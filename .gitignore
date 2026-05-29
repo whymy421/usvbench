@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Training artifacts (Wandb runs are remote, no need to commit local cache)
+wandb/
+logs/
+runs/
+outputs/
+*.log
+
+# Large model files (use Git LFS or external storage)
+*.pt
+*.pth
+*.ckpt
+
+# Local environment
+.env
+.venv
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# USD intermediates
+*.usda.tmp
