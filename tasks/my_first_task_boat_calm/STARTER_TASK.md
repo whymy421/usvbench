@@ -64,7 +64,26 @@ python "C:\Users\Yutong\NavRL\IsaacLab\scripts\reinforcement_learning\skrl\train
 
 Boat drops from 1m, splashes in, settles to z=0.
 
-### Real training (3-4 hours)
+### Real training with auto video upload to wandb (3-4 hours, RECOMMENDED)
+
+This uses `train_with_eval.py` which records short videos every 50k timesteps and uploads them to wandb. You'll see training videos in your wandb run page (very useful for debugging + showing reviewers later).
+
+```powershell
+$env:PYTHONIOENCODING="utf-8"
+$env:WANDB_NAME="boat_calm_nav_s42"
+python "C:\Users\Yutong\NavRL\IsaacLab\scripts\reinforcement_learning\skrl\train_with_eval.py" `
+  --task=Isaac-Boat-Calm-Direct-v0 --num_envs=64 --headless --max_iterations=3000 --seed=42 `
+  --video --video_interval 50000 --video_length 200
+```
+
+Video parameters:
+- `--video_length 200` — each video is 200 simulation steps (~3 seconds)
+- `--video_interval 50000` — record a video every 50000 timesteps (~3 videos total per 3000 iter run)
+- Add `--enable_cameras` if you get "no camera" errors (the script tries to add it automatically)
+
+### Real training without video (faster, fallback option)
+
+If your GPU can't handle the camera/render overhead, use the basic trainer:
 
 ```powershell
 $env:PYTHONIOENCODING="utf-8"
