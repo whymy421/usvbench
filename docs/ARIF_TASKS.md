@@ -9,11 +9,10 @@
 ## The project in one paragraph
 
 We're building **USVBench**, an open RL benchmark for surface vessels with real marine
-physics (buoyancy, damping, currents, JONSWAP waves). I've built and validated two calm
-reference tasks (ROV + boat) and the wave-aware / multi-agent tasks. **Your job** is to
-extend the vessel range upward: a fast **catamaran** and a large **cruise ship**, so the
-benchmark covers agile-to-heavy dynamics. You start by reproducing my two reference tasks
-to confirm your pipeline works, then build the two new ones.
+physics (buoyancy, damping, currents). I've built and validated two calm reference tasks
+(ROV + boat). **Your job** is to extend the vessel range upward: a fast **catamaran** and
+a large **cruise ship**, so the benchmark covers agile-to-heavy dynamics. You start by
+reproducing my two reference tasks to confirm your pipeline works, then build the two new ones.
 
 ---
 
@@ -23,8 +22,6 @@ to confirm your pipeline works, then build the two new ones.
 |--------|------|-------|--------|
 | ROV | calm nav | Yutong | ✅ done (Task A, ~24 tgt/ep) |
 | 5 m monohull | calm nav | Yutong | ✅ done (Task B, ~4.8 tgt/ep) |
-| 5 m monohull | wave-aware nav | Yutong | ✅ done (E7) |
-| 5 m monohull × 3 | multi-USV SAR in waves | Yutong | 🔄 in progress (E6) |
 | **5 m catamaran** | **high-speed patrol** | **Arif (P1)** | ⬜ TODO |
 | **~100 m ship** | **harbor approach** | **Arif (P2)** | ⬜ TODO |
 
