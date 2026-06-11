@@ -40,3 +40,6 @@ venv/
 
 # USD intermediates
 *.usda.tmp
+
+# Local-only draft (not for GitHub)
+docs/EMAIL_TO_ARIF.md
