@@ -22,7 +22,7 @@ to confirm your pipeline works, then build the two new ones.
 | Vessel | Task | Owner | Status |
 |--------|------|-------|--------|
 | ROV | calm nav | Yutong | ✅ done (Task A, ~24 tgt/ep) |
-| 5 m monohull | calm nav | Yutong | ✅ done (Task B, ~5.6 tgt/ep) |
+| 5 m monohull | calm nav | Yutong | ✅ done (Task B, ~4.8 tgt/ep) |
 | 5 m monohull | wave-aware nav | Yutong | ✅ done (E7) |
 | 5 m monohull × 3 | multi-USV SAR in waves | Yutong | 🔄 in progress (E6) |
 | **5 m catamaran** | **high-speed patrol** | **Arif (P1)** | ⬜ TODO |
@@ -35,7 +35,7 @@ to confirm your pipeline works, then build the two new ones.
 | Week | Phase | Goal | Deliverable |
 |------|-------|------|-------------|
 | **1** | P0 | Setup + reproduce **Task A (ROV calm)** | wandb run, `targets_per_episode` ≥ 20 |
-| **2** | P0 | Reproduce **Task B (boat calm)**, 3 seeds | 3 wandb runs ≥ 4.5 tgt/ep; Friday: "P0 done" |
+| **2** | P0 | Reproduce **Task B (boat calm)**, 3 seeds | 3 wandb runs ≥ 4.0 tgt/ep; Friday: "P0 done" |
 | **3** | P1 | Get a **catamaran USD**, verify forward-axis with a debug thrust | USD in `assets/`, axis noted |
 | **4** | P1 | Fork `boat_calm_nav` → `catamaran_patrol`, make it **float + move** (no RL yet) | stable physics demo |
 | **5** | P1 | Single-target navigation learns on the catamaran | wandb run reaching targets |
@@ -69,7 +69,7 @@ This proves your Isaac Lab + skrl + wandb pipeline works before you build anythi
 1. Same install steps for `tasks/boat_calm_nav/`.
 2. Read its STARTER carefully — **the reward is different from Task A and the doc explains why**. Use the exact env vars given; do NOT set `FORWARD_TRANSIT=1`.
 3. Run seeds 42, 123, 456.
-4. **Success**: each run ≥ 4.5 `targets_per_episode`. Send 3 wandb links.
+4. **Success**: each run ≥ 4.0 `targets_per_episode`. Send 3 wandb links.
 
 If your numbers are far off, **message me before moving on** — don't power through.
 

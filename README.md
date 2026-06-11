@@ -15,7 +15,7 @@ with reproducible RL baselines for each vessel × task combination.
 | Task | Vessel | Condition | Baseline | Folder |
 |------|--------|-----------|----------|--------|
 | **A — ROV calm nav** | Doc Ricketts ROV | calm | ~24 targets/ep | [`tasks/rov_calm_nav/`](tasks/rov_calm_nav/STARTER_TASK.md) |
-| **B — Boat calm nav** | 5 m monohull | calm | ~5.6 targets/ep | [`tasks/boat_calm_nav/`](tasks/boat_calm_nav/STARTER_TASK.md) |
+| **B — Boat calm nav** | 5 m monohull | calm | ~4.8 targets/ep | [`tasks/boat_calm_nav/`](tasks/boat_calm_nav/STARTER_TASK.md) |
 
 Both are single-agent PPO point-navigation tasks. **Task A is the recommended Day-1
 warmup** (trains in ~30 min with the simplest reward). Task B is the same task on a real

@@ -1,7 +1,7 @@
 # =============================================================
 # USVBench — Train: Boat calm-water navigation (reference task B)
-# Reference: V40 = 5.64 targets/episode @ 3000 iter, seed 42 (RTX 5080, ~1.5 h)
-# wandb: https://wandb.ai/whymysong321-university-of-southampton/usvbench/runs/9yupkmf6
+# Reference: V26 = 4.76 targets/episode @ 3000 iter, seed 42 (RTX 5080, ~1.5 h)
+# wandb: https://wandb.ai/whymysong321-university-of-southampton/usvbench/runs/si1f8sq1
 # =============================================================
 #
 # Before running:
@@ -22,16 +22,18 @@ $ISAACLAB = "C:\Users\Yutong\NavRL\IsaacLab"
 $env:USVBENCH_ASSETS = (Resolve-Path "$PSScriptRoot\..\assets").Path
 $env:PYTHONIOENCODING = "utf-8"
 
-# Task B config: boat, calm water, V40 "side-approach" reward
+# Task B config: boat, calm water, V26 speed-coupled reward
 #   The simple ROV recipe (forward x exp(alignment)) FAILS on the boat (points
-#   backwards, ~0.1 tgt/ep). The boat needs the side-approach reward below.
+#   backwards, ~0.1 tgt/ep). The boat needs the V23 speed-coupled reward below,
+#   with a large reach bonus because the boat is slow.
 $env:OBS_DIM = "9"           # 9D obs: nav + self-state (speed, yaw-rate, ...)
 $env:OBS_EXTENDED = "1"      # enable the extra self-state channels
-$env:REWARD_VARIANT = "V23"  # speed-coupled nav reward
+$env:REWARD_VARIANT = "V23"  # speed-coupled nav reward (heading reward x forward_speed)
 $env:SPEED_COUPLE = "1"      # reward only counts when the boat is moving
 $env:REACH_BONUS = "50.0"    # boat is slow; +10 gets eaten by respawn travel cost
-$env:SIDE_APPROACH = "1"     # don't require bow-alignment; side/stern entry counts as reach
-# NOTE: do NOT set FORWARD_TRANSIT=1 — that was V41 and it made the boat flee (0.04 tgt/ep).
+# NOTE: do NOT set SIDE_APPROACH=1 (that was V40: higher score 5.64 but the boat
+#   likes to reverse into targets) or FORWARD_TRANSIT=1 (V41 regression, 0.04 tgt/ep).
+#   V26 keeps bow-forward navigation, which is the cleaner benchmark baseline.
 
 $env:WANDB_PROJECT = "usvbench"
 $env:WANDB_NAME = "boat_calm_nav_s42"
