@@ -12,7 +12,19 @@ Repo: **https://github.com/whymy421/usvbench** (private)
 2. I'll add you as a **collaborator** (Settings → Collaborators).
 3. You'll get an email invite — accept it. Now you can push branches.
 
-You'll also be added to the **wandb** project so your training runs show up alongside mine.
+---
+
+## 0.5 Weights & Biases (wandb)
+
+We track every training run on **wandb** (free experiment tracker — logs reward curves,
+metrics like `targets_per_episode`, short policy videos, and the exact config). It's how
+I review your results: you send a run link, I compare it to my baseline in the browser.
+
+Setup (once): `pip install wandb` (usually ships with Isaac Lab) → `wandb login` → paste
+your key from https://wandb.ai/authorize. **Send me your wandb email** and I'll add you
+to the `usvbench` project. The train scripts already set `WANDB_PROJECT=usvbench` and
+record videos, so after `wandb login` you don't need to do anything else — the console
+prints a `View run at https://wandb.ai/...` link when training starts.
 
 ---
 
