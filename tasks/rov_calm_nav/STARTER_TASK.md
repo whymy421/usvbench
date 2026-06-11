@@ -63,6 +63,19 @@ Takes ~30 min on an RTX 5080.
 
 ---
 
+## Play my trained checkpoint (no training needed)
+
+A reference policy is shipped at `checkpoints/rov_calm_s42.pt`. Load it to watch the ROV
+navigate immediately and confirm your setup matches mine:
+```bash
+USVBENCH_ASSETS=<repo>/assets OBS_DIM=3 \
+python <IsaacLab>/scripts/reinforcement_learning/skrl/play.py \
+  --task=Isaac-My-First-Task-Calm-Direct-v1 --num_envs=16 \
+  --checkpoint=<repo>/tasks/rov_calm_nav/checkpoints/rov_calm_s42.pt
+```
+
+---
+
 ## What success looks like
 
 Reference run (Yutong, seed 42, 3000 iter): **`rov_calm_benchmark_s42`** on the

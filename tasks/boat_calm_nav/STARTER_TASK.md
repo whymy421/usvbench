@@ -82,6 +82,18 @@ Takes ~1.5 h on an RTX 5080.
 
 ---
 
+## Play my trained checkpoint (no training needed)
+
+The V26 reference policy is shipped at `checkpoints/boat_calm_v26_s42.pt`:
+```bash
+USVBENCH_ASSETS=<repo>/assets OBS_DIM=9 OBS_EXTENDED=1 REWARD_VARIANT=V23 SPEED_COUPLE=1 REACH_BONUS=50.0 \
+python <IsaacLab>/scripts/reinforcement_learning/skrl/play.py \
+  --task=Isaac-My-First-Task-Calm-Boat-Direct-v1 --num_envs=16 \
+  --checkpoint=<repo>/tasks/boat_calm_nav/checkpoints/boat_calm_v26_s42.pt
+```
+
+---
+
 ## What success looks like
 
 Reference: V26 (`boat_calm_V26_speedcouple_s42`, wandb `si1f8sq1`).
