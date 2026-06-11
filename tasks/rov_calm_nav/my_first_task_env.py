@@ -891,10 +891,10 @@ class MyFirstTaskEnv(DirectRLEnv):
             print(f"   Attitude: Roll={roll_deg:+.1f}° Pitch={pitch_deg:+.1f}°")
             print(f"   Heading:  Yaw={yaw_deg:+6.1f}° | ToTarget={target_dir_deg:+6.1f}° | Error={yaw_error:5.1f}°")
             print(f"   Speed:    {boat_speed:.2f} m/s")
-            print(f"   Current:  Dir={current_dir_deg:+6.1f}° | Speed={current_speed:.2f} m/s")
             print(f"   Buoyancy: {buoyancy_force[env_idx, 2]:.0f}N")
 
             if self.physics_cfg.enable_current:
+                print(f"   Current:  Dir={current_dir_deg:+6.1f}° | Speed={current_speed:.2f} m/s")
                 print(f"   Current Force: [{current_force[env_idx, 0]:.1f}, {current_force[env_idx, 1]:.1f}] N")
 
             # 🆕 波浪信息
@@ -906,11 +906,12 @@ class MyFirstTaskEnv(DirectRLEnv):
                 print(f"   Roll Rate: {roll_rate:.2f} rad/s")
                 # 🆕 更新波浪动画
 
-            # 避浪统计
+            # 避浪统计（仅波浪模式打印）
             self.total_lateral += self.lateral_exposure.mean().item()
             self.total_steps += 1
             avg_lateral = self.total_lateral / self.total_steps
-            print(f"   📊 Avg Lateral Exposure: {avg_lateral:.3f}")
+            if self.wave_cfg.enable_wave:
+                print(f"   📊 Avg Lateral Exposure: {avg_lateral:.3f}")
 
             try:
                 import wandb
