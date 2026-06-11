@@ -5,7 +5,7 @@ seed: 42
 # https://skrl.readthedocs.io/en/latest/api/utils/model_instantiators.html
 models:
   separate: False
-  policy:  # see gaussian_model parameters
+  policy:
     class: GaussianMixin
     clip_actions: False
     clip_log_std: True
@@ -15,16 +15,16 @@ models:
     network:
       - name: net
         input: OBSERVATIONS
-        layers: [32, 32]
+        layers: [128, 128, 64]
         activations: elu
     output: ACTIONS
-  value:  # see deterministic_model parameters
+  value:
     class: DeterministicMixin
     clip_actions: False
     network:
       - name: net
         input: OBSERVATIONS
-        layers: [32, 32]
+        layers: [128, 128, 64]
         activations: elu
     output: ONE
 
@@ -59,25 +59,25 @@ agent:
   ratio_clip: 0.2
   value_clip: 0.2
   clip_predicted_values: True
-  entropy_loss_scale: 0.0
+  entropy_loss_scale: 0.01
   value_loss_scale: 2.0
   kl_threshold: 0.0
-  rewards_shaper_scale: 0.1
+  rewards_shaper_scale: 1
   time_limit_bootstrap: False
   # logging and checkpoint
   experiment:
-    directory: "usvbench"
-    experiment_name: "boat_calm_baseline"
+    directory: "usv_navigation"
+    experiment_name: "e3_wave_aware_7d"
     write_interval: auto
     checkpoint_interval: auto
     wandb: true
     wandb_kwargs:
-      project: "usvbench"
+      project: "usv-navigation"
 
 
 # Sequential trainer
 # https://skrl.readthedocs.io/en/latest/api/trainers/sequential.html
 trainer:
   class: SequentialTrainer
-  timesteps: 1000000
+  timesteps: 300000
   environment_info: log
