@@ -196,7 +196,6 @@ if the physics looks wrong (sinks/flies) or training plateaus.
 - `GITHUB_COLLABORATION.md` — git workflow (read before your first commit)
 - `tasks/rov_calm_nav/STARTER_TASK.md` — how to run Task A
 - `tasks/boat_calm_nav/STARTER_TASK.md` — how to run Task B (and why its reward differs)
-- `BENCHMARK_DESIGN.md` — overall architecture (context, not required for P0/P1)
 - wandb project: **usvbench** — I'll add you.
 
 Questions? Just ask.

@@ -34,8 +34,7 @@ usvbench/
 ├── scripts/            # ready-to-run training launchers (.ps1)
 ├── docs/
 │   ├── ARIF_TASKS.md           # contributor roadmap (week-by-week)
-│   ├── GITHUB_COLLABORATION.md # git workflow for contributors
-│   └── BENCHMARK_DESIGN.md     # overall architecture
+│   └── GITHUB_COLLABORATION.md # git workflow + wandb for contributors
 └── README.md
 ```
 
