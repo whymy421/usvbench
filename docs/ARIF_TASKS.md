@@ -10,9 +10,17 @@
 
 We're building **USVBench**, an open RL benchmark for surface vessels with real marine
 physics (buoyancy, damping, currents). I've built and validated two calm reference tasks
-(ROV + boat). **Your job** is to extend the vessel range upward: a fast **catamaran** and
-a large **cruise ship**, so the benchmark covers agile-to-heavy dynamics. You start by
-reproducing my two reference tasks to confirm your pipeline works, then build the two new ones.
+(ROV + boat). **Your job** is to add new vessel × task combinations so the benchmark
+covers a wider range of dynamics. You start by reproducing my two reference tasks to
+confirm your pipeline works, then build ~2 new tasks of your own.
+
+**You have a lot of freedom on what those two tasks are.** Below I suggest a fast
+**catamaran** and a large **cruise ship** (they nicely extend the range from agile to
+heavy), and the week-by-week plan is written around them so you have a concrete path to
+follow. But if you have your own idea — a different vessel, a different task (docking,
+obstacle avoidance, formation, station-keeping, racing…) — **go with it.** Just send me
+a one-paragraph proposal first so we make sure it fits the benchmark and isn't redundant
+with what I'm building. The examples are a default, not a requirement.
 
 ---
 
@@ -22,8 +30,8 @@ reproducing my two reference tasks to confirm your pipeline works, then build th
 |--------|------|-------|--------|
 | ROV | calm nav | Yutong | ✅ done (Task A, ~24 tgt/ep) |
 | 5 m monohull | calm nav | Yutong | ✅ done (Task B, ~4.8 tgt/ep) |
-| **5 m catamaran** | **high-speed patrol** | **Arif (P1)** | ⬜ TODO |
-| **~100 m ship** | **harbor approach** | **Arif (P2)** | ⬜ TODO |
+| **Arif's task 1** | *e.g.* catamaran high-speed patrol | **Arif (P1)** | ⬜ TODO (your call) |
+| **Arif's task 2** | *e.g.* ~100 m ship harbor approach | **Arif (P2)** | ⬜ TODO (your call) |
 
 ---
 
@@ -46,8 +54,13 @@ reproducing my two reference tasks to confirm your pipeline works, then build th
 | **13** | P2 | **3-seed baselines + STARTER + PR** for cruise ship | PR opened (cruise done) |
 | **14** | Buffer | Polish docs, address PR review comments | both PRs merged |
 
-**If you fall behind, drop P2 first.** A clean, well-documented catamaran task (P1) is
-worth more than two rushed half-working ones. Don't add tasks beyond this list.
+The P1/P2 weeks above are written for the **example** tasks (catamaran, cruise ship). If
+you pick your own tasks, keep the same rhythm — roughly: get the USD + physics stable
+(1–2 wks) → task + reward (2–3 wks) → 3-seed baseline + STARTER + PR (1 wk) — and we'll
+adjust the schedule together.
+
+**If you fall behind, drop the second task first.** One clean, well-documented task is
+worth more than two rushed half-working ones.
 
 ---
 
@@ -72,10 +85,14 @@ If your numbers are far off, **message me before moving on** — don't power thr
 
 ---
 
-## P1 — Catamaran high-speed patrol (Weeks 3–8)
+## P1 — Your first new task (Weeks 3–8) · *example: catamaran high-speed patrol*
 
-**Concept**: a 5 m catamaran patrols a sequence of 3–5 waypoints, rewarded for reaching
-them quickly. Catamarans glide more (lower damping) and run faster than a monohull.
+> This is one suggested task. If you have your own idea, swap it in (send me a short
+> proposal first) and keep the same rhythm. The example below is fully worked out so you
+> have something concrete to start from.
+
+**Example concept**: a 5 m catamaran patrols a sequence of 3–5 waypoints, rewarded for
+reaching them quickly. Catamarans glide more (lower damping) and run faster than a monohull.
 
 **Steps**: find a catamaran USD → verify which body axis is "forward" with a debug thrust
 → fork `boat_calm_nav` to `catamaran_patrol` → tune physics (cheat sheet below) → replace
@@ -89,10 +106,13 @@ single-target with a waypoint sequence → reward fast transit + waypoint reach 
 
 ---
 
-## P2 — Cruise ship harbor approach (Weeks 9–13)
+## P2 — Your second new task (Weeks 9–13) · *example: cruise-ship harbor approach*
 
-**Concept**: a ~100 m ship approaches a harbor entrance from open sea; goal is to enter a
-50 m-diameter harbor circle without veering out of the channel.
+> Again just a suggestion — your own idea is welcome. The example pairs well with P1
+> because it pushes the heavy/slow end of the dynamics range.
+
+**Example concept**: a ~100 m ship approaches a harbor entrance from open sea; goal is to
+enter a 50 m-diameter harbor circle without veering out of the channel.
 
 **Steps**: find a ship USD (harder) → fork your catamaran task → scale physics way up
 (mass ~10 t, big displacement, high yaw inertia, ~5000 N thrust) → reward = penalize
@@ -185,8 +205,8 @@ if the physics looks wrong (sinks/flies) or training plateaus.
 
 ## Authorship
 
-- P0 + P1 + P2 with merged PRs + 3-seed baselines → **second author** on the USVBench paper.
-- P0 + P1 only → acknowledged in the paper.
+- P0 + **both your tasks** (P1 + P2) with merged PRs + 3-seed baselines → **second author** on the USVBench paper.
+- P0 + **one** task → acknowledged in the paper.
 - Need to stop early → no problem, just tell me early so I can re-plan.
 
 ---
