@@ -21,8 +21,7 @@ Both are single-agent PPO point-navigation tasks. **Task A is the recommended Da
 warmup** (trains in ~30 min with the simplest reward). Task B is the same task on a real
 boat hull and needs a tuned reward (see its STARTER doc for why).
 
-Wave-aware single-agent (E7) and multi-USV cooperative (E6) tasks are maintained by
-Yutong and will be added to this repo as they stabilise.
+More vessel scales and conditions will be added as the benchmark grows.
 
 ## Repo layout
 
