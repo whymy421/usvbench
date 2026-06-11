@@ -110,3 +110,19 @@ Reproduce within ~20%. With V26 the boat navigates **bow-first** toward targets
 | `REACH_BONUS` | `50` | per-target reward (must be large for the slow boat) |
 | `SIDE_APPROACH` | unset | set to `1` for the V40 variant (reverses in, ~5.6 tgt/ep) |
 | `FORWARD_TRANSIT` | unset | ⚠️ leave unset (V41 regression) |
+
+---
+
+## Known limitation — an open problem (optional to improve)
+
+The boat is the **weak spot** of the benchmark: ~4.8 targets/ep vs the ROV's ~24. It
+took a lot of reward tuning (V11→V26→V40) just to get here, and neither baseline is
+clean: V26 navigates bow-first but is slow/modest, V40 scores higher but reverses into
+targets. Root causes are the boat's non-marine-grade physics (mass/volume are a float-
+balance hack, non-standard body axes) and the fact that the simple ROV reward fails on it.
+
+**If you have ideas to make the boat navigate more cleanly/efficiently** (better reward,
+obs, or physics), feel free to try — it'd be a welcome contribution. But this is
+**optional**: it's not your assigned task, so don't sink days into it. Reproducing the
+V26 baseline is all P0 requires; your real deliverables are the catamaran and cruise-ship
+tasks (see `docs/ARIF_TASKS.md`).
