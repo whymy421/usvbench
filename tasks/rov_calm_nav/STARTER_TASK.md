@@ -76,6 +76,19 @@ python <IsaacLab>/scripts/reinforcement_learning/skrl/play.py \
 
 ---
 
+## Evaluate (standardized protocol)
+
+Score any checkpoint with the benchmark eval (deterministic policy, fixed budget):
+```bash
+USVBENCH_ASSETS=<repo>/assets OBS_DIM=3 \
+python scripts/eval_benchmark.py --task=Isaac-My-First-Task-Calm-Direct-v1 \
+  --num_envs=64 --eval_steps=6000 --headless \
+  --checkpoint=<repo>/tasks/rov_calm_nav/checkpoints/rov_calm_s42.pt
+```
+Reference: `targets_per_episode` ≈ **27.1 ± 2.4** over seeds 42 / 123 / 456.
+
+---
+
 ## What success looks like
 
 Reference run (Yutong, seed 42, 3000 iter): **`rov_calm_benchmark_s42`** on the

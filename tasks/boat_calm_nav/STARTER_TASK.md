@@ -94,6 +94,20 @@ python <IsaacLab>/scripts/reinforcement_learning/skrl/play.py \
 
 ---
 
+## Evaluate (standardized protocol)
+
+Score any checkpoint with the benchmark eval (deterministic policy, fixed budget):
+```bash
+USVBENCH_ASSETS=<repo>/assets OBS_DIM=9 OBS_EXTENDED=1 \
+python scripts/eval_benchmark.py --task=Isaac-My-First-Task-Calm-Boat-Direct-v1 \
+  --num_envs=64 --eval_steps=6000 --headless \
+  --checkpoint=<repo>/tasks/boat_calm_nav/checkpoints/boat_calm_v26_s42.pt
+```
+Reference: `targets_per_episode` ≈ **5.1** (seed 42). Note: the boat has higher
+seed-variance than the ROV — see *Known limitation* below.
+
+---
+
 ## What success looks like
 
 Reference: V26 (`boat_calm_V26_speedcouple_s42`, wandb `si1f8sq1`).
