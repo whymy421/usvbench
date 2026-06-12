@@ -48,6 +48,31 @@ usvbench/
 3. Copy a task folder into Isaac Lab and run it — see
    [`tasks/rov_calm_nav/STARTER_TASK.md`](tasks/rov_calm_nav/STARTER_TASK.md).
 
+## Evaluation
+
+All baselines use one standardized protocol — [`scripts/eval_benchmark.py`](scripts/eval_benchmark.py):
+a **deterministic** policy (mean action), a **fixed step budget**, and metrics normalized
+per **episode-equivalent**. (These are continuous-retargeting tasks that rarely terminate
+inside the window, so we normalize by `total_steps / episode_length`, not by completed
+episodes.) Report **mean ± std over 3 seeds (42 / 123 / 456)** — not a single seed.
+
+```bash
+python scripts/eval_benchmark.py --task=<gym-id> --num_envs=64 --eval_steps=6000 \
+  --headless --checkpoint=<path>/best_agent.pt
+```
+(Set the same `OBS_DIM`/`OBS_EXTENDED` you trained with — the observation shape must match
+the network. Reward env-vars don't affect evaluation.)
+
+| Task | targets/ep (primary) | mean speed | notes |
+|------|----------------------|------------|-------|
+| ROV calm | **27.1 ± 2.4** (n=3) | 6.6 m/s | robust across seeds |
+| boat calm | ~5.1 (seed 42) | 4.6 m/s | higher seed-variance — see task notes |
+
+**Metrics**: `targets_per_episode` (navigation throughput, primary) · `mean_speed` ·
+`oob_rate` (out-of-bounds events per episode — a control-quality / safety signal).
+Each task's number is its own reference; numbers are comparable *within* a task (a new
+method vs the reference), not *across* tasks.
+
 ## For contributors
 
 - **Roadmap & your assignment**: [`docs/ARIF_TASKS.md`](docs/ARIF_TASKS.md)
