@@ -305,25 +305,23 @@ class MyFirstTaskEnv(DirectRLEnv):
 
 
     def _visualize_markers(self):
-        # 🆕 单箭头/船,按 env 上色,朝向船头(boat body-(-X) = bow → rotate 180°)
+        # 🆕 彩色箭头 = 当前实际速度方向(每船按 env 上色);黑色箭头 = 指向目标
         self.marker_locations = self.robot.data.root_pos_w
-        base_quat = self.robot.data.root_quat_w
 
-        # arrow_x.usd 默认沿 +X;boat 船头在 body-(-X) → 绕 Z 转 180°
-        # fwd_x = -1 时船头在 body-(-X) → arrow 转 180°;fwd_x = +1 时无需转
-        rotation_angle = torch.pi if self._fwd_x < 0 else 0.0
-        rotation_quat = math_utils.quat_from_angle_axis(
-            torch.ones((self.num_envs, 1), device=self.device) * rotation_angle,
-            self.up_dir
+        # 彩色:world xy 速度矢量方向(atan2 → yaw)。arrow_x.usd 默认沿 +X,直接用 yaw。
+        # (速度≈0 时 atan2(0,0)=0 → 指 +X/世界东,会有点抖,属正常)
+        vel_xy = self.robot.data.root_com_vel_w[:, :2]
+        vel_yaws = torch.atan2(vel_xy[:, 1], vel_xy[:, 0]).unsqueeze(1)
+        arrow_orientations = math_utils.quat_from_angle_axis(
+            vel_yaws, self.up_dir
         ).reshape(self.num_envs, 4)
-        arrow_orientations = math_utils.quat_mul(base_quat, rotation_quat)
 
-        # 🆕 彩色 + 黑色箭头同高度,方向一致时会重合
+        # 彩色 + 黑色箭头同高度,方向一致时会重合
         offset = torch.zeros((self.num_envs, 3), device=self.device)
         offset[:, 2] = 1.2
         arrow_loc = self.marker_locations + offset
 
-        # marker_indices = env_id → 每艘船自己的颜色(船头朝向)
+        # marker_indices = env_id → 每艘船自己的颜色(速度方向)
         env_ids = torch.arange(self.num_envs, device=self.device)
         self.visualization_markers.visualize(arrow_loc, arrow_orientations, marker_indices=env_ids)
 
