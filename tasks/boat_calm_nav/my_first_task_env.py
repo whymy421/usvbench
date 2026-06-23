@@ -93,14 +93,12 @@ class MyFirstTaskEnv(DirectRLEnv):
 
     def _load_water_from_usd(self):
         """从ROV_TEST.usd复制水面mesh及其动画"""
-        import omni.usd, os
+        import omni.usd
         from pxr import Usd, UsdGeom, Sdf
 
         print("\n🌊 Loading water surface from ROV_TEST.usd...")
 
-        # Optional visual water surface (calm benchmark works without it — wrapped in try/except).
-        _assets = os.environ.get("USVBENCH_ASSETS", os.path.join(os.path.expanduser("~"), "usvbench", "assets"))
-        source_usd_path = os.environ.get("USVBENCH_WATER_USD", os.path.join(_assets, "ROV_TEST.usd"))
+        source_usd_path = "C:/Users/Yutong/NavRL/NavRL2026/isaac_underwater/ROV_TEST.usd"
         source_water_path = "/World/Water"
 
         try:
@@ -169,6 +167,27 @@ class MyFirstTaskEnv(DirectRLEnv):
 
         # 🔬 P1 诊断:首次 _apply_action 时打印 boat 物理参数
         self._physics_diagnostic_printed = False
+        self._prev_distance = None  # 势能式 distance-progress reward 用(PROGRESS_COEF)
+
+        # 🔧 COM_CENTER=1: 在 play/baking 前 author 修正质心。boat USD 实测 COM≈(0.5,-0.9,-0.06),
+        #    横向偏 0.9m 造成不对称偏航/转不准。把横向 y 归零(x、z 保留)。默认 0=不动 benchmark。
+        #    (运行时 set_coms 在 GPU 管线被后端拒绝,只能 authoring 阶段改 prim。)
+        import os as _os_com
+        if int(_os_com.environ.get('COM_CENTER', '0')):
+            try:
+                import omni.usd
+                from pxr import UsdPhysics, Gf
+                stage = omni.usd.get_context().get_stage()
+                prim = stage.GetPrimAtPath("/World/envs/env_0/Robot")
+                mapi = UsdPhysics.MassAPI.Apply(prim)
+                # 直接写实测 COM 的有限值、y 归零(不能读 GetCenterOfMassAttr:未 author 时返回
+                # 哨兵 (-inf,-inf,-inf),会让 PhysX 整体回退自动算)。x/z 用实测值保留。
+                new = Gf.Vec3f(0.504, 0.0, -0.057)
+                mapi.CreateCenterOfMassAttr().Set(new)
+                mapi.CreateMassAttr().Set(100.0)  # 显式写 mass,确保用 authored COM 而非自动重算
+                print(f"🔧 COM_CENTER authored: centerOfMass -> {new} on /World/envs/env_0/Robot")
+            except Exception as e:
+                print(f"⚠️ COM_CENTER author failed: {e}")
 
         self._load_water_from_usd()
 
@@ -931,10 +950,10 @@ class MyFirstTaskEnv(DirectRLEnv):
             print(f"   Attitude: Roll={roll_deg:+.1f}° Pitch={pitch_deg:+.1f}°")
             print(f"   Heading:  Yaw={yaw_deg:+6.1f}° | ToTarget={target_dir_deg:+6.1f}° | Error={yaw_error:5.1f}°")
             print(f"   Speed:    {boat_speed:.2f} m/s")
+            print(f"   Current:  Dir={current_dir_deg:+6.1f}° | Speed={current_speed:.2f} m/s")
             print(f"   Buoyancy: {buoyancy_force[env_idx, 2]:.0f}N")
 
             if self.physics_cfg.enable_current:
-                print(f"   Current:  Dir={current_dir_deg:+6.1f}° | Speed={current_speed:.2f} m/s")
                 print(f"   Current Force: [{current_force[env_idx, 0]:.1f}, {current_force[env_idx, 1]:.1f}] N")
 
             # 🆕 波浪信息
@@ -946,12 +965,11 @@ class MyFirstTaskEnv(DirectRLEnv):
                 print(f"   Roll Rate: {roll_rate:.2f} rad/s")
                 # 🆕 更新波浪动画
 
-            # 避浪统计（仅波浪模式打印）
+            # 避浪统计
             self.total_lateral += self.lateral_exposure.mean().item()
             self.total_steps += 1
             avg_lateral = self.total_lateral / self.total_steps
-            if self.wave_cfg.enable_wave:
-                print(f"   📊 Avg Lateral Exposure: {avg_lateral:.3f}")
+            print(f"   📊 Avg Lateral Exposure: {avg_lateral:.3f}")
 
             try:
                 import wandb
@@ -1235,7 +1253,11 @@ class MyFirstTaskEnv(DirectRLEnv):
             elif speed_coupling:
                 fs = forward_speed.clamp(min=0)
                 heading_reward = heading_reward_raw * fs
-                alive_bonus = fs * 0.05    # 必须动才有 alive 奖(变相鼓励持续运动)
+                # 🆕 ALIVE_DIRECTIONAL=1：alive 奖只给"朝目标方向"的运动，掐掉"朝任意方向猛冲farm奖励"的坏局部最优
+                if int(os.environ.get('ALIVE_DIRECTIONAL', '0')):
+                    alive_bonus = vel_toward.clamp(min=0) * 0.05
+                else:
+                    alive_bonus = fs * 0.05    # 原 V26：必须动才有 alive 奖（朝任意方向）
                 backward_cost_coef = float(os.environ.get('BACKWARD_COST', '0.5'))
                 backward_cost = forward_speed.clamp(max=0) * backward_cost_coef
             else:
@@ -1289,7 +1311,7 @@ class MyFirstTaskEnv(DirectRLEnv):
             distances = self.min_spawn_distance + \
                         torch.rand(len(env_ids), device=self.device) * \
                         (self.max_spawn_distance - self.min_spawn_distance)
-            angles = torch.rand(len(env_ids), device=self.device) * 2 * torch.pi
+            angles = self._sample_target_angles(len(env_ids))  # cone 课程:respawn 也套锥
             origin_xy = self.scene.env_origins[env_ids, :2]
             self.target_pos[env_ids, 0] = origin_xy[:, 0] + distances * torch.cos(angles)
             self.target_pos[env_ids, 1] = origin_xy[:, 1] + distances * torch.sin(angles)
@@ -1306,7 +1328,59 @@ class MyFirstTaskEnv(DirectRLEnv):
                   + wave_safety * wave_coef
                   + reach_reward)
 
+        # 🆕 距离决定速度(论文 ψ,治 overshoot 出界):近目标时期望速度随距离线性降,
+        #    惩罚"近了还猛冲"的超速部分。DIST_SPEED_COEF=0 默认关(不变 benchmark)。
+        dist_speed_coef = float(os.environ.get('DIST_SPEED_COEF', '0.0'))
+        if dist_speed_coef > 0:
+            d0 = float(os.environ.get('DIST_SPEED_D0', '10.0'))   # 距离 < d0 开始要求减速
+            v_max = float(os.environ.get('MAX_LIN_VEL', '5.0'))
+            v_des = v_max * (distance / d0).clamp(max=1.0)         # 远=v_max,近线性降到 0
+            over_speed = (forward_speed - v_des).clamp(min=0.0)    # 超过期望速度的部分
+            reward = reward - dist_speed_coef * over_speed
+
+        # 🆕 势能式"距离-进展"reward(治锁航向不转):奖励真正缩短到目标的距离,逼船转向偏轴目标。
+        #    PROGRESS_COEF=0 默认关。clamp 防 respawn/reset 时距离跳变造成的伪进展尖峰(真实每步<~0.1m)。
+        progress_coef = float(os.environ.get('PROGRESS_COEF', '0.0'))
+        if progress_coef > 0 and getattr(self, '_prev_distance', None) is not None \
+                and self._prev_distance.shape == distance.shape:
+            progress = (self._prev_distance - distance).clamp(-0.2, 0.2)
+            reward = reward + progress_coef * progress
+
+        # 🆕 出界惩罚（默认 0 = V26 不变；实验设 OOB_PENALTY=10 堵住"猛冲出界"坏局部最优）
+        oob_penalty = float(os.environ.get('OOB_PENALTY', '0.0'))
+        if oob_penalty > 0:
+            origin_2d = self.scene.env_origins[:, :2]
+            dist_from_origin = torch.norm(
+                self.robot.data.root_pos_w[:, :2] - origin_2d, dim=-1, keepdim=True
+            )
+            oob = (dist_from_origin > (self.max_spawn_distance + 20.0)).float()
+            reward = reward - oob_penalty * oob
+
+        # 更新 prev_distance(在 respawn 之后,用当前 boat 位置到当前目标),供下一步 progress 用。
+        # respawn 改了 target_pos → 这里重算后,下一步对新目标的 progress 不会有伪尖峰。
+        _rpos_pd = self.target_pos[:, :2] - self.robot.data.root_pos_w[:, :2]
+        self._prev_distance = torch.norm(_rpos_pd, dim=-1, keepdim=True).clamp(min=1e-6)
+
         return reward
+
+    def _sample_target_angles(self, n):
+        """目标方位采样,支持 spawn 课程(治"重船学不会转向")。
+        SPAWN_CONE_DEG<360 → 目标只落在船头世界朝向(fwd_bearing)±半角的锥形内;默认 360=全向(不变 benchmark)。
+        CONE_ANNEAL_STEPS>0 → 锥形半角随 common_step_counter 从 SPAWN_CONE_DEG 线性放宽到 360°(课程展开,边学转向边保持可达)。
+        初始 spawn 和 reach-respawn 都用本函数,保证全程一致。"""
+        import os as _o
+        cone_start = float(_o.environ.get('SPAWN_CONE_DEG', '360'))
+        if cone_start >= 360.0:
+            return torch.rand(n, device=self.device) * 2 * torch.pi
+        anneal = float(_o.environ.get('CONE_ANNEAL_STEPS', '0'))
+        if anneal > 0:
+            frac = min(1.0, float(self.common_step_counter) / anneal)
+            cone_deg = cone_start + frac * (360.0 - cone_start)
+        else:
+            cone_deg = cone_start
+        fwd_bearing = torch.pi if self._fwd_x < 0 else 0.0
+        half = (cone_deg / 2.0) * torch.pi / 180.0
+        return fwd_bearing + (torch.rand(n, device=self.device) * 2.0 - 1.0) * half
 
     def _get_dones(self):
         time_out = self.episode_length_buf >= self.max_episode_length - 1
@@ -1346,6 +1420,25 @@ class MyFirstTaskEnv(DirectRLEnv):
                     })
             except:
                 pass
+            # 🆕 早停:课程展开到一定程度(EARLYSTOP_AFTER 步)后,若 in-training Targets/ep 连续
+            #    EARLYSTOP_PATIENCE 次低于 EARLYSTOP_MIN_TARGETS → 判定"没学会转向",提前退出省时间。
+            #    EARLYSTOP_AFTER=0 默认关。注意阈值是 in-training 尺度(被 OOB-reset 摊薄,好模型~0.2-0.3)。
+            import os as _es
+            _es_after = float(_es.environ.get('EARLYSTOP_AFTER', '0'))
+            if _es_after > 0 and self.common_step_counter >= _es_after:
+                _es_min = float(_es.environ.get('EARLYSTOP_MIN_TARGETS', '0.10'))
+                _es_pat = int(_es.environ.get('EARLYSTOP_PATIENCE', '3'))
+                self._es_strikes = (getattr(self, '_es_strikes', 0) + 1) if targets_per_ep < _es_min else 0
+                if self._es_strikes >= _es_pat:
+                    print(f"🛑 [EARLY-STOP] step={self.common_step_counter} Targets/ep={targets_per_ep:.2f} "
+                          f"< {_es_min} 连续 {self._es_strikes} 次 → 没学会,提前停(省时间)。", flush=True)
+                    try:
+                        import wandb as _wb
+                        if _wb.run is not None:
+                            _wb.finish()
+                    except Exception:
+                        pass
+                    _es._exit(0)  # 硬退出:跳过 Isaac Sim 拆插件(渲染管线在录像时 sys.exit 会 access-violation 崩)
             self.episode_count = 0
             self.reached_count = 0
             self._metric_backward_steps = 0
@@ -1367,7 +1460,8 @@ class MyFirstTaskEnv(DirectRLEnv):
         distances = self.min_spawn_distance + \
                     torch.rand(num, device=self.device) * \
                     (self.max_spawn_distance - self.min_spawn_distance)
-        angles = torch.rand(num, device=self.device) * 2 * torch.pi
+        # 🆕 cone 课程(治转向):见 _sample_target_angles。初始 spawn 和 respawn 共用。
+        angles = self._sample_target_angles(num)
 
         origin_xy = self.scene.env_origins[env_ids, :2]
         self.target_pos[env_ids, 0] = origin_xy[:, 0] + distances * torch.cos(angles)
