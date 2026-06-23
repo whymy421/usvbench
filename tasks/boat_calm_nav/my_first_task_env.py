@@ -169,25 +169,30 @@ class MyFirstTaskEnv(DirectRLEnv):
         self._physics_diagnostic_printed = False
         self._prev_distance = None  # 势能式 distance-progress reward 用(PROGRESS_COEF)
 
-        # 🔧 COM_CENTER=1: 在 play/baking 前 author 修正质心。boat USD 实测 COM≈(0.5,-0.9,-0.06),
-        #    横向偏 0.9m 造成不对称偏航/转不准。把横向 y 归零(x、z 保留)。默认 0=不动 benchmark。
-        #    (运行时 set_coms 在 GPU 管线被后端拒绝,只能 authoring 阶段改 prim。)
+        # 🔧 物理清理(benchmark 默认开;PHYS_RAW=1 关回原始物理做对照/复现旧结果):
+        #   ① 质心居中:boat USD 实测 COM≈(0.5,-0.9,-0.06),横向偏 0.9m(应在中线)→ y 归零(x/z 保留)。
+        #   ② 碰撞近似:USD 碰撞是三角网格,PhysX 对动态体不支持→退化凸包并 warning→显式设 convexHull。
+        #   都必须在 play/baking 前 author prim(运行时改不了)。⚠️ 改了物理→旧 checkpoint 需重训。
         import os as _os_com
-        if int(_os_com.environ.get('COM_CENTER', '0')):
+        if not int(_os_com.environ.get('PHYS_RAW', '0')):
             try:
                 import omni.usd
-                from pxr import UsdPhysics, Gf
+                from pxr import UsdPhysics, Gf, Usd
                 stage = omni.usd.get_context().get_stage()
-                prim = stage.GetPrimAtPath("/World/envs/env_0/Robot")
-                mapi = UsdPhysics.MassAPI.Apply(prim)
-                # 直接写实测 COM 的有限值、y 归零(不能读 GetCenterOfMassAttr:未 author 时返回
-                # 哨兵 (-inf,-inf,-inf),会让 PhysX 整体回退自动算)。x/z 用实测值保留。
-                new = Gf.Vec3f(0.504, 0.0, -0.057)
-                mapi.CreateCenterOfMassAttr().Set(new)
-                mapi.CreateMassAttr().Set(100.0)  # 显式写 mass,确保用 authored COM 而非自动重算
-                print(f"🔧 COM_CENTER authored: centerOfMass -> {new} on /World/envs/env_0/Robot")
+                robot_prim = stage.GetPrimAtPath("/World/envs/env_0/Robot")
+                # ① 质心居中(写在带 MassAPI 的刚体 prim 上;直接写有限值,y=0)
+                mapi = UsdPhysics.MassAPI.Apply(robot_prim)
+                mapi.CreateCenterOfMassAttr().Set(Gf.Vec3f(0.504, 0.0, -0.057))
+                mapi.CreateMassAttr().Set(100.0)
+                # ② 碰撞近似 = convexHull(消除三角网格 fallback warning)
+                n_coll = 0
+                for p in Usd.PrimRange(robot_prim):
+                    if p.HasAPI(UsdPhysics.CollisionAPI):
+                        UsdPhysics.MeshCollisionAPI.Apply(p).CreateApproximationAttr().Set("convexHull")
+                        n_coll += 1
+                print(f"🔧 PHYS clean: COM centered (y=0) + collision=convexHull on {n_coll} prim(s)")
             except Exception as e:
-                print(f"⚠️ COM_CENTER author failed: {e}")
+                print(f"⚠️ physics cleanup failed: {e}")
 
         self._load_water_from_usd()
 
