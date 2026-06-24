@@ -169,12 +169,13 @@ class MyFirstTaskEnv(DirectRLEnv):
         self._physics_diagnostic_printed = False
         self._prev_distance = None  # 势能式 distance-progress reward 用(PROGRESS_COEF)
 
-        # 🔧 物理清理(benchmark 默认开;PHYS_RAW=1 关回原始物理做对照/复现旧结果):
-        #   ① 质心居中:boat USD 实测 COM≈(0.5,-0.9,-0.06),横向偏 0.9m(应在中线)→ y 归零(x/z 保留)。
-        #   ② 碰撞近似:USD 碰撞是三角网格,PhysX 对动态体不支持→退化凸包并 warning→显式设 convexHull。
-        #   都必须在 play/baking 前 author prim(运行时改不了)。⚠️ 改了物理→旧 checkpoint 需重训。
+        # 🔧 物理清理(PHYS_CLEAN=1 才开;默认关=raw 物理,复现 progress reward 的 3.24):
+        #   ① 质心居中:boat USD 实测 COM≈(0.5,-0.9,-0.06),横向偏 0.9m → y 归零(x/z 保留)。
+        #   ② 碰撞近似:三角网格→PhysX 退化凸包(warning)→显式 convexHull。都在 play 前 author。
+        #   ⚠️ 实测:干净物理改了转动动力学,3.24(偏心船)掉到 ~1。clean 物理需在 clean 船上重新调
+        #   reward/超参才能恢复——这是后续/学生任务(见 usvbench TASKS.md A1/A2)。故默认关,benchmark 用 raw。
         import os as _os_com
-        if not int(_os_com.environ.get('PHYS_RAW', '0')):
+        if int(_os_com.environ.get('PHYS_CLEAN', '0')):
             try:
                 import omni.usd
                 from pxr import UsdPhysics, Gf, Usd
