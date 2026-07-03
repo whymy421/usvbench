@@ -31,10 +31,12 @@ usvbench/
 │   ├── rov_calm_nav/   # Task A  + STARTER_TASK.md
 │   └── boat_calm_nav/  # Task B  + STARTER_TASK.md
 ├── assets/             # vessel USD models (ROV_rigged.usd, boat_physics.usdc)
-├── scripts/            # ready-to-run training launchers (.ps1)
+├── scripts/            # training launchers (.ps1) + eval_benchmark.py
 ├── docs/
 │   ├── ARIF_TASKS.md           # contributor roadmap (week-by-week)
+│   ├── EMAIL_TO_ARIF.md        # contributor onboarding note
 │   └── GITHUB_COLLABORATION.md # git workflow + wandb for contributors
+├── TASKS.md            # benchmark roadmap (physics cleanup, enrichment, Gazebo)
 └── README.md
 ```
 
@@ -66,12 +68,17 @@ the network. Reward env-vars don't affect evaluation.)
 | Task | targets/ep (primary) | mean speed | notes |
 |------|----------------------|------------|-------|
 | ROV calm | **27.1 ± 2.4** (n=3) | 6.6 m/s | robust across seeds |
-| boat calm | ~5.1 (seed 42) | 4.6 m/s | higher seed-variance — see task notes |
+| boat calm | ~5.1 (seed 42 only) | 4.6 m/s | 3-seed baseline pending; higher seed-variance |
 
-**Metrics**: `targets_per_episode` (navigation throughput, primary) · `mean_speed` ·
-`oob_rate` (out-of-bounds events per episode — a control-quality / safety signal).
-Each task's number is its own reference; numbers are comparable *within* a task (a new
-method vs the reference), not *across* tasks.
+> The **Reference tasks** table above quotes *training-time* throughput (~24 / ~4.8);
+> the numbers here are the *standardized deterministic eval* (`eval_benchmark.py`), which
+> runs a little higher (~27 / ~5). Compare new methods against these eval numbers.
+
+**Metrics**: `targets_per_episode` (navigation throughput, **primary**) · `mean_speed` ·
+`oob_per_episode` (out-of-bounds events per episode — a control-quality diagnostic; in
+calm water this is *overshoot*, not a safety failure — safety only becomes meaningful
+under waves). Each task's number is its own reference; numbers are comparable *within* a
+task (a new method vs the reference), not *across* tasks.
 
 ## For contributors
 
