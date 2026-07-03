@@ -10,9 +10,11 @@ Protocol (report like this in the paper):
   - Report mean ± std ACROSS the 3 seeds for each metric.
 
 Metrics:
-  - targets_per_episode : primary score (total targets reached / episodes completed)
+  - targets_per_episode : primary score (total targets reached / episode-equivalent)
   - mean_speed          : avg planar speed over the rollout (m/s)
-  - oob_rate            : fraction of episodes that ended out-of-bounds (vs timeout)
+  - oob_per_episode     : out-of-bounds events per episode-equivalent. Control-quality
+                          signal — in calm water this is overshoot, not a safety failure
+                          (safety only becomes meaningful under waves). Can exceed 1.0.
   - mean_episode_len    : avg steps per completed episode
 
 Example (ROV, calm):
@@ -143,7 +145,7 @@ def main(env_cfg, experiment_cfg):
     # episode-equivalents = total env-steps / steps-per-episode
     ep_equiv = (args_cli.num_envs * args_cli.eval_steps) / max(max_ep, 1.0)
     tgt_per_ep = reached_total / max(ep_equiv, 1e-9)
-    oob_rate = n_oob / max(ep_equiv, 1e-9)
+    oob_per_episode = n_oob / max(ep_equiv, 1e-9)   # events per episode-equivalent (can be >1)
     mean_speed = speed_sum / max(speed_n, 1)
 
     print("\n" + "=" * 56)
@@ -152,7 +154,7 @@ def main(env_cfg, experiment_cfg):
     print("-" * 56)
     print(f"  targets_per_episode : {tgt_per_ep:7.2f}   (primary score)")
     print(f"  mean_speed (m/s)    : {mean_speed:7.2f}")
-    print(f"  oob_rate            : {oob_rate:7.2%}   (per episode; rest = timeout)")
+    print(f"  oob_per_episode     : {oob_per_episode:7.2f}   (out-of-bounds events / episode)")
     print(f"  total_targets       : {reached_total}")
     print(f"  episode_equivalents : {ep_equiv:7.1f}   (ep_len={max_ep:.0f} steps)")
     print("=" * 56 + "\n")
@@ -161,8 +163,8 @@ def main(env_cfg, experiment_cfg):
         new = not os.path.exists(args_cli.csv)
         with open(args_cli.csv, "a", encoding="utf-8") as f:
             if new:
-                f.write("task,seed,targets_per_episode,mean_speed,oob_rate,total_targets\n")
-            f.write(f"{args_cli.task},{args_cli.seed},{tgt_per_ep:.3f},{mean_speed:.3f},{oob_rate:.4f},{reached_total}\n")
+                f.write("task,seed,targets_per_episode,mean_speed,oob_per_episode,total_targets\n")
+            f.write(f"{args_cli.task},{args_cli.seed},{tgt_per_ep:.3f},{mean_speed:.3f},{oob_per_episode:.4f},{reached_total}\n")
         print(f"[INFO] appended result to {args_cli.csv}")
 
     env.close()

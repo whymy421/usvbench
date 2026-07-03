@@ -4,17 +4,20 @@ Standardized calm-water navigation baselines for a **surface vehicle (boat)** an
 **underwater vehicle (ROV)** in Isaac Sim. This file tracks planned work and who owns it.
 
 ## Current baselines
-Continuous 360° waypoint navigation, calm water, evaluated with `eval_benchmark.py`
-(targets reached per 7200-step episode, mean over seeds 42/123/456):
+Continuous 360° point navigation, calm water, scored with `eval_benchmark.py`
+(deterministic policy; `targets_per_episode` normalized per episode-equivalent):
 
-| vehicle | targets/episode | OOB rate |
+| vehicle | targets/episode | oob/episode |
 |---|---|---|
-| ROV  | ~27 | 0% |
-| boat | 3.24 ± 0.48 (distance-progress reward) | ~600% |
+| ROV  | 27.1 ± 2.4 (seeds 42/123/456) | 0 |
+| boat | ~5.1 (seed 42; 3-seed pending) | several (leaves the arena — open weakness) |
 
-The boat's main remaining weakness is the high out-of-bounds rate (it still leaves the
-arena ~6×/episode). Reward fix that got it from 1.05 → 3.24: potential-based
-distance-progress shaping (`PROGRESS_COEF`, reward closing distance to target).
+The shipped boat reference is the **V26 speed-coupled** reward
+(`tasks/boat_calm_nav/STARTER_TASK.md`). The boat's main remaining weakness is that it
+still overshoots and leaves the arena (high `oob_per_episode`). An experimental
+potential-based **distance-progress** reward (`PROGRESS_COEF`, default off) was tried to
+curb this — it lifted a from-scratch run 1.05 → 3.24 but scores *below* the V26 reference,
+so it stays an opt-in experiment, not the baseline.
 
 ---
 
