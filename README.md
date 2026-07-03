@@ -87,7 +87,7 @@ task (a new method vs the reference), not *across* tasks.
 
 ## Authors
 
-- Yutong Wang, UCL Mechanical Engineering (lead)
+- Song Yutong, UCL Mechanical Engineering (lead)
 - Arif (contributor, ongoing)
 
 ## License
