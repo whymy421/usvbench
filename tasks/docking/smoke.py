@@ -21,13 +21,13 @@ def curriculum_smoke_check() -> bool:
     curriculum = DockingCurriculum()
     for _ in range(20):
         curriculum.update(False)
-    stayed_at_start = curriculum.spawn_distance == 5.0
+    stayed_at_start = curriculum.spawn_distance == 3.0
 
     for _ in range(200):
         curriculum.update(True)
-        if curriculum.spawn_distance > 5.0:
+        if curriculum.spawn_distance > 3.0:
             break
-    advanced_one_stage = curriculum.spawn_distance == 7.5
+    advanced_one_stage = curriculum.spawn_distance == 5.5
     return stayed_at_start and advanced_one_stage
 
 

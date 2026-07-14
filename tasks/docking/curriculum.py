@@ -8,7 +8,7 @@ class DockingCurriculum:
 
     def __init__(
         self,
-        start_distance: float = 5.0,
+        start_distance: float = 3.0,
         distance_increment: float = 2.5,
         max_distance: float = 25.0,
         ema_decay: float = 0.99,

@@ -113,11 +113,13 @@ class DockingEnvCfg(DirectRLEnvCfg):
     state_space = 0
 
     success_position_tolerance_m: float = 2.5
+    # Mission-evaluation alias of the position tolerance, used to compute SPL.
+    goal_radius: float = 2.5
     success_heading_tolerance_deg: float = 15.0
     success_speed_tolerance_mps: float = 0.3
     required_hold_time_s: float = 5.0
 
-    curriculum_start_distance_m: float = 5.0
+    curriculum_start_distance_m: float = 3.0
     curriculum_distance_increment_m: float = 2.5
     curriculum_max_distance_m: float = 25.0
     curriculum_ema_decay: float = 0.99
@@ -128,6 +130,10 @@ class DockingEnvCfg(DirectRLEnvCfg):
     reference_reward_distance_scale_m: float = 25.0
     reference_reward_alignment_scale: float = 0.5
     reference_reward_alignment_decay_m: float = 5.0
+    reference_reward_braking_scale: float = 0.4
+    reference_reward_braking_decay_m: float = 2.5
+    reference_reward_braking_speed_scale_mps: float = 1.0
+    reference_reward_hold_progress_scale: float = 0.2
     reference_reward_success_bonus: float = 1.0
 
     # VRX classic thrusters provide 250 N forward and 100 N reverse each.
