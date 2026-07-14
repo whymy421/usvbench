@@ -5,13 +5,13 @@ from curriculum import DockingCurriculum
 
 def test_no_advance_below_threshold() -> None:
     curriculum = DockingCurriculum(ema_decay=0.5, success_threshold=0.75)
-    assert curriculum.update(True) == 5.0
+    assert curriculum.update(True) == 3.0
     assert curriculum.success_rate_ema == 0.5
 
 
 def test_advance_at_threshold() -> None:
     curriculum = DockingCurriculum(ema_decay=0.5, success_threshold=0.5)
-    assert curriculum.update(True) == 7.5
+    assert curriculum.update(True) == 5.5
     assert curriculum.success_rate_ema == 0.5
 
 

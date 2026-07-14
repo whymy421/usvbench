@@ -257,12 +257,29 @@ class DockingEnv(DirectRLEnv):
 
     def _get_rewards(self) -> torch.Tensor:
         """Reference baseline only; benchmark methods may use any reward shaping."""
-        distance, dock_dot, _, instantaneous_success = self._task_state()
+        distance, dock_dot, planar_speed, instantaneous_success = self._task_state()
+        braking_credit = (
+            self.cfg.reference_reward_braking_scale
+            * torch.exp(-distance / self.cfg.reference_reward_braking_decay_m)
+            * torch.clamp(
+                1.0
+                - planar_speed / self.cfg.reference_reward_braking_speed_scale_mps,
+                min=0.0,
+                max=1.0,
+            )
+        )
+        hold_progress_credit = (
+            self.cfg.reference_reward_hold_progress_scale
+            * self.hold_timer
+            / self.cfg.required_hold_time_s
+        )
         return (
             -distance / self.cfg.reference_reward_distance_scale_m
             + self.cfg.reference_reward_alignment_scale
             * dock_dot
             * torch.exp(-distance / self.cfg.reference_reward_alignment_decay_m)
+            + braking_credit
+            + hold_progress_credit
             + self.cfg.reference_reward_success_bonus * instantaneous_success.float()
         )
 

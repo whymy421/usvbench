@@ -36,7 +36,7 @@ The spawn radius never decreases.
 
 | Parameter | Value |
 |---|---:|
-| Initial spawn radius | 5.0 m |
+| Initial spawn radius | 3.0 m |
 | Success-rate EMA decay | 0.99 |
 | Advancement threshold | 0.6 |
 | Radius increment | 2.5 m |
@@ -51,8 +51,19 @@ The included reward is **reference-only** and is not part of success:
 
 ```text
 -distance/25 + 0.5 * dock_dot * exp(-distance/5)
+    + 0.4 * exp(-distance/2.5) * clamp(1 - planar_speed/1.0, 0, 1)
+    + 0.2 * (hold_timer/5.0)
     + 1.0 * [instantaneous success predicate is true]
 ```
+
+## Reference reward history
+
+V1 omitted the braking and hold-progress terms. A full 3000-iteration training
+run produced 0% episode success, a zero success-rate EMA, and no advancement
+beyond its then-initial 5.0 m curriculum stage: the policy learned to remain
+close and aligned while still moving. V2 adds near-dock deceleration credit and
+progress credit during the consecutive hold. This documents reward sensitivity
+only; the scored success predicate did not change.
 
 ## Train
 
