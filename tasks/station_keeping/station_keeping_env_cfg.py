@@ -113,6 +113,22 @@ class WavePhysicsCfg:
 
 
 @configclass
+class VisualCfg:
+    """Render-only settings; never read by physics, observations, or reward."""
+
+    enable_water: bool = True
+    water_size_m: float = 300.0
+    water_res: int = 60
+    water_color: tuple = (0.1, 0.3, 0.8)
+    enable_hold_zone_marker: bool = True
+    hold_zone_segments: int = 64
+    # High-contrast against the blue water in rendered videos: a thin orange ring
+    # washed out to pale yellow at 0.12 m, so the ring is wider and near-red.
+    hold_zone_color: tuple = (1.0, 0.15, 0.0)
+    hold_zone_line_width_m: float = 0.35
+
+
+@configclass
 class StationKeepingEnvCfg(DirectRLEnvCfg):
     decimation = 2
     episode_length_s = 120.0
@@ -146,6 +162,9 @@ class StationKeepingEnvCfg(DirectRLEnvCfg):
     robot_cfg: ArticulationCfg = ROV_CONFIG
     underwater_physics_cfg: UnderwaterPhysicsCfg = UnderwaterPhysicsCfg()
     wave_cfg: WavePhysicsCfg = WavePhysicsCfg()
+    # Rendering only: this block must not affect physics, observations, reward,
+    # termination, or success semantics.
+    visual: VisualCfg = VisualCfg()
 
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
         num_envs=64,
