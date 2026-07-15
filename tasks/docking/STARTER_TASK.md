@@ -56,7 +56,7 @@ The included reward is **reference-only** and is not part of success:
     + 1.0 * [instantaneous success predicate is true]
 ```
 
-## Reference reward history
+## Reference training recipe history
 
 V1 omitted the braking and hold-progress terms. A full 3000-iteration training
 run produced 0% episode success, a zero success-rate EMA, and no advancement
@@ -64,6 +64,11 @@ beyond its then-initial 5.0 m curriculum stage: the policy learned to remain
 close and aligned while still moving. V2 adds near-dock deceleration credit and
 progress credit during the consecutive hold. This documents reward sensitivity
 only; the scored success predicate did not change.
+
+V2.1 keeps the V2 reward and adds a bounded action space, `clip_actions: True`,
+and `initial_log_std: -1.0`. This prevents the Gaussian policy mean from locking
+beyond the action rails, where hard-clipped samples become indistinguishable,
+while reducing disruptive exploration during the 5 s hold.
 
 ## Train
 
