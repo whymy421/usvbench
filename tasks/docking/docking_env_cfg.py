@@ -5,6 +5,7 @@
 
 import os as _os
 
+import gymnasium as gym
 import isaaclab.sim as sim_utils
 from isaaclab.assets import RigidObjectCfg
 from isaaclab.envs import DirectRLEnvCfg
@@ -108,7 +109,7 @@ class DockingEnvCfg(DirectRLEnvCfg):
     decimation = 2
     episode_length_s = 120.0
 
-    action_space = 2
+    action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
     observation_space = 6
     state_space = 0
 
