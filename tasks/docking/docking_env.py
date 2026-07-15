@@ -362,15 +362,44 @@ class DockingEnv(DirectRLEnv):
         distances = torch.full(
             (num_resets,), self.current_spawn_distance, device=self.device
         )
-        spawn_angles = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
-        headings = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
+        dock_headings = self.dock_heading[env_ids]
+        dock_headings = dock_headings / torch.norm(
+            dock_headings, dim=-1, keepdim=True
+        ).clamp(min=1.0e-6)
+
+        bearing_limit = math.radians(self.cfg.spawn_bearing_limit_deg)
+        bearing_offsets = (
+            2.0 * torch.rand(num_resets, device=self.device) - 1.0
+        ) * bearing_limit
+        bearing_cos = torch.cos(bearing_offsets)
+        bearing_sin = torch.sin(bearing_offsets)
+        spawn_directions = torch.stack(
+            (
+                dock_headings[:, 0] * bearing_cos
+                - dock_headings[:, 1] * bearing_sin,
+                dock_headings[:, 0] * bearing_sin
+                + dock_headings[:, 1] * bearing_cos,
+            ),
+            dim=-1,
+        )
+
+        heading_limit = math.radians(self.cfg.spawn_heading_offset_limit_deg)
+        heading_offsets = (
+            2.0 * torch.rand(num_resets, device=self.device) - 1.0
+        ) * heading_limit
+        forward_headings = torch.atan2(dock_headings[:, 1], dock_headings[:, 0])
+        forward_headings += heading_offsets
+        # The asset's bow is body -X, so its body yaw is pi beyond the desired
+        # world-frame bow heading.
+        body_yaws = forward_headings + torch.pi
 
         root_state = self.robot.data.default_root_state[env_ids].clone()
         root_state[:, :3] += self.scene.env_origins[env_ids]
-        root_state[:, 0] += distances * torch.cos(spawn_angles)
-        root_state[:, 1] += distances * torch.sin(spawn_angles)
+        root_state[:, :2] = (
+            self.dock_point[env_ids] + distances.unsqueeze(-1) * spawn_directions
+        )
         root_state[:, 3:7] = math_utils.quat_from_angle_axis(
-            headings.unsqueeze(-1), self.up_dir
+            body_yaws.unsqueeze(-1), self.up_dir
         ).reshape(num_resets, 4)
         root_state[:, 7:] = 0.0
         self.robot.write_root_state_to_sim(root_state, env_ids)

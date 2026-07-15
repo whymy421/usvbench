@@ -7,15 +7,21 @@
 ## Task
 
 Each 120 s episode asks the boat to dock at the local environment origin with
-its bow pointing along world `+X`. The boat starts at rest on the current
-curriculum radius, with a uniformly random bearing and uniformly random heading.
-The boat asset's bow/forward axis is body `-X`.
+its bow pointing along the per-environment dock heading (world `+X` by default).
+The boat starts at rest on the current curriculum radius. Its bearing from the
+dock is sampled uniformly from
+`[-60, +60]` degrees relative to the dock heading, and its bow heading is the
+dock heading plus a uniformly sampled offset in `[-45, +45]` degrees. Both are
+rotated by the per-environment dock heading. The boat asset's bow/forward axis
+is body `-X`.
+
+Task geometry statement: docking is evaluated as an approach-sector task (vessels enter a berth from the water side); this is part of the task geometry, not a curriculum trick.
 
 The fixed observation is
 `(dot, cross, dist/25, dock_dot, dock_cross, planar_speed/2)`. The first two
 components describe the dock position relative to the boat's forward direction;
-`dock_dot` and `dock_cross` align boat forward with world `+X`. Actions are
-forward thrust and yaw torque in `[-1, 1]^2`.
+`dock_dot` and `dock_cross` align boat forward with the dock heading. Actions
+are forward thrust and yaw torque in `[-1, 1]^2`.
 
 ## Reward-free success predicate
 
@@ -36,7 +42,7 @@ The spawn radius never decreases.
 
 | Parameter | Value |
 |---|---:|
-| Initial spawn radius | 3.0 m |
+| Initial spawn radius | 2.0 m |
 | Success-rate EMA decay | 0.99 |
 | Advancement threshold | 0.6 |
 | Radius increment | 2.5 m |
@@ -50,7 +56,7 @@ When the updated EMA is at least 0.6, that episode advances the radius by one
 The included reward is **reference-only** and is not part of success:
 
 ```text
--distance/25 + 0.5 * dock_dot * exp(-distance/5)
+-distance/25 + 0.5 * dock_dot * exp(-distance/2.5)
     + 0.4 * exp(-distance/2.5) * clamp(1 - planar_speed/1.0, 0, 1)
     + 0.2 * (hold_timer/5.0)
     + 1.0 * [instantaneous success predicate is true]
@@ -68,7 +74,14 @@ only; the scored success predicate did not change.
 V2.1 keeps the V2 reward and adds a bounded action space, `clip_actions: True`,
 and `initial_log_std: -1.0`. This prevents the Gaussian policy mean from locking
 beyond the action rails, where hard-clipped samples become indistinguishable,
-while reducing disruptive exploration during the 5 s hold.
+while reducing disruptive exploration during the 5 s hold. V2 and V2.1 training
+also scored 0% episode success.
+
+V3 adds approach-sector spawns, an in-zone 2.0 m curriculum start, and
+proximity-gated alignment. The diagnosis was that the alignment term was
+antagonistic to distance-closing approaches on the far side of the dock, while
+the previous 3.0 m start placed zero-exploration episodes outside the position
+tolerance. The scored success predicate remains unchanged.
 
 ## Train
 
