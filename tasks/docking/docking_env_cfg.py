@@ -120,17 +120,24 @@ class DockingEnvCfg(DirectRLEnvCfg):
     success_speed_tolerance_mps: float = 0.3
     required_hold_time_s: float = 5.0
 
-    curriculum_start_distance_m: float = 3.0
+    # V3 begins inside the position tolerance so align-and-stop is learnable
+    # before the approach distance grows.
+    curriculum_start_distance_m: float = 2.0
     curriculum_distance_increment_m: float = 2.5
     curriculum_max_distance_m: float = 25.0
     curriculum_ema_decay: float = 0.99
     curriculum_success_threshold: float = 0.6
 
+    # Spawn positions and bow headings are sampled relative to each
+    # environment's dock_heading, rather than in fixed world coordinates.
+    spawn_bearing_limit_deg: float = 60.0
+    spawn_heading_offset_limit_deg: float = 45.0
+
     observation_distance_scale_m: float = 25.0
     observation_speed_scale_mps: float = 2.0
     reference_reward_distance_scale_m: float = 25.0
     reference_reward_alignment_scale: float = 0.5
-    reference_reward_alignment_decay_m: float = 5.0
+    reference_reward_alignment_decay_m: float = 2.5
     reference_reward_braking_scale: float = 0.4
     reference_reward_braking_decay_m: float = 2.5
     reference_reward_braking_speed_scale_mps: float = 1.0

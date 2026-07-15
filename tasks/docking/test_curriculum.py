@@ -3,15 +3,24 @@
 from curriculum import DockingCurriculum
 
 
+def test_v3_defaults() -> None:
+    curriculum = DockingCurriculum()
+    assert curriculum.start_distance == 2.0
+    assert curriculum.spawn_distance == 2.0
+    assert curriculum.distance_increment == 2.5
+    assert curriculum.success_threshold == 0.6
+    assert curriculum.max_distance == 25.0
+
+
 def test_no_advance_below_threshold() -> None:
     curriculum = DockingCurriculum(ema_decay=0.5, success_threshold=0.75)
-    assert curriculum.update(True) == 3.0
+    assert curriculum.update(True) == 2.0
     assert curriculum.success_rate_ema == 0.5
 
 
 def test_advance_at_threshold() -> None:
     curriculum = DockingCurriculum(ema_decay=0.5, success_threshold=0.5)
-    assert curriculum.update(True) == 5.5
+    assert curriculum.update(True) == 4.5
     assert curriculum.success_rate_ema == 0.5
 
 
@@ -31,6 +40,7 @@ def test_distance_is_monotonic() -> None:
 
 
 def main() -> None:
+    test_v3_defaults()
     test_no_advance_below_threshold()
     test_advance_at_threshold()
     test_cap_at_25_metres()

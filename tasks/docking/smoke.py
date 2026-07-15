@@ -21,13 +21,13 @@ def curriculum_smoke_check() -> bool:
     curriculum = DockingCurriculum()
     for _ in range(20):
         curriculum.update(False)
-    stayed_at_start = curriculum.spawn_distance == 3.0
+    stayed_at_start = curriculum.spawn_distance == 2.0
 
     for _ in range(200):
         curriculum.update(True)
-        if curriculum.spawn_distance > 3.0:
+        if curriculum.spawn_distance > 2.0:
             break
-    advanced_one_stage = curriculum.spawn_distance == 5.5
+    advanced_one_stage = curriculum.spawn_distance == 4.5
     return stayed_at_start and advanced_one_stage
 
 
@@ -96,9 +96,31 @@ def main() -> bool:
             f"max={base.hold_timer.max().item():.6f}"
         )
 
+        # Exercise reset geometry against distinct per-environment headings so
+        # a world-fixed sector cannot accidentally pass.
+        dock_angles = (
+            torch.arange(NUM_ENVS, device=base.device)
+            * (2.0 * torch.pi / NUM_ENVS)
+            - torch.pi
+        )
+        base.dock_heading[:, 0] = torch.cos(dock_angles)
+        base.dock_heading[:, 1] = torch.sin(dock_angles)
         env.reset()
-        spawn_distance = torch.norm(
-            base.robot.data.root_pos_w[:, :2] - base.dock_point, dim=-1
+        spawn_offset = base.robot.data.root_pos_w[:, :2] - base.dock_point
+        spawn_distance = torch.norm(spawn_offset, dim=-1)
+        spawn_direction = spawn_offset / spawn_distance.unsqueeze(-1).clamp(
+            min=1.0e-6
+        )
+        spawn_bearing = torch.atan2(
+            base.dock_heading[:, 0] * spawn_direction[:, 1]
+            - base.dock_heading[:, 1] * spawn_direction[:, 0],
+            torch.sum(base.dock_heading * spawn_direction, dim=-1),
+        )
+        spawn_forward = base._forward_2d()
+        spawn_heading_offset = torch.atan2(
+            base.dock_heading[:, 0] * spawn_forward[:, 1]
+            - base.dock_heading[:, 1] * spawn_forward[:, 0],
+            torch.sum(base.dock_heading * spawn_forward, dim=-1),
         )
         previous_timer = base.hold_timer.clone()
         predicate_violations = 0
@@ -114,13 +136,18 @@ def main() -> bool:
             )
             previous_timer.copy_(base.hold_timer)
 
-        # Positive control: put env 0 one metre from the dock, aligned with
-        # world +X and at rest. Body -X points +X at a pi-radian body yaw.
+        # Positive control: put env 0 one metre from the dock, aligned with its
+        # dock heading and at rest. Body -X is the asset's forward direction.
         probe_id = torch.tensor([0], dtype=torch.long, device=base.device)
         inside_state = base.robot.data.default_root_state[probe_id].clone()
         inside_state[:, :3] += base.scene.env_origins[probe_id]
-        inside_state[:, 0] += 1.0
-        dock_aligned_yaw = torch.full((1, 1), torch.pi, device=base.device)
+        inside_state[:, :2] = (
+            base.dock_point[probe_id] + base.dock_heading[probe_id]
+        )
+        dock_heading_angle = torch.atan2(
+            base.dock_heading[probe_id, 1], base.dock_heading[probe_id, 0]
+        )
+        dock_aligned_yaw = (dock_heading_angle + torch.pi).unsqueeze(-1)
         inside_state[:, 3:7] = math_utils.quat_from_angle_axis(
             dock_aligned_yaw, base.up_dir
         ).reshape(1, 4)
@@ -140,7 +167,10 @@ def main() -> bool:
 
         # Break heading alignment and verify the consecutive timer resets.
         broken_state = base.robot.data.root_state_w[probe_id].clone()
-        broken_state[:, 3:7] = base.robot.data.default_root_state[probe_id, 3:7]
+        broken_yaw = dock_aligned_yaw + torch.pi / 2.0
+        broken_state[:, 3:7] = math_utils.quat_from_angle_axis(
+            broken_yaw, base.up_dir
+        ).reshape(1, 4)
         broken_state[:, 7:] = 0.0
         base.robot.write_root_state_to_sim(broken_state, probe_id)
         env.step(zero_actions)
@@ -151,18 +181,35 @@ def main() -> bool:
             and inside_growth_samples > 0
             and break_resets_timer
         )
-        spawn_ok = bool(
-            torch.allclose(
-                spawn_distance,
-                torch.full_like(spawn_distance, base.current_spawn_distance),
-                atol=1.0e-3,
-                rtol=0.0,
-            )
+        distance_ok = torch.allclose(
+            spawn_distance,
+            torch.full_like(spawn_distance, base.current_spawn_distance),
+            atol=1.0e-3,
+            rtol=0.0,
         )
+        bearing_limit = torch.deg2rad(torch.tensor(60.0, device=base.device))
+        heading_limit = torch.deg2rad(torch.tensor(45.0, device=base.device))
+        sector_ok = bool(
+            (torch.abs(spawn_bearing) <= bearing_limit + 1.0e-5).all()
+        )
+        heading_ok = bool(
+            (torch.abs(spawn_heading_offset) <= heading_limit + 1.0e-5).all()
+        )
+        spawn_ok = bool(distance_ok) and sector_ok and heading_ok
         print(
             "spawn distance (m): "
             f"min={spawn_distance.min().item():.6f}, "
             f"max={spawn_distance.max().item():.6f}"
+        )
+        print(
+            "spawn bearing relative to dock heading (deg): "
+            f"min={torch.rad2deg(spawn_bearing).min().item():.6f}, "
+            f"max={torch.rad2deg(spawn_bearing).max().item():.6f}"
+        )
+        print(
+            "spawn bow offset from dock heading (deg): "
+            f"min={torch.rad2deg(spawn_heading_offset).min().item():.6f}, "
+            f"max={torch.rad2deg(spawn_heading_offset).max().item():.6f}"
         )
         print(
             "three-factor predicate timer: "
