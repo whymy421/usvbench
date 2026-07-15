@@ -36,6 +36,14 @@ shaping**:
 
 This reward is not part of the success predicate.
 
+## Visualization
+
+`StationKeepingEnvCfg.visual` controls the calm water surface and the orange
+2 m hold-zone ring used in rendered demos. These settings are render-only and
+are never read by physics, observations, reward, termination, or the success
+predicate. Record demo videos with both `enable_water` and
+`enable_hold_zone_marker` enabled (the defaults).
+
 ## Install
 
 Copy this folder into the Isaac Lab direct-task package:
