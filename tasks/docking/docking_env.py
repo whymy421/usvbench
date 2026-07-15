@@ -19,6 +19,12 @@ from .curriculum import DockingCurriculum
 from .docking_env_cfg import DockingEnvCfg
 
 
+def _space_dim(space: object) -> int:
+    """Return the leading dimension of a Gym space or a legacy integer size."""
+    shape = getattr(space, "shape", None)
+    return int(shape[0]) if shape else int(space)
+
+
 class DockingEnv(DirectRLEnv):
     """Calm-water boat docking with reward-independent success."""
 
@@ -73,7 +79,7 @@ class DockingEnv(DirectRLEnv):
         )
         self._previous_xy = self.robot.data.root_pos_w[:, :2].clone()
         self.actions = torch.zeros(
-            (self.num_envs, self.cfg.action_space), device=self.device
+            (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
         )
 
     @property
