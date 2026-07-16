@@ -287,6 +287,7 @@ class DockingEnv(DirectRLEnv):
             + braking_credit
             + hold_progress_credit
             + self.cfg.reference_reward_success_bonus * instantaneous_success.float()
+            + self.cfg.reference_reward_terminal_success * self._success.float()
         )
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:

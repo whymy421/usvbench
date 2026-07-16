@@ -60,6 +60,7 @@ The included reward is **reference-only** and is not part of success:
     + 0.4 * exp(-distance/2.5) * clamp(1 - planar_speed/1.0, 0, 1)
     + 0.2 * (hold_timer/5.0)
     + 1.0 * [instantaneous success predicate is true]
+    + 150.0 * [episode terminates in success]
 ```
 
 ## Reference training recipe history
@@ -82,6 +83,9 @@ proximity-gated alignment. The diagnosis was that the alignment term was
 antagonistic to distance-closing approaches on the far side of the dock, while
 the previous 3.0 m start placed zero-exploration episodes outside the position
 tolerance. The scored success predicate remains unchanged.
+
+V4 fixes reward milking: zero-action scored 39% success while trained PPO scored 0%, showing that the policy learned to avoid success termination and keep collecting the near-dock dense stream.
+Design rule for all success-terminated mission tasks: add a one-time terminal success bonus large enough to dominate the discounted value of continuing to milk dense rewards; V4 uses `150.0` and reduces `initial_log_std` to `-1.5` so exploration is less likely to break the speed condition.
 
 ## Train
 
