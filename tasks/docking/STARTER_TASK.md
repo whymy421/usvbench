@@ -60,7 +60,7 @@ The included reward is **reference-only** and is not part of success:
     + 0.4 * exp(-distance/2.5) * clamp(1 - planar_speed/1.0, 0, 1)
     + 0.2 * (hold_timer/5.0)
     + 1.0 * [instantaneous success predicate is true]
-    + 150.0 * [episode terminates in success]
+    + 500.0 * [episode terminates in success]
 ```
 
 ## Reference training recipe history
@@ -93,6 +93,25 @@ required reverse-parking recovery was unlearnable. V5 spawns on the approach
 lane so drift, thrust authority, alignment shaping, and the predicate all point
 the same way. Design rule: spawn geometry must make the success maneuver lie
 along the vehicle's strong actuation axis.
+
+V6 fixes an exploration infeasibility that remained after the V5 geometry
+change. The success predicate requires planar speed `<= 0.3 m/s` for 300
+consecutive 60 Hz control steps. Under Gaussian exploration with
+`initial_log_std: -1.5` (sigma approximately 0.22) on a 500 N thruster, the
+velocity random-walk RMS is approximately 0.4 m/s. The probability that the
+instantaneous speed conjunction survives all 300 steps is therefore
+effectively zero, so stochastic rollouts never sample success or its terminal
+bonus even though deterministic zero-action evaluation scores 39%. V6 reduces
+`initial_log_std` to `-2.5` (sigma approximately 0.08, velocity RMS
+approximately 0.07 m/s), making bootstrap spawn-successes samplable, and raises
+the terminal success reward from `150.0` to `500.0`. With `gamma=0.99`, the
+milkable dense stream is worth approximately 140 from the best hover state, so
+the larger bonus makes completion strictly dominant.
+
+Design rule: a hold-based success predicate bounds the exploration noise a
+solver can use. Benchmark tasks with consecutive instantaneous-speed
+conditions must either be paired with low-noise exploration or use an
+averaged-speed criterion.
 
 ## Train
 
