@@ -42,6 +42,7 @@ parser.add_argument(
     default=128,
     help="Number of completed episodes to include.",
 )
+parser.add_argument("--spawn-distance", type=float, default=None, help="Override curriculum start distance (m); tasks without the field ignore it.")
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--csv", type=str, default=None, help="If set, append one result row to this CSV.")
 parser.add_argument("--ml_framework", type=str, default="torch", choices=["torch", "jax", "jax-numpy"])
@@ -248,6 +249,9 @@ def main(env_cfg, experiment_cfg):
     print("[REPRO] " + "  ".join(f"{key}={value}" for key, value in repro.items()))
     print("[REPRO] cfg_scalars=" + json.dumps(cfg_scalars, sort_keys=True, separators=(",", ":")))
 
+    if getattr(args_cli, "spawn_distance", None) and hasattr(env_cfg, "curriculum_start_distance_m"):
+        env_cfg.curriculum_start_distance_m = float(args_cli.spawn_distance)
+        print(f"[eval] spawn distance override: {env_cfg.curriculum_start_distance_m} m")
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode=None)
     if isinstance(env.unwrapped, DirectMARLEnv) and algorithm in ["ppo"]:
         env = multi_agent_to_single_agent(env)

@@ -54,6 +54,7 @@ parser.add_argument("--num_envs", type=int, default=64)
 parser.add_argument("--episodes", type=int, default=128, help="Completed episodes for mission protocol.")
 parser.add_argument("--eval_steps", type=int, default=6000, help="Steps for throughput protocol.")
 parser.add_argument("--seed", type=int, default=42)
+parser.add_argument("--spawn-distance", type=float, default=None, help="Override curriculum start distance (m); tasks without the field ignore it.")
 parser.add_argument("--csv", type=str, default=None, help="If set, append one result row to this CSV.")
 parser.add_argument(
     "--dist-scale",
@@ -445,7 +446,7 @@ class DockingController:
         # rate damping 1.0), validated by per-second probe traces.
         yaw_rate = self.base.robot.data.root_com_vel_w[:, 5]
         yaw = (1.0 * yaw_error - 1.0 * yaw_rate).clamp(-1.0, 1.0)
-        # HOLD deadband: once parked within 8 deg, stop stirring — calm water
+        # HOLD deadband: once parked within 8 deg, stop stirring 鈥?calm water
         # keeps a parked boat parked; active yaw only reintroduces rate.
         in_deadband = (self.phase == self.HOLD) & (
             dock_error.abs() < math.radians(8.0)
@@ -759,6 +760,9 @@ def main(env_cfg, experiment_cfg):
     env_cfg.seed = args_cli.seed
 
     cfg_sha1, cfg_scalars = _cfg_fingerprint(env_cfg)
+    if getattr(args_cli, "spawn_distance", None) and hasattr(env_cfg, "curriculum_start_distance_m"):
+        env_cfg.curriculum_start_distance_m = float(args_cli.spawn_distance)
+        print(f"[eval] spawn distance override: {env_cfg.curriculum_start_distance_m} m")
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode=None)
     if isinstance(env.unwrapped, DirectMARLEnv):
         env = multi_agent_to_single_agent(env)
