@@ -34,14 +34,36 @@ predicate.
 ## Reference reward
 
 The included reward is a **reference baseline only; methods may use other
-shaping**. It is the calm-navigation E7 family applied to the current waypoint:
+shaping**. V3 uses potential-based progress toward the waypoint that was active
+at the start of the control step:
 
 ```text
-forward_speed * exp(alignment_to_current_waypoint)
+20.0 * (previous_distance - current_distance)
     + 10.0 * (waypoint gate passed this step)
+    + 100.0 * (terminal success this step)
 ```
 
-`forward_speed` is body +Y speed and alignment is the heading/target dot product.
+Both distances are measured against the same step-start waypoint. After the
+reward delta is computed, the previous-distance potential is refreshed against
+the possibly new active waypoint. Thus passing a gate does not mix the old
+target's previous distance with the new target's current distance. The dense
+progress return is capped by route progress: orbiting or moving away and back
+nets zero rather than creating an indefinitely farmable per-step stream.
+
+## Reference reward history
+
+V3 replaces the V1/V2 flow reward after the post-mortem showed the
+`forward_speed * exp(alignment)` stream paid approximately 14k for orbiting near
+a gate for the full 120 s, versus approximately 8.6k for finishing in 68 s.
+Both PPO runs reached 100% success and four gates at roughly 3-4k steps, then
+rationally abandoned completion while reward rose to approximately 14k because
+success termination cut off the stream. The V3 potential-based term makes
+progress farming-immune and adds a one-time 100-point terminal success bonus
+while retaining the 10-point per-gate bonus.
+
+This follows the docking V4/V6 design rule: success-terminated tasks need dense
+terms whose total obtainable return is farming-capped, plus a dominant terminal
+bonus that makes completing the task preferable to prolonging the episode.
 
 ## Metrics
 

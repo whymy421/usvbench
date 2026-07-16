@@ -75,7 +75,10 @@ class PathFollowingEnv(DirectRLEnv):
             self.num_envs, dtype=torch.long, device=self.device
         )
         self._previous_xy = self.robot.data.root_pos_w[:, :2].clone()
-        self._reward_direction = torch.zeros((self.num_envs, 2), device=self.device)
+        self._prev_target_distance = torch.zeros(self.num_envs, device=self.device)
+        self._pre_transition_target_distance = torch.zeros(
+            self.num_envs, device=self.device
+        )
         self.actions = torch.zeros(
             (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
         )
@@ -371,21 +374,24 @@ class PathFollowingEnv(DirectRLEnv):
         return {"policy": torch.hstack([dot, cross, distance_norm])}
 
     def _get_rewards(self) -> torch.Tensor:
-        """Reference-only E7-family reward; success never reads this value."""
-        forwards_2d, _ = self._heading_and_direction(
-            self.robot.data.root_pos_w[:, :2] + self._reward_direction
+        """Reference-only potential-progress reward; success never reads this value."""
+        progress = (
+            self._prev_target_distance - self._pre_transition_target_distance
         )
-        alignment = torch.sum(forwards_2d * self._reward_direction, dim=-1)
-
-        vel_w = self.robot.data.root_com_vel_w[:, :3]
-        quat_inv = math_utils.quat_conjugate(self.robot.data.root_link_quat_w)
-        vel_b = math_utils.quat_apply(quat_inv, vel_w)
-        forward_speed = vel_b[:, 1]
-
-        return (
-            forward_speed * torch.exp(alignment)
+        reward = (
+            self.cfg.reference_reward_progress_scale * progress
             + self._gates_passed_this_step.float() * self.cfg.reference_reward_gate_bonus
+            + self.cfg.reference_reward_terminal_success * self._success.float()
         )
+
+        # Re-anchor after rewarding progress against the step-start waypoint.
+        # On a gate transition this measures the new active waypoint, avoiding a
+        # mixed old-target/new-target delta on the next control step.
+        target_xy = self._current_waypoint_world()
+        self._prev_target_distance.copy_(
+            torch.norm(target_xy - self.robot.data.root_pos_w[:, :2], dim=-1)
+        )
+        return reward
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         current_xy = self.robot.data.root_pos_w[:, :2]
@@ -414,7 +420,7 @@ class PathFollowingEnv(DirectRLEnv):
         target_xy = self._current_waypoint_world()
         rpos = target_xy - current_xy
         distance = torch.norm(rpos, dim=-1)
-        self._reward_direction.copy_(rpos / distance.unsqueeze(-1).clamp(min=1.0e-6))
+        self._pre_transition_target_distance.copy_(distance)
 
         reached = (distance <= self.cfg.goal_radius) & ~self._success
         self._gates_passed_this_step.copy_(reached)
@@ -515,9 +521,9 @@ class PathFollowingEnv(DirectRLEnv):
 
         first_targets = self.waypoints[env_ids, 0] + self.scene.env_origins[env_ids, :2]
         first_rpos = first_targets - root_state[:, :2]
-        self._reward_direction[env_ids] = first_rpos / torch.norm(
-            first_rpos, dim=-1, keepdim=True
-        ).clamp(min=1.0e-6)
+        first_target_distance = torch.norm(first_rpos, dim=-1)
+        self._prev_target_distance[env_ids] = first_target_distance
+        self._pre_transition_target_distance[env_ids] = first_target_distance
 
         # This is reset-only USD authoring and has no disabled-mode or per-step cost.
         if self.cfg.visual.enable_waypoint_markers and bool((env_ids == 0).any().item()):

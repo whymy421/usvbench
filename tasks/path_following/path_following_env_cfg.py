@@ -128,7 +128,9 @@ class PathFollowingEnvCfg(DirectRLEnvCfg):
     segment_length_max: float = 20.0
     heading_change_max_deg: float = 60.0
     goal_radius: float = 2.0
+    reference_reward_progress_scale: float = 20.0
     reference_reward_gate_bonus: float = 10.0
+    reference_reward_terminal_success: float = 100.0
 
     # Blue Robotics T200 baseline: body +Y thrust and body +Z yaw torque.
     # Actions are hard-clipped to [-1, 1] before applying these limits.
