@@ -87,6 +87,13 @@ tolerance. The scored success predicate remains unchanged.
 V4 fixes reward milking: zero-action scored 39% success while trained PPO scored 0%, showing that the policy learned to avoid success termination and keep collecting the near-dock dense stream.
 Design rule for all success-terminated mission tasks: add a one-time terminal success bonus large enough to dominate the discounted value of continuing to milk dense rewards; V4 uses `150.0` and reduces `initial_log_std` to `-1.5` so exploration is less likely to break the speed condition.
 
+V5 fixes the V3/V4 geometry, which spawned the boat past the berth facing away;
+noise drift under asymmetric thrust destroyed all bootstrap successes, and the
+required reverse-parking recovery was unlearnable. V5 spawns on the approach
+lane so drift, thrust authority, alignment shaping, and the predicate all point
+the same way. Design rule: spawn geometry must make the success maneuver lie
+along the vehicle's strong actuation axis.
+
 ## Train
 
 Copy this folder into the Isaac Lab direct-task package, set `USVBENCH_ASSETS`

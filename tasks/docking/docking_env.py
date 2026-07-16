@@ -396,8 +396,11 @@ class DockingEnv(DirectRLEnv):
 
         root_state = self.robot.data.default_root_state[env_ids].clone()
         root_state[:, :3] += self.scene.env_origins[env_ids]
+        # Spawn on the approach lane: bow-ward drift now moves toward the berth,
+        # forward thrust serves position control, and alignment cooperates with
+        # the approach instead of fighting a return leg.
         root_state[:, :2] = (
-            self.dock_point[env_ids] + distances.unsqueeze(-1) * spawn_directions
+            self.dock_point[env_ids] - distances.unsqueeze(-1) * spawn_directions
         )
         root_state[:, 3:7] = math_utils.quat_from_angle_axis(
             body_yaws.unsqueeze(-1), self.up_dir
