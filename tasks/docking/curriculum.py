@@ -32,6 +32,11 @@ class DockingCurriculum:
         self.spawn_distance = self.start_distance
         self.success_rate_ema = 0.0
         self.finished_episodes = 0
+        self.episodes_since_change = 0
+        # Retreat guard: if the policy cannot cope with the new distance for
+        # this many episodes at near-zero EMA, step back one increment.
+        self.retreat_patience = 400
+        self.retreat_threshold = 0.05
 
     def update(self, success: bool) -> float:
         """Record one finished episode and return the current spawn distance."""
@@ -41,6 +46,7 @@ class DockingCurriculum:
             + (1.0 - self.ema_decay) * sample
         )
         self.finished_episodes += 1
+        self.episodes_since_change += 1
 
         if (
             self.success_rate_ema >= self.success_threshold
@@ -50,4 +56,22 @@ class DockingCurriculum:
                 self.spawn_distance + self.distance_increment,
                 self.max_distance,
             )
+            # The new distance must re-earn the threshold from scratch; the
+            # EMA reset doubles as a natural advance cooldown (~90 successful
+            # episodes at decay 0.99). Without it a success streak advances
+            # every update and the curriculum outruns the policy (v10: 2->25 m
+            # in ~360 iterations, then success collapsed with no way back).
+            self.success_rate_ema = 0.0
+            self.episodes_since_change = 0
+        elif (
+            self.episodes_since_change >= self.retreat_patience
+            and self.success_rate_ema < self.retreat_threshold
+            and self.spawn_distance > self.start_distance
+        ):
+            self.spawn_distance = max(
+                self.spawn_distance - self.distance_increment,
+                self.start_distance,
+            )
+            self.success_rate_ema = 0.0
+            self.episodes_since_change = 0
         return self.spawn_distance
