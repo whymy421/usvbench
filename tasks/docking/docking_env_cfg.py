@@ -85,6 +85,12 @@ class UnderwaterPhysicsCfg:
     yaw_quad_damping: float = 250.0
     # Roll/pitch are not task DOFs. These baseline values overdamp wobble modes.
     attitude_spring: float = 5000.0
+    # V9b: sustained yaw spin (~0.27 rad/s) at rest pumps roll/pitch through
+    # the asset's inertia products (COM sits 1.03 m off the USD origin) and
+    # the boat tumbles within ~3 s (ghost_force_probe 2026-07-16). Explicit
+    # overdamping is numerically unstable past ~2*I*f, so the real fix is
+    # balancing the boat USD inertia (authorized, ROV-campaign tooling);
+    # until then the reference recipe cannot hold yaw spins near the berth.
     rollpitch_rate_damping: float = 2000.0
 
     enable_current: bool = False
