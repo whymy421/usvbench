@@ -208,7 +208,13 @@ class DockingEnv(DirectRLEnv):
         return vel_w[:, :3] if vel_w.shape[-1] == 6 else vel_w
 
     def _horizontal_distance(self) -> torch.Tensor:
-        return torch.norm(self.dock_point - self.robot.data.root_pos_w[:, :2], dim=-1)
+        # Measure the CENTER OF MASS, not the USD body origin: the boat asset's
+        # origin sits ~1.0 m from its COM, so a yaw reorientation sweeps the
+        # origin on a 1 m arc and can leave the 2.5 m tolerance while the hull
+        # itself never moves (probed 2026-07-16; broke both PID and RL).
+        return torch.norm(
+            self.dock_point - self.robot.data.root_com_pos_w[:, :2], dim=-1
+        )
 
     def _forward_2d(self) -> torch.Tensor:
         forwards = math_utils.quat_apply(self.robot.data.root_quat_w, self.forward_vec)
@@ -233,7 +239,8 @@ class DockingEnv(DirectRLEnv):
 
     def _get_observations(self) -> dict:
         forwards_2d = self._forward_2d()
-        rpos = self.dock_point - self.robot.data.root_pos_w[:, :2]
+        # COM-referenced, consistent with the success predicate.
+        rpos = self.dock_point - self.robot.data.root_com_pos_w[:, :2]
         distance = torch.norm(rpos, dim=-1, keepdim=True)
         direction = rpos / distance.clamp(min=1.0e-6)
 
@@ -291,7 +298,9 @@ class DockingEnv(DirectRLEnv):
         )
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
-        current_xy = self.robot.data.root_pos_w[:, :2]
+        # COM travel: the origin arcs around the COM during yaw, which would
+        # count pure reorientation as path length.
+        current_xy = self.robot.data.root_com_pos_w[:, :2]
         self.path_length += torch.norm(current_xy - self._previous_xy, dim=-1)
         self._previous_xy.copy_(current_xy)
 
@@ -399,12 +408,19 @@ class DockingEnv(DirectRLEnv):
         # Spawn on the approach lane: bow-ward drift now moves toward the berth,
         # forward thrust serves position control, and alignment cooperates with
         # the approach instead of fighting a return leg.
-        root_state[:, :2] = (
-            self.dock_point[env_ids] - distances.unsqueeze(-1) * spawn_directions
-        )
-        root_state[:, 3:7] = math_utils.quat_from_angle_axis(
+        spawn_quats = math_utils.quat_from_angle_axis(
             body_yaws.unsqueeze(-1), self.up_dir
         ).reshape(num_resets, 4)
+        # Place the CENTER OF MASS (the predicate's reference point) at the
+        # curriculum distance; the USD origin sits ~1.0 m from the COM, so the
+        # written root pose is offset by the rotated body-frame COM offset.
+        com_target_xy = (
+            self.dock_point[env_ids] - distances.unsqueeze(-1) * spawn_directions
+        )
+        com_offset_b = self.robot.data.com_pos_b[env_ids].reshape(num_resets, 3)
+        com_offset_w = math_utils.quat_apply(spawn_quats, com_offset_b)
+        root_state[:, :2] = com_target_xy - com_offset_w[:, :2]
+        root_state[:, 3:7] = spawn_quats
         root_state[:, 7:] = 0.0
         self.robot.write_root_state_to_sim(root_state, env_ids)
 
@@ -413,4 +429,4 @@ class DockingEnv(DirectRLEnv):
         self.path_length[env_ids] = 0.0
         self._success[env_ids] = False
         self._episode_finished[env_ids] = False
-        self._previous_xy[env_ids] = root_state[:, :2]
+        self._previous_xy[env_ids] = com_target_xy
