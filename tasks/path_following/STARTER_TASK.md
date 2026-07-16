@@ -21,6 +21,8 @@ waypoint, with `dist_norm = distance / 20`. The action is
 `(forward_thrust, yaw_torque)` in `[-1, 1]^2`. Entering the current 2.0 m gate
 advances the observation target immediately to the next waypoint.
 
+Use a bounded `Box([-1, 1])` action space with `clip_actions: True` and `initial_log_std: -1.0`, because an unbounded Gaussian mean can escape the +/-1 rail under environment-side clipping.
+
 ## Reward-free success predicate
 
 Success depends only on ordered gate entry: the horizontal distance to each

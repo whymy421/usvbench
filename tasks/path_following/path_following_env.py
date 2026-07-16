@@ -17,6 +17,12 @@ from isaaclab.envs import DirectRLEnv
 from .path_following_env_cfg import PathFollowingEnvCfg
 
 
+def _space_dim(space: object) -> int:
+    """Return the leading dimension of a Gym space or a legacy integer size."""
+    shape = getattr(space, "shape", None)
+    return int(shape[0]) if shape else int(space)
+
+
 class PathFollowingEnv(DirectRLEnv):
     """Calm-water ordered waypoint following with reward-independent success."""
 
@@ -70,7 +76,9 @@ class PathFollowingEnv(DirectRLEnv):
         )
         self._previous_xy = self.robot.data.root_pos_w[:, :2].clone()
         self._reward_direction = torch.zeros((self.num_envs, 2), device=self.device)
-        self.actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
+        self.actions = torch.zeros(
+            (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
+        )
 
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot_cfg)
