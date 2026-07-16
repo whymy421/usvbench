@@ -39,7 +39,7 @@ agent:
   rollouts: 32
   learning_epochs: 8
   mini_batches: 8
-  discount_factor: 0.99
+  discount_factor: 0.997
   lambda: 0.95
   # V7: V6 proved success is samplable and learnable (training success hit
   # 0.99-1.00 twice) but the policy oscillated in and out of it under
@@ -58,7 +58,7 @@ agent:
   ratio_clip: 0.2
   value_clip: 0.2
   clip_predicted_values: True
-  # V6: no entropy bonus — it pushes log_std back up, re-breaking the
+  # V6: no entropy bonus --it pushes log_std back up, re-breaking the
   # speed<=0.3 hold condition that requires sigma to stay small.
   entropy_loss_scale: 0.0
   value_loss_scale: 2.0
