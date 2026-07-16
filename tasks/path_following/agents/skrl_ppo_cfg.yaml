@@ -20,7 +20,9 @@ models:
     output: ACTIONS
   value:
     class: DeterministicMixin
-    clip_actions: True
+    # Never clip the critic: DeterministicMixin clip_actions clamps the output
+    # against the ACTION-space bounds, broadcasting the (N,1) value to (N,2).
+    clip_actions: False
     network:
       - name: net
         input: OBSERVATIONS
