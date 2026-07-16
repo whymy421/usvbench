@@ -129,7 +129,7 @@ class DockingEnvCfg(DirectRLEnvCfg):
     # V3 begins inside the position tolerance so align-and-stop is learnable
     # before the approach distance grows.
     curriculum_start_distance_m: float = 2.0
-    curriculum_distance_increment_m: float = 2.5
+    curriculum_distance_increment_m: float = 1.0
     curriculum_max_distance_m: float = 25.0
     curriculum_ema_decay: float = 0.99
     curriculum_success_threshold: float = 0.6
