@@ -128,8 +128,10 @@ class DockingEnvCfg(DirectRLEnvCfg):
     curriculum_ema_decay: float = 0.99
     curriculum_success_threshold: float = 0.6
 
-    # Spawn positions and bow headings are sampled relative to each
-    # environment's dock_heading, rather than in fixed world coordinates.
+    # V5 spawns on the approach lane behind the berth, with positions and bow
+    # headings sampled relative to each environment's dock_heading rather than
+    # in fixed world coordinates. Bow-ward drift and forward thrust therefore
+    # carry the boat toward the berth while alignment supports the approach.
     spawn_bearing_limit_deg: float = 60.0
     spawn_heading_offset_limit_deg: float = 45.0
 
