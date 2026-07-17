@@ -92,6 +92,24 @@ class DockingEnv(DirectRLEnv):
         self.scene.clone_environments(copy_from_source=False)
         self.scene.rigid_objects["robot"] = self.robot
 
+        if self.cfg.visual.enable_water:
+            try:
+                self._create_static_water_mesh()
+            except Exception as exc:
+                print(f"[WARN] Static water visualization could not be created: {exc}")
+
+        if self.cfg.visual.enable_tolerance_ring:
+            try:
+                self._create_tolerance_ring_markers()
+            except Exception as exc:
+                print(f"[WARN] Tolerance-ring visualization could not be created: {exc}")
+
+        if self.cfg.visual.enable_berth_marker:
+            try:
+                self._create_berth_markers()
+            except Exception as exc:
+                print(f"[WARN] Berth visualization could not be created: {exc}")
+
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 
@@ -101,6 +119,175 @@ class DockingEnv(DirectRLEnv):
         self.forward_vec = torch.tensor([-1.0, 0.0, 0.0], device=self.device).repeat(
             self.num_envs, 1
         )
+
+    def _create_static_water_mesh(self) -> None:
+        """Create a flat, render-only water mesh with no per-step updates."""
+        import omni.usd
+        from pxr import Gf, UsdGeom, Vt
+
+        stage = omni.usd.get_context().get_stage()
+        water_path = "/World/StaticWater"
+        if stage.GetPrimAtPath(water_path).IsValid():
+            stage.RemovePrim(water_path)
+
+        res = int(self.cfg.visual.water_res)
+        size = float(self.cfg.visual.water_size_m)
+        if res < 2:
+            raise ValueError("visual.water_res must be at least 2")
+        if size <= 0.0:
+            raise ValueError("visual.water_size_m must be positive")
+
+        surface_z = float(self.physics_cfg.water_surface_z)
+        spacing = size / (res - 1)
+        start = -size / 2.0
+        points = Vt.Vec3fArray(
+            [
+                Gf.Vec3f(start + i * spacing, start + j * spacing, surface_z)
+                for j in range(res)
+                for i in range(res)
+            ]
+        )
+
+        face_counts = []
+        face_indices = []
+        for j in range(res - 1):
+            for i in range(res - 1):
+                v0 = j * res + i
+                v1 = v0 + 1
+                v2 = (j + 1) * res + i + 1
+                v3 = (j + 1) * res + i
+                face_counts.append(4)
+                face_indices.extend((v0, v1, v2, v3))
+
+        mesh = UsdGeom.Mesh.Define(stage, water_path)
+        mesh.GetPointsAttr().Set(points)
+        mesh.GetFaceVertexCountsAttr().Set(Vt.IntArray(face_counts))
+        mesh.GetFaceVertexIndicesAttr().Set(Vt.IntArray(face_indices))
+
+        color = Gf.Vec3f(*self.cfg.visual.water_color)
+        vertex_count = res * res
+        mesh.GetDisplayColorAttr().Set(Vt.Vec3fArray([color] * vertex_count))
+        mesh.GetDisplayColorPrimvar().SetInterpolation("vertex")
+        mesh.GetDisplayOpacityAttr().Set(Vt.FloatArray([1.0] * vertex_count))
+        mesh.GetDoubleSidedAttr().Set(True)
+
+    def _create_tolerance_ring_markers(self) -> None:
+        """Create one static, render-only tolerance annulus at each dock point."""
+        import omni.usd
+        from pxr import Gf, UsdGeom, Vt
+
+        segments = int(self.cfg.visual.tolerance_ring_segments)
+        radius = float(self.cfg.success_position_tolerance_m)
+        line_width = float(self.cfg.visual.tolerance_ring_line_width_m)
+        if segments < 3:
+            raise ValueError("visual.tolerance_ring_segments must be at least 3")
+        if radius <= 0.0:
+            raise ValueError(
+                "success_position_tolerance_m must be positive to render its marker"
+            )
+        if line_width <= 0.0:
+            raise ValueError("visual.tolerance_ring_line_width_m must be positive")
+
+        marker_z = float(self.physics_cfg.water_surface_z) + 0.02
+        outer_radius = radius + line_width
+        points = []
+        for segment in range(segments):
+            angle = 2.0 * math.pi * segment / segments
+            cos_angle = math.cos(angle)
+            sin_angle = math.sin(angle)
+            points.extend(
+                (
+                    Gf.Vec3f(radius * cos_angle, radius * sin_angle, marker_z),
+                    Gf.Vec3f(outer_radius * cos_angle, outer_radius * sin_angle, marker_z),
+                )
+            )
+
+        face_counts = []
+        face_indices = []
+        for segment in range(segments):
+            next_segment = (segment + 1) % segments
+            inner = 2 * segment
+            outer = inner + 1
+            next_inner = 2 * next_segment
+            next_outer = next_inner + 1
+            face_counts.extend((3, 3))
+            face_indices.extend(
+                (inner, outer, next_outer, inner, next_outer, next_inner)
+            )
+
+        self._author_marker_mesh(
+            "ToleranceRing",
+            points,
+            face_counts,
+            face_indices,
+            self.cfg.visual.tolerance_ring_color,
+            Gf,
+            UsdGeom,
+            Vt,
+        )
+
+    def _create_berth_markers(self) -> None:
+        """Create a flat, render-only +X chevron at each dock point."""
+        import omni.usd
+        from pxr import Gf, UsdGeom, Vt
+
+        length = float(self.cfg.visual.berth_arrow_length_m)
+        width = float(self.cfg.visual.berth_arrow_width_m)
+        if length <= 0.0:
+            raise ValueError("visual.berth_arrow_length_m must be positive")
+        if width <= 0.0:
+            raise ValueError("visual.berth_arrow_width_m must be positive")
+
+        marker_z = float(self.physics_cfg.water_surface_z) + 0.03
+        half_length = length / 2.0
+        half_width = width / 2.0
+        head_base = half_length - min(length * 0.4, width * 2.0)
+        points = [
+            Gf.Vec3f(-half_length, -half_width, marker_z),
+            Gf.Vec3f(head_base, -half_width, marker_z),
+            Gf.Vec3f(head_base, -width, marker_z),
+            Gf.Vec3f(half_length, 0.0, marker_z),
+            Gf.Vec3f(head_base, width, marker_z),
+            Gf.Vec3f(head_base, half_width, marker_z),
+            Gf.Vec3f(-half_length, half_width, marker_z),
+        ]
+        self._author_marker_mesh(
+            "BerthHeading",
+            points,
+            [4, 3],
+            [0, 1, 5, 6, 2, 3, 4],
+            self.cfg.visual.berth_arrow_color,
+            Gf,
+            UsdGeom,
+            Vt,
+        )
+
+    def _author_marker_mesh(
+        self, name, points, face_counts, face_indices, color_value, Gf, UsdGeom, Vt
+    ) -> None:
+        """Author identical display-only mesh data under every environment."""
+        import omni.usd
+
+        stage = omni.usd.get_context().get_stage()
+        point_array = Vt.Vec3fArray(points)
+        count_array = Vt.IntArray(face_counts)
+        index_array = Vt.IntArray(face_indices)
+        color = Gf.Vec3f(*color_value)
+        colors = Vt.Vec3fArray([color] * len(points))
+        opacities = Vt.FloatArray([1.0] * len(points))
+
+        for env_index in range(self.num_envs):
+            marker_path = f"/World/envs/env_{env_index}/{name}"
+            if stage.GetPrimAtPath(marker_path).IsValid():
+                stage.RemovePrim(marker_path)
+            mesh = UsdGeom.Mesh.Define(stage, marker_path)
+            mesh.GetPointsAttr().Set(point_array)
+            mesh.GetFaceVertexCountsAttr().Set(count_array)
+            mesh.GetFaceVertexIndicesAttr().Set(index_array)
+            mesh.GetDisplayColorAttr().Set(colors)
+            mesh.GetDisplayColorPrimvar().SetInterpolation("vertex")
+            mesh.GetDisplayOpacityAttr().Set(opacities)
+            mesh.GetDoubleSidedAttr().Set(True)
 
     def _compute_buoyancy_forces(self) -> tuple[torch.Tensor, torch.Tensor]:
         positions = self.robot.data.root_pos_w
