@@ -111,6 +111,24 @@ class WavePhysicsCfg:
 
 
 @configclass
+class VisualCfg:
+    """Render-only settings; never read by physics, observations, or reward."""
+
+    enable_water: bool = True
+    water_size_m: float = 300.0
+    water_res: int = 60
+    water_color: tuple = (0.1, 0.3, 0.8)
+    enable_tolerance_ring: bool = True
+    tolerance_ring_segments: int = 64
+    tolerance_ring_color: tuple = (1.0, 0.15, 0.0)
+    tolerance_ring_line_width_m: float = 0.35
+    enable_berth_marker: bool = True
+    berth_arrow_length_m: float = 3.0
+    berth_arrow_width_m: float = 0.5
+    berth_arrow_color: tuple = (1.0, 0.85, 0.0)
+
+
+@configclass
 class DockingEnvCfg(DirectRLEnvCfg):
     decimation = 2
     episode_length_s = 120.0
@@ -173,6 +191,9 @@ class DockingEnvCfg(DirectRLEnvCfg):
     robot_cfg: RigidObjectCfg = BOAT_CONFIG
     underwater_physics_cfg: UnderwaterPhysicsCfg = UnderwaterPhysicsCfg()
     wave_cfg: WavePhysicsCfg = WavePhysicsCfg()
+    # Rendering only: this block must not affect physics, observations, reward,
+    # termination, or success semantics.
+    visual: VisualCfg = VisualCfg()
 
     scene: InteractiveSceneCfg = InteractiveSceneCfg(
         num_envs=64,

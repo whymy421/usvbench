@@ -1,5 +1,7 @@
 # USV Boat Docking
 
+The water, tolerance ring, and berth-heading marker form a render-only visual layer that is excluded from physics by construction.
+
 > **Vehicle:** realistic boat hull (`boat_physics.usdc`)
 > **Condition:** calm water (no waves or current)
 > **Gym id:** `Isaac-USV-Dock-Direct-v1`
