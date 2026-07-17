@@ -110,6 +110,12 @@ class DockingEnv(DirectRLEnv):
             except Exception as exc:
                 print(f"[WARN] Berth visualization could not be created: {exc}")
 
+        if self.cfg.visual.enable_berth_box:
+            try:
+                self._create_berth_box_markers()
+            except Exception as exc:
+                print(f"[WARN] Berth-box visualization could not be created: {exc}")
+
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 
@@ -257,6 +263,57 @@ class DockingEnv(DirectRLEnv):
             [4, 3],
             [0, 1, 5, 6, 2, 3, 4],
             self.cfg.visual.berth_arrow_color,
+            Gf,
+            UsdGeom,
+            Vt,
+        )
+
+    def _create_berth_box_markers(self) -> None:
+        """Create a render-only parking-slot outline aligned with dock +X."""
+        from pxr import Gf, UsdGeom, Vt
+
+        length = float(self.cfg.visual.berth_box_length_m)
+        width = float(self.cfg.visual.berth_box_width_m)
+        line_width = float(self.cfg.visual.berth_box_line_width_m)
+        if length <= 0.0:
+            raise ValueError("visual.berth_box_length_m must be positive")
+        if width <= 0.0:
+            raise ValueError("visual.berth_box_width_m must be positive")
+        if line_width <= 0.0:
+            raise ValueError("visual.berth_box_line_width_m must be positive")
+        if line_width >= min(length, width):
+            raise ValueError("visual.berth_box_line_width_m must fit inside the box")
+
+        marker_z = float(self.physics_cfg.water_surface_z) + 0.03
+        half_length = length / 2.0
+        half_width = width / 2.0
+        half_line = line_width / 2.0
+        points = [
+            # Long sides, parallel to dock heading (+X).
+            Gf.Vec3f(-half_length, -half_width - half_line, marker_z),
+            Gf.Vec3f(half_length, -half_width - half_line, marker_z),
+            Gf.Vec3f(half_length, -half_width + half_line, marker_z),
+            Gf.Vec3f(-half_length, -half_width + half_line, marker_z),
+            Gf.Vec3f(-half_length, half_width - half_line, marker_z),
+            Gf.Vec3f(half_length, half_width - half_line, marker_z),
+            Gf.Vec3f(half_length, half_width + half_line, marker_z),
+            Gf.Vec3f(-half_length, half_width + half_line, marker_z),
+            # End sides, perpendicular to dock heading.
+            Gf.Vec3f(-half_length - half_line, -half_width, marker_z),
+            Gf.Vec3f(-half_length + half_line, -half_width, marker_z),
+            Gf.Vec3f(-half_length + half_line, half_width, marker_z),
+            Gf.Vec3f(-half_length - half_line, half_width, marker_z),
+            Gf.Vec3f(half_length - half_line, -half_width, marker_z),
+            Gf.Vec3f(half_length + half_line, -half_width, marker_z),
+            Gf.Vec3f(half_length + half_line, half_width, marker_z),
+            Gf.Vec3f(half_length - half_line, half_width, marker_z),
+        ]
+        self._author_marker_mesh(
+            "BerthBox",
+            points,
+            [4, 4, 4, 4],
+            list(range(16)),
+            self.cfg.visual.berth_box_color,
             Gf,
             UsdGeom,
             Vt,

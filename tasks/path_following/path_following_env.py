@@ -192,14 +192,20 @@ class PathFollowingEnv(DirectRLEnv):
 
         count_array = Vt.IntArray(face_counts)
         index_array = Vt.IntArray(face_indices)
-        color = Gf.Vec3f(*self.cfg.visual.waypoint_color)
-        colors = Vt.Vec3fArray([color] * (2 * segments))
         opacities = Vt.FloatArray([1.0] * (2 * segments))
+        ordered_colors = self.cfg.visual.waypoint_ordered_colors
         world_waypoints = (
             self.waypoints[0] + self.scene.env_origins[0, :2]
         ).detach().cpu().tolist()
 
         for waypoint_index, (center_x, center_y) in enumerate(world_waypoints):
+            color_value = (
+                ordered_colors[waypoint_index]
+                if waypoint_index < len(ordered_colors)
+                else self.cfg.visual.waypoint_color
+            )
+            color = Gf.Vec3f(*color_value)
+            colors = Vt.Vec3fArray([color] * (2 * segments))
             points = []
             for segment in range(segments):
                 angle = 2.0 * math.pi * segment / segments
@@ -227,6 +233,56 @@ class PathFollowingEnv(DirectRLEnv):
             mesh.GetDisplayColorAttr().Set(colors)
             mesh.GetDisplayColorPrimvar().SetInterpolation("vertex")
             mesh.GetDisplayOpacityAttr().Set(opacities)
+            mesh.GetDoubleSidedAttr().Set(True)
+
+    def _create_env0_path_line(self) -> None:
+        """Recreate the render-only route from env 0's spawn origin to its gates."""
+        import math
+
+        import omni.usd
+        from pxr import Gf, UsdGeom, Vt
+
+        line_width = float(self.cfg.visual.path_line_width_m)
+        if line_width <= 0.0:
+            raise ValueError("visual.path_line_width_m must be positive")
+
+        stage = omni.usd.get_context().get_stage()
+        path_root = "/World/PathFollowingPathLine"
+        if stage.GetPrimAtPath(path_root).IsValid():
+            stage.RemovePrim(path_root)
+
+        origin_xy = self.scene.env_origins[0, :2].detach().cpu().tolist()
+        waypoint_xy = (
+            self.waypoints[0] + self.scene.env_origins[0, :2]
+        ).detach().cpu().tolist()
+        route_points = [origin_xy, *waypoint_xy]
+        marker_z = float(self.physics_cfg.water_surface_z) + 0.015
+        half_width = line_width / 2.0
+        color = Gf.Vec3f(*self.cfg.visual.path_line_color)
+
+        for segment_index, (start, end) in enumerate(
+            zip(route_points, route_points[1:])
+        ):
+            dx = end[0] - start[0]
+            dy = end[1] - start[1]
+            segment_length = math.hypot(dx, dy)
+            if segment_length <= 0.0:
+                raise ValueError("path line segments must have positive length")
+            offset_x = -dy / segment_length * half_width
+            offset_y = dx / segment_length * half_width
+            points = [
+                Gf.Vec3f(start[0] + offset_x, start[1] + offset_y, marker_z),
+                Gf.Vec3f(end[0] + offset_x, end[1] + offset_y, marker_z),
+                Gf.Vec3f(end[0] - offset_x, end[1] - offset_y, marker_z),
+                Gf.Vec3f(start[0] - offset_x, start[1] - offset_y, marker_z),
+            ]
+            mesh = UsdGeom.Mesh.Define(stage, f"{path_root}/Segment_{segment_index}")
+            mesh.GetPointsAttr().Set(Vt.Vec3fArray(points))
+            mesh.GetFaceVertexCountsAttr().Set(Vt.IntArray([4]))
+            mesh.GetFaceVertexIndicesAttr().Set(Vt.IntArray([0, 1, 2, 3]))
+            mesh.GetDisplayColorAttr().Set(Vt.Vec3fArray([color] * 4))
+            mesh.GetDisplayColorPrimvar().SetInterpolation("vertex")
+            mesh.GetDisplayOpacityAttr().Set(Vt.FloatArray([1.0] * 4))
             mesh.GetDoubleSidedAttr().Set(True)
 
     # The following dynamics block deliberately matches tasks/rov_calm_nav and
@@ -531,3 +587,9 @@ class PathFollowingEnv(DirectRLEnv):
                 self._create_env0_waypoint_markers()
             except Exception as exc:
                 print(f"[WARN] Waypoint visualization could not be created: {exc}")
+
+        if self.cfg.visual.enable_path_line and bool((env_ids == 0).any().item()):
+            try:
+                self._create_env0_path_line()
+            except Exception as exc:
+                print(f"[WARN] Path-line visualization could not be created: {exc}")

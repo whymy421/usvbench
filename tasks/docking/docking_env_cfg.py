@@ -126,6 +126,11 @@ class VisualCfg:
     berth_arrow_length_m: float = 3.0
     berth_arrow_width_m: float = 0.5
     berth_arrow_color: tuple = (1.0, 0.85, 0.0)
+    enable_berth_box: bool = True
+    berth_box_length_m: float = 6.5
+    berth_box_width_m: float = 3.2
+    berth_box_line_width_m: float = 0.25
+    berth_box_color: tuple = (1.0, 1.0, 1.0)
 
 
 @configclass

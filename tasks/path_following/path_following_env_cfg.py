@@ -111,7 +111,16 @@ class VisualCfg:
     enable_waypoint_markers: bool = True
     waypoint_segments: int = 64
     waypoint_color: tuple = (1.0, 0.15, 0.0)
+    waypoint_ordered_colors: tuple = (
+        (1.0, 0.9, 0.1),
+        (1.0, 0.55, 0.0),
+        (1.0, 0.15, 0.0),
+        (0.7, 0.0, 0.8),
+    )
     waypoint_line_width_m: float = 0.35
+    enable_path_line: bool = True
+    path_line_width_m: float = 0.2
+    path_line_color: tuple = (1.0, 1.0, 1.0)
 
 
 @configclass
