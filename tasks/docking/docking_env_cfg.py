@@ -172,9 +172,7 @@ class DockingEnvCfg(DirectRLEnvCfg):
     reference_reward_braking_scale: float = 0.4
     reference_reward_braking_decay_m: float = 2.5
     reference_reward_braking_speed_scale_mps: float = 1.0
-    reference_reward_hold_progress_scale: float = 2.0
-    reference_reward_success_bonus: float = 1.0
-    reference_reward_terminal_success: float = 500.0
+    reference_reward_success_bonus: float = 3.0
 
     # VRX classic thrusters provide 250 N forward and 100 N reverse each.
     # The two aft thrusters therefore give the asymmetric 500 N / 200 N limits

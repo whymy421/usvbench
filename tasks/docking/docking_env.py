@@ -73,6 +73,12 @@ class DockingEnv(DirectRLEnv):
         self._hold_steps = torch.zeros(
             self.num_envs, dtype=torch.long, device=self.device
         )
+        self._max_hold_steps = torch.zeros(
+            self.num_envs, dtype=torch.long, device=self.device
+        )
+        self._first_success_time_s = torch.full(
+            (self.num_envs,), torch.nan, device=self.device
+        )
         self._success = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._episode_finished = torch.zeros(
             self.num_envs, dtype=torch.bool, device=self.device
@@ -534,20 +540,13 @@ class DockingEnv(DirectRLEnv):
                 max=1.0,
             )
         )
-        hold_progress_credit = (
-            self.cfg.reference_reward_hold_progress_scale
-            * self.hold_timer
-            / self.cfg.required_hold_time_s
-        )
         return (
             -distance / self.cfg.reference_reward_distance_scale_m
             + self.cfg.reference_reward_alignment_scale
             * dock_dot
             * torch.exp(-distance / self.cfg.reference_reward_alignment_decay_m)
             + braking_credit
-            + hold_progress_credit
             + self.cfg.reference_reward_success_bonus * instantaneous_success.float()
-            + self.cfg.reference_reward_terminal_success * self._success.float()
         )
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -563,13 +562,24 @@ class DockingEnv(DirectRLEnv):
             self._hold_steps + 1,
             torch.zeros_like(self._hold_steps),
         )
+        self._max_hold_steps.copy_(
+            torch.maximum(self._max_hold_steps, self._hold_steps)
+        )
         self.hold_timer.copy_(self._hold_steps * self.control_step_s)
 
+        achieved_now = (
+            ~self._success & (self._max_hold_steps >= self.required_hold_steps)
+        )
+        elapsed_s = self.episode_length_buf.float() * self.control_step_s
+        self._first_success_time_s.copy_(
+            torch.where(achieved_now, elapsed_s, self._first_success_time_s)
+        )
+        self._success.copy_(self._max_hold_steps >= self.required_hold_steps)
+
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        # A timeout is explicitly a failure, including the final control step.
-        self._success = (self._hold_steps >= self.required_hold_steps) & ~time_out
-        self._episode_finished.copy_(self._success | time_out)
-        return self._success, time_out
+        self._episode_finished.copy_(time_out)
+        terminated = torch.zeros_like(time_out)
+        return terminated, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:
@@ -579,12 +589,7 @@ class DockingEnv(DirectRLEnv):
         completed_ids = env_ids[self._episode_finished[env_ids]]
         if len(completed_ids) > 0:
             success = self._success[completed_ids]
-            elapsed_s = self.episode_length_buf[completed_ids].float() * self.control_step_s
-            time_to_success = torch.where(
-                success,
-                elapsed_s,
-                torch.full_like(elapsed_s, torch.nan),
-            )
+            time_to_success = self._first_success_time_s[completed_ids]
 
             self.episode_success[completed_ids] = success
             self.time_to_success[completed_ids] = time_to_success
@@ -594,7 +599,9 @@ class DockingEnv(DirectRLEnv):
             self.extras.setdefault("log", {})
             self.extras["log"]["Episode/success"] = success.float().mean()
             if success.any():
-                self.extras["log"]["Episode/time_to_success_s"] = elapsed_s[success].mean()
+                self.extras["log"]["Episode/time_to_success_s"] = time_to_success[
+                    success
+                ].mean()
             else:
                 self.extras["log"]["Episode/time_to_success_s"] = torch.tensor(
                     torch.nan, device=self.device
@@ -678,6 +685,8 @@ class DockingEnv(DirectRLEnv):
         self.robot.write_root_state_to_sim(root_state, env_ids)
 
         self._hold_steps[env_ids] = 0
+        self._max_hold_steps[env_ids] = 0
+        self._first_success_time_s[env_ids] = torch.nan
         self.hold_timer[env_ids] = 0.0
         self.path_length[env_ids] = 0.0
         self._success[env_ids] = False

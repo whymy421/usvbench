@@ -33,9 +33,13 @@ All three conditions must hold simultaneously for 5 consecutive seconds:
 - absolute heading error from dock heading `<= 15 degrees`;
 - planar speed `<= 0.3 m/s`.
 
-Breaking any condition resets only the 5 s timer. Success terminates the
-episode. Reaching 120 s is failure. Success is computed only from state and does
-not depend on reward.
+Breaking any condition resets only the 5 s timer. Every episode runs for the
+full 120 s. Episode success is an achieved-once metric: it is true when the
+conjunction has held for at least 5 consecutive seconds at any point in the
+episode, even if a later violation resets the current timer. Time to success is
+the elapsed time when that streak first completes, or NaN if it never does.
+Success is computed only from the logged state trajectory and does not depend
+on reward.
 
 ## Official curriculum
 
@@ -60,9 +64,7 @@ The included reward is **reference-only** and is not part of success:
 ```text
 -distance/25 + 0.5 * dock_dot * exp(-distance/2.5)
     + 0.4 * exp(-distance/2.5) * clamp(1 - planar_speed/1.0, 0, 1)
-    + 0.2 * (hold_timer/5.0)
-    + 1.0 * [instantaneous success predicate is true]
-    + 500.0 * [episode terminates in success]
+    + 3.0 * [instantaneous success predicate is true]
 ```
 
 ## Reference training recipe history
@@ -114,6 +116,21 @@ Design rule: a hold-based success predicate bounds the exploration noise a
 solver can use. Benchmark tasks with consecutive instantaneous-speed
 conditions must either be paired with low-noise exploration or use an
 averaged-speed criterion.
+
+V13 makes every episode fixed-horizon. Removing success termination eliminates
+timer-dependent termination, so the environment remains Markov without adding
+the hold timer to observations; the timer now exists only for evaluation
+logging. The reward is a pure function of instantaneous physical state
+(position, heading, and speed), while the consecutive-5 s requirement is
+evaluated from logged trajectories. Terminal-scored docking has precedent in
+Patil et al. (2021), and the separation follows the shaping and time-limit
+principles of Ng et al. (1999) and Pardo et al. (2018).
+
+Design rule: with no early termination, per-step conjunction pay makes holding
+the successful state the optimum. The success-termination milking trap is
+therefore structurally impossible because incentives and the achieved-once
+metric point in the same direction. This protocol change invalidates direct
+comparison with V12 returns and requires matched-seed retraining (queued).
 
 ## Train
 
