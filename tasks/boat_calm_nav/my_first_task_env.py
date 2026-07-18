@@ -855,11 +855,13 @@ class MyFirstTaskEnv(DirectRLEnv):
         # ========================================
         # 4. 姿态稳定弹簧 (世界系; 速率阻尼已并入第 3 节)
         # ========================================
-        w, x, y, z = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
-        pitch_angle = torch.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
-        roll_angle = torch.asin(torch.clamp(2 * (w * y - z * x), -1.0, 1.0))
-        torque_w[:, 0] += -pitch_angle * self.physics_cfg.attitude_spring
-        torque_w[:, 1] += -roll_angle * self.physics_cfg.attitude_spring
+        # Yaw-invariant attitude spring: restoring torque k*(up_body_in_world x
+        # world_up). The previous Euler-angle form applied BODY tilt angles as
+        # FIXED world-axis torques, which is restoring only near the spawn yaw
+        # and becomes precessing/anti-restoring past ~90 deg (capsize-by-turning).
+        up_body_w = math_utils.quat_apply(quat, self.up_dir.expand(self.num_envs, 3))
+        tilt_axis = torch.stack((up_body_w[:, 1], -up_body_w[:, 0]), dim=-1)
+        torque_w[:, :2] += self.physics_cfg.attitude_spring * tilt_axis
 
         # ========================================
         # 5. 洋流力 (世界系)
