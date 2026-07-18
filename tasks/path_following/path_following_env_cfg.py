@@ -129,7 +129,7 @@ class PathFollowingEnvCfg(DirectRLEnvCfg):
     episode_length_s = 120.0
 
     action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
-    observation_space = 3
+    observation_space = 7
     state_space = 0
 
     num_waypoints: int = 4

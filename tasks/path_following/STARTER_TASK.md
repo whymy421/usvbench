@@ -16,10 +16,33 @@ The ROV starts at the environment origin, at rest at `z=-0.15`, with a uniformly
 random heading. It must visit all four waypoint gates in order. There is no
 corridor failure and no curriculum in v1.
 
-The policy observation is `(dot, cross, dist_norm)` relative to the current
-waypoint, with `dist_norm = distance / 20`. The action is
-`(forward_thrust, yaw_torque)` in `[-1, 1]^2`. Entering the current 2.0 m gate
-advances the observation target immediately to the next waypoint.
+The action is `(forward_thrust, yaw_torque)` in `[-1, 1]^2`. Entering the
+current 2.0 m gate advances the observation target immediately to the next
+waypoint. The fixed 7D policy observation is:
+
+| Index | Field | Definition |
+| ---: | --- | --- |
+| 0 | `current_dot` | Bow-heading dot product toward the current waypoint |
+| 1 | `current_cross` | Signed 2D bow-heading cross product toward the current waypoint |
+| 2 | `current_distance_norm` | Current-waypoint distance divided by 20 m |
+| 3 | `stage_norm` | `gates_passed / num_waypoints`, in `[0, 1]` |
+| 4 | `next_dot` | Bow-heading dot product toward the waypoint after the current one |
+| 5 | `next_cross` | Signed 2D bow-heading cross product toward that next waypoint |
+| 6 | `next_distance_norm` | Next-waypoint distance divided by 20 m |
+
+At the last waypoint there is no next gate, so indices 4-6 use neutral
+`(dot=1, cross=0, distance=0)` padding: "straight ahead, arrived."
+
+The gate index is genuine task state. Without `stage_norm`, two different gate
+stages can produce identical current-waypoint geometry even though the remaining
+course differs, violating the Markov property. This follows the docking V13
+principle that task state affecting future outcomes must either be observed or
+removed from the transition/termination process (see
+`tasks/docking/STARTER_TASK.md`). Next-gate geometry additionally lets the policy
+set up for an upcoming turn before entering the current gate.
+
+Old checkpoints are incompatible because the policy input width changed from 3
+to 7. Matched-seed retraining is queued.
 
 Use a bounded `Box([-1, 1])` action space with `clip_actions: True` and `initial_log_std: -1.0`, because an unbounded Gaussian mean can escape the +/-1 rail under environment-side clipping.
 
@@ -99,7 +122,7 @@ Copy this folder into the Isaac Lab direct-task package:
 
 Set `USVBENCH_ASSETS` to this repository's `assets` directory if the repository
 is not at `~/usvbench`, then activate the Isaac Lab environment. Observation size
-is fixed to 3; no `OBS_DIM` environment variable is needed.
+is fixed to 7; no `OBS_DIM` environment variable is needed.
 
 ```bash
 python <IsaacLab>/scripts/reinforcement_learning/skrl/train_with_eval.py \
@@ -117,6 +140,6 @@ $env:USVBENCH_ASSETS = (Resolve-Path .\assets).Path
 python .\tasks\path_following\smoke.py --headless
 ```
 
-The smoke test creates 16 environments, checks the `(16, 3)` observation and
+The smoke test creates 16 environments, checks the `(16, 7)` observation and
 300 random-step reward range, validates path sampling bounds, then teleports env
 0 to all four waypoints in order and requires terminal success only on gate four.

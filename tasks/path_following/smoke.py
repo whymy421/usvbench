@@ -141,7 +141,7 @@ def main() -> bool:
             and tuple(base.xte_rms.shape) == (NUM_ENVS,)
         )
         return (
-            obs_shape == (NUM_ENVS, 3)
+            obs_shape == (NUM_ENVS, 7)
             and finite
             and geometry_ok
             and waypoint_probe_ok

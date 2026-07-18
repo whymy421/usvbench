@@ -383,10 +383,16 @@ class PathFollowingEnv(DirectRLEnv):
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
         self.robot.set_external_force_and_torque(forces, torques)
 
-    def _current_waypoint_world(self) -> torch.Tensor:
+    def _waypoint_world(self, waypoint_indices: torch.Tensor) -> torch.Tensor:
         env_indices = torch.arange(self.num_envs, device=self.device)
+        return (
+            self.waypoints[env_indices, waypoint_indices]
+            + self.scene.env_origins[:, :2]
+        )
+
+    def _current_waypoint_world(self) -> torch.Tensor:
         waypoint_indices = self.gates_passed.clamp(max=self.cfg.num_waypoints - 1)
-        return self.waypoints[env_indices, waypoint_indices] + self.scene.env_origins[:, :2]
+        return self._waypoint_world(waypoint_indices)
 
     def _active_segment_relative(self) -> tuple[torch.Tensor, torch.Tensor]:
         env_indices = torch.arange(self.num_envs, device=self.device)
@@ -429,7 +435,44 @@ class PathFollowingEnv(DirectRLEnv):
             - forwards_2d[:, 1:2] * direction[:, 0:1]
         )
         distance_norm = distance / self.cfg.segment_length_max
-        return {"policy": torch.hstack([dot, cross, distance_norm])}
+
+        stage_norm = self.gates_passed.float().unsqueeze(-1) / self.cfg.num_waypoints
+
+        current_is_last = self.gates_passed >= self.cfg.num_waypoints - 1
+        next_indices = (self.gates_passed + 1).clamp(max=self.cfg.num_waypoints - 1)
+        next_target_xy = self._waypoint_world(next_indices)
+        next_forwards_2d, next_direction = self._heading_and_direction(next_target_xy)
+        next_distance = torch.norm(
+            next_target_xy - self.robot.data.root_pos_w[:, :2], dim=-1, keepdim=True
+        )
+        next_dot = torch.sum(next_forwards_2d * next_direction, dim=-1, keepdim=True)
+        next_cross = (
+            next_forwards_2d[:, 0:1] * next_direction[:, 1:2]
+            - next_forwards_2d[:, 1:2] * next_direction[:, 0:1]
+        )
+        next_distance_norm = next_distance / self.cfg.segment_length_max
+
+        # The last waypoint has no successor. Pad its look-ahead triplet with the
+        # neutral "straight ahead, arrived" geometry (dot=1, cross=0, distance=0).
+        last_mask = current_is_last.unsqueeze(-1)
+        next_dot = torch.where(last_mask, torch.ones_like(next_dot), next_dot)
+        next_cross = torch.where(last_mask, torch.zeros_like(next_cross), next_cross)
+        next_distance_norm = torch.where(
+            last_mask, torch.zeros_like(next_distance_norm), next_distance_norm
+        )
+        return {
+            "policy": torch.hstack(
+                [
+                    dot,
+                    cross,
+                    distance_norm,
+                    stage_norm,
+                    next_dot,
+                    next_cross,
+                    next_distance_norm,
+                ]
+            )
+        }
 
     def _get_rewards(self) -> torch.Tensor:
         """Reference-only potential-progress reward; success never reads this value."""
