@@ -12,8 +12,13 @@ the 5.5 m boat.
 
 Each 120 s episode starts the boat at rest, 5-15 m from its environment origin,
 with a random heading. Success requires horizontal distance <= 3.0 m for 60
-consecutive seconds. Leaving the zone resets the timer without failing; success
-terminates the episode and timeout is failure.
+consecutive seconds. Leaving the zone resets the current timer without failing.
+Episodes use the docking V13 fixed-horizon treatment: they always run for 120 s,
+and success is an achieved-once metric judged from the logged trajectory.
+Termination no longer depends on the hold timer, preserving the Markov property
+without observation augmentation. The reward is unchanged. Returns are not
+comparable to prior success-terminated returns; matched-seed retraining is
+queued. See `tasks/docking/docking_env.py` (V13).
 
 The fixed 3D observation is `(dot, cross, dist_norm)` toward the origin, using
 body `-X` as forward and `dist_norm = distance / 15`. Actions are forward thrust

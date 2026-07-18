@@ -18,8 +18,12 @@ The action is `(forward_thrust, yaw_torque)` in `[-1, 1]^2`.
 
 Success depends only on state: horizontal distance must remain at or below 2.0 m
 for 60 consecutive seconds. Leaving the zone resets the hold timer and does not
-end the episode. Success terminates the episode; reaching the 120 s time limit
-without success is failure.
+end the episode. Episodes use the docking V13 fixed-horizon treatment: they
+always run for 120 s, and success is an achieved-once metric judged from the
+logged trajectory. Termination no longer depends on the hold timer, preserving
+the Markov property without observation augmentation. The reward is unchanged.
+Returns are not comparable to prior success-terminated returns; matched-seed
+retraining is queued. See `tasks/docking/docking_env.py` (V13).
 
 The environment exposes per-environment `hold_timer` (seconds) and `path_length`
 (cumulative planar metres). Completed episodes log `success`, `time_to_success_s`
