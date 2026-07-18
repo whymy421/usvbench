@@ -17,6 +17,7 @@ from isaaclab.envs import DirectRLEnv
 
 from .curriculum import DockingCurriculum
 from .docking_env_cfg import DockingEnvCfg
+from .restoring import restoring_torque_body
 
 
 def _space_dim(space: object) -> int:
@@ -443,20 +444,14 @@ class DockingEnv(DirectRLEnv):
             -self.physics_cfg.rollpitch_rate_damping * angular_velocity[:, :2]
         )
 
-        # Yaw-invariant attitude spring: restoring torque k*(up_body_in_world x
-        # world_up). The previous Euler-angle form applied BODY tilt angles as
-        # FIXED world-axis torques, which is restoring only near the spawn yaw
-        # and becomes precessing/anti-restoring after ~90 deg of yaw — probed
-        # 2026-07-16: spinning 0.27 rad/s tumbled the boat (roll -70/pitch +76)
-        # after ~50 deg of rotation, while the stripped pipeline stayed flat at
-        # 3 rad/s. This capsize-by-turning broke docking for RL and PID alike.
-        up_body_w = math_utils.quat_apply(
-            quat, self.up_dir.expand(self.num_envs, 3)
+        # Native body-frame anisotropic hydrostatic restoring torque. Expressing
+        # world-up in body coordinates makes it invariant to the boat's yaw.
+        restoring_torque = restoring_torque_body(
+            quat,
+            self.physics_cfg.restoring_stiffness_roll,
+            self.physics_cfg.restoring_stiffness_pitch,
         )
-        tilt_axis = torch.stack(
-            (up_body_w[:, 1], -up_body_w[:, 0]), dim=-1
-        )  # (e x z-hat) restricted to world xy
-        torque_w[:, :2] += self.physics_cfg.attitude_spring * tilt_axis
+        torques[:, 0, :2] += restoring_torque[:, :2]
 
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_w)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
