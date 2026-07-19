@@ -438,7 +438,12 @@ class PathFollowingEnv(DirectRLEnv):
 
         stage_norm = self.gates_passed.float().unsqueeze(-1) / self.cfg.num_waypoints
 
-        current_is_last = self.gates_passed >= self.cfg.num_waypoints - 1
+        # At the final gate the clamp makes next == current: the look-ahead
+        # smoothly degenerates to the current target ("the route ends here").
+        # v4 padded it with (dot=1, cross=0, dist=0) instead -- an
+        # out-of-distribution input the policy had never seen; probing showed
+        # the thrust command SIGN-FLIPPED the moment the padding appeared,
+        # deterministically stranding every episode at 3/4 gates.
         next_indices = (self.gates_passed + 1).clamp(max=self.cfg.num_waypoints - 1)
         next_target_xy = self._waypoint_world(next_indices)
         next_forwards_2d, next_direction = self._heading_and_direction(next_target_xy)
@@ -452,14 +457,6 @@ class PathFollowingEnv(DirectRLEnv):
         )
         next_distance_norm = next_distance / self.cfg.segment_length_max
 
-        # The last waypoint has no successor. Pad its look-ahead triplet with the
-        # neutral "straight ahead, arrived" geometry (dot=1, cross=0, distance=0).
-        last_mask = current_is_last.unsqueeze(-1)
-        next_dot = torch.where(last_mask, torch.ones_like(next_dot), next_dot)
-        next_cross = torch.where(last_mask, torch.zeros_like(next_cross), next_cross)
-        next_distance_norm = torch.where(
-            last_mask, torch.zeros_like(next_distance_norm), next_distance_norm
-        )
         return {
             "policy": torch.hstack(
                 [
