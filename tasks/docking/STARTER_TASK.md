@@ -160,3 +160,11 @@ Full Isaac Lab smoke:
 $env:USVBENCH_ASSETS = (Resolve-Path .\assets).Path
 python .\tasks\docking\smoke.py --headless
 ```
+
+V13b ablation (negative result, documented): capping KLAdaptiveLR at
+max_lr=3e-4 did NOT cure the recurring training cliff -- the LR trace
+confirms the cap engaged (peak 2.9e-4) and KL cuts fired, yet success
+still oscillated (1.00 -> 0.23 -> 0.88 -> 0.00). The instability is not
+pure LR growth; value-function dynamics are implicated. Early-stop
+checkpoint harvest (dense interval + eval ladder) remains the
+documented recipe. V13 reference (92.2%) stands.
