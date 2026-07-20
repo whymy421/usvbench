@@ -175,10 +175,10 @@ class PathHazardEnvCfg(DirectRLEnvCfg):
 
     ray_count: int = 36
     ray_max_range_m: float = 30.0
-    safe_clearance_m: float = 0.90
+    safe_clearance_m: float = 0.6  # v2: no distant barrier tax while threading 2 m gates0
 
     reference_reward_progress_scale: float = 20.0
-    reference_reward_gate_bonus: float = 10.0
+    reference_reward_gate_bonus: float = 25.0  # v2: threading past on-line blockers must outweigh one contact entry
     reward_clearance_scale: float = 1.0
     reward_contact_entry_penalty: float = 25.0
     reward_contact_dwell_penalty: float = 1.0
