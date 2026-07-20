@@ -15,6 +15,7 @@ import isaaclab.utils.math as math_utils
 from isaaclab.assets import RigidObject
 from isaaclab.envs import DirectRLEnv
 
+from .._shared.vehicles import get_vehicle
 from .curriculum import DockingCurriculum
 from .docking_env_cfg import DockingEnvCfg
 from .restoring import restoring_torque_body
@@ -32,6 +33,7 @@ class DockingEnv(DirectRLEnv):
     cfg: DockingEnvCfg
 
     def __init__(self, cfg: DockingEnvCfg, render_mode: str | None = None, **kwargs):
+        self.vehicle_spec = get_vehicle(cfg.vehicle)
         self.physics_cfg = cfg.underwater_physics_cfg
         self.curriculum = DockingCurriculum(
             start_distance=cfg.curriculum_start_distance_m,
@@ -127,11 +129,28 @@ class DockingEnv(DirectRLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
         self.up_dir = torch.tensor([0.0, 0.0, 1.0], device=self.device)
-        # The boat asset's bow/forward axis is body -X.
-        self._fwd_x = -1.0
-        self.forward_vec = torch.tensor([-1.0, 0.0, 0.0], device=self.device).repeat(
-            self.num_envs, 1
-        )
+        axis_vectors = {
+            "+x": (1.0, 0.0, 0.0),
+            "-x": (-1.0, 0.0, 0.0),
+            "+y": (0.0, 1.0, 0.0),
+            "-y": (0.0, -1.0, 0.0),
+        }
+        body_yaw_offsets = {
+            "+x": 0.0,
+            "-x": math.pi,
+            "+y": -math.pi / 2.0,
+            "-y": math.pi / 2.0,
+        }
+        bow_axis = self.vehicle_spec.bow_body_axis
+        forward_components = axis_vectors[bow_axis]
+        self._fwd_x = forward_components[0]
+        self._fwd_y = forward_components[1]
+        self._surge_axis_idx = 0 if self._fwd_x else 1
+        self._sway_axis_idx = 1 - self._surge_axis_idx
+        self._body_yaw_from_bow_offset = body_yaw_offsets[bow_axis]
+        self.forward_vec = torch.tensor(
+            forward_components, device=self.device
+        ).repeat(self.num_envs, 1)
 
     def _create_static_water_mesh(self) -> None:
         """Create a flat, render-only water mesh with no per-step updates."""
@@ -401,6 +420,7 @@ class DockingEnv(DirectRLEnv):
             a0 * self.cfg.thrust_max_rev,
         )
         forces[:, 0, 0] = thrust_magnitude * self._fwd_x
+        forces[:, 0, 1] = thrust_magnitude * self._fwd_y
         torques[:, 0, 2] = self.actions[:, 1] * self.cfg.yaw_torque_max
 
         # World-frame buoyancy, heave, and torques are inverse-rotated before
@@ -424,14 +444,20 @@ class DockingEnv(DirectRLEnv):
 
         vel_b = math_utils.quat_apply_inverse(quat, linear_velocity)
         drag_b = torch.zeros_like(vel_b)
-        drag_b[:, 0] = -(
+        surge_velocity = vel_b[:, self._surge_axis_idx]
+        drag_b[:, self._surge_axis_idx] = -(
             self.physics_cfg.surge_lin_damping
-            + self.physics_cfg.surge_quad_damping * torch.abs(vel_b[:, 0])
-        ) * vel_b[:, 0]
-        drag_b[:, 1] = -(
-            self.physics_cfg.sway_lin_damping
-            + self.physics_cfg.sway_quad_damping * torch.abs(vel_b[:, 1])
-        ) * vel_b[:, 1]
+            + self.physics_cfg.surge_quad_damping * torch.abs(surge_velocity)
+        ) * surge_velocity
+        if (
+            self.physics_cfg.sway_lin_damping is not None
+            and self.physics_cfg.sway_quad_damping is not None
+        ):
+            sway_velocity = vel_b[:, self._sway_axis_idx]
+            drag_b[:, self._sway_axis_idx] = -(
+                self.physics_cfg.sway_lin_damping
+                + self.physics_cfg.sway_quad_damping * torch.abs(sway_velocity)
+            ) * sway_velocity
         forces[:, 0, :2] += drag_b[:, :2]
         force_w[:, 2] += -self.physics_cfg.heave_damping * linear_velocity[:, 2]
 
@@ -654,9 +680,9 @@ class DockingEnv(DirectRLEnv):
         ) * heading_limit
         forward_headings = torch.atan2(dock_headings[:, 1], dock_headings[:, 0])
         forward_headings += heading_offsets
-        # The asset's bow is body -X, so its body yaw is pi beyond the desired
-        # world-frame bow heading.
-        body_yaws = forward_headings + torch.pi
+        # Convert the desired world bow heading to the asset's body yaw using
+        # the selected hull's registry-authored bow axis.
+        body_yaws = forward_headings + self._body_yaw_from_bow_offset
 
         root_state = self.robot.data.default_root_state[env_ids].clone()
         root_state[:, :3] += self.scene.env_origins[env_ids]
