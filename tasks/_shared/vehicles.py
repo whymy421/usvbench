@@ -11,6 +11,7 @@ from typing import Literal
 
 
 BowBodyAxis = Literal["+x", "-x", "+y", "-y"]
+AssetKind = Literal["articulation", "rigid_object"]
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,7 @@ class VehicleSpec:
     """USD asset and hull-specific actuator/hydrodynamic parameters."""
 
     name: str
+    asset_kind: AssetKind
     usd_relpath: str
     mass_kg: float | None
     thrust_fwd_n: float
@@ -48,6 +50,7 @@ class VehicleSpec:
 VEHICLES: dict[str, VehicleSpec] = {
     "rov": VehicleSpec(
         name="rov",
+        asset_kind="articulation",
         usd_relpath="ROV_rigged.usd",
         mass_kg=100.0,
         thrust_fwd_n=400.0,
@@ -71,6 +74,7 @@ VEHICLES: dict[str, VehicleSpec] = {
     ),
     "wamv": VehicleSpec(
         name="wamv",
+        asset_kind="rigid_object",
         usd_relpath="boat_physics.usdc",
         mass_kg=100.0,
         thrust_fwd_n=500.0,
@@ -94,6 +98,7 @@ VEHICLES: dict[str, VehicleSpec] = {
     ),
     "blueboat": VehicleSpec(
         name="blueboat",
+        asset_kind="rigid_object",
         usd_relpath="blueboat_physics.usd",
         mass_kg=None,
         thrust_fwd_n=80.0,

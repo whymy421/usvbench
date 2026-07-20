@@ -1,8 +1,4 @@
-"""Plain-data regression guard for docking's pre-registry WAM-V literals.
-
-This script intentionally imports no Isaac Lab modules. Float values are
-compared by their packed IEEE-754 bytes, not with a tolerance.
-"""
+"""Plain-data regression guard for boat station keeping's WAM-V literals."""
 
 from __future__ import annotations
 
@@ -70,7 +66,7 @@ def main() -> None:
 
     print("Vehicle registry keys: PASS (blueboat, rov, wamv)")
     print(
-        f"WAM-V docking parity: PASS ({len(WAMV_SNAPSHOT)} fields; "
+        f"WAM-V boat station-keeping parity: PASS ({len(WAMV_SNAPSHOT)} fields; "
         "float bytes exact)"
     )
 

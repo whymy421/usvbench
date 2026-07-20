@@ -5,15 +5,18 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 import torch
 
 import isaaclab.sim as sim_utils
 import isaaclab.utils.math as math_utils
-from isaaclab.assets import RigidObject
+from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
 
+from .._shared.restoring import restoring_torque_body
+from .._shared.vehicles import get_vehicle
 from .station_keeping_boat_env_cfg import StationKeepingBoatEnvCfg
 
 
@@ -23,6 +26,7 @@ class StationKeepingBoatEnv(DirectRLEnv):
     cfg: StationKeepingBoatEnvCfg
 
     def __init__(self, cfg: StationKeepingBoatEnvCfg, render_mode: str | None = None, **kwargs):
+        self.vehicle_spec = get_vehicle(cfg.vehicle)
         self.physics_cfg = cfg.underwater_physics_cfg
         super().__init__(cfg, render_mode, **kwargs)
 
@@ -58,19 +62,42 @@ class StationKeepingBoatEnv(DirectRLEnv):
         self.actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
 
     def _setup_scene(self):
-        self.robot = RigidObject(self.cfg.robot_cfg)
+        if self.vehicle_spec.asset_kind == "articulation":
+            self.robot = Articulation(self.cfg.robot_cfg)
+        else:
+            self.robot = RigidObject(self.cfg.robot_cfg)
         self.scene.clone_environments(copy_from_source=False)
-        self.scene.rigid_objects["robot"] = self.robot
+        if self.vehicle_spec.asset_kind == "articulation":
+            self.scene.articulations["robot"] = self.robot
+        else:
+            self.scene.rigid_objects["robot"] = self.robot
 
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 
         self.up_dir = torch.tensor([0.0, 0.0, 1.0], device=self.device)
-        # The boat asset's bow/forward axis is body -X.
-        self._fwd_x = -1.0
-        self.forward_vec = torch.tensor([-1.0, 0.0, 0.0], device=self.device).repeat(
-            self.num_envs, 1
-        )
+        axis_vectors = {
+            "+x": (1.0, 0.0, 0.0),
+            "-x": (-1.0, 0.0, 0.0),
+            "+y": (0.0, 1.0, 0.0),
+            "-y": (0.0, -1.0, 0.0),
+        }
+        body_yaw_offsets = {
+            "+x": 0.0,
+            "-x": math.pi,
+            "+y": -math.pi / 2.0,
+            "-y": math.pi / 2.0,
+        }
+        bow_axis = self.vehicle_spec.bow_body_axis
+        forward_components = axis_vectors[bow_axis]
+        self._fwd_x = forward_components[0]
+        self._fwd_y = forward_components[1]
+        self._surge_axis_idx = 0 if self._fwd_x else 1
+        self._sway_axis_idx = 1 - self._surge_axis_idx
+        self._body_yaw_from_bow_offset = body_yaw_offsets[bow_axis]
+        self.forward_vec = torch.tensor(
+            forward_components, device=self.device
+        ).repeat(self.num_envs, 1)
 
     def _compute_buoyancy_forces(self) -> tuple[torch.Tensor, torch.Tensor]:
         positions = self.robot.data.root_pos_w
@@ -120,6 +147,7 @@ class StationKeepingBoatEnv(DirectRLEnv):
             a0 * self.cfg.thrust_max_rev,
         )
         forces[:, 0, 0] = thrust_magnitude * self._fwd_x
+        forces[:, 0, 1] = thrust_magnitude * self._fwd_y
         torques[:, 0, 2] = self.actions[:, 1] * self.cfg.yaw_torque_max
 
         # World-frame buoyancy, heave, and torques are inverse-rotated before
@@ -143,14 +171,20 @@ class StationKeepingBoatEnv(DirectRLEnv):
 
         vel_b = math_utils.quat_apply_inverse(quat, linear_velocity)
         drag_b = torch.zeros_like(vel_b)
-        drag_b[:, 0] = -(
+        surge_velocity = vel_b[:, self._surge_axis_idx]
+        drag_b[:, self._surge_axis_idx] = -(
             self.physics_cfg.surge_lin_damping
-            + self.physics_cfg.surge_quad_damping * torch.abs(vel_b[:, 0])
-        ) * vel_b[:, 0]
-        drag_b[:, 1] = -(
-            self.physics_cfg.sway_lin_damping
-            + self.physics_cfg.sway_quad_damping * torch.abs(vel_b[:, 1])
-        ) * vel_b[:, 1]
+            + self.physics_cfg.surge_quad_damping * torch.abs(surge_velocity)
+        ) * surge_velocity
+        if (
+            self.physics_cfg.sway_lin_damping is not None
+            and self.physics_cfg.sway_quad_damping is not None
+        ):
+            sway_velocity = vel_b[:, self._sway_axis_idx]
+            drag_b[:, self._sway_axis_idx] = -(
+                self.physics_cfg.sway_lin_damping
+                + self.physics_cfg.sway_quad_damping * torch.abs(sway_velocity)
+            ) * sway_velocity
         forces[:, 0, :2] += drag_b[:, :2]
         force_w[:, 2] += -self.physics_cfg.heave_damping * linear_velocity[:, 2]
 
@@ -165,9 +199,23 @@ class StationKeepingBoatEnv(DirectRLEnv):
         # world_up). The previous Euler-angle form applied BODY tilt angles as
         # FIXED world-axis torques, which is restoring only near the spawn yaw
         # and becomes precessing/anti-restoring past ~90 deg (capsize-by-turning).
-        up_body_w = math_utils.quat_apply(quat, self.up_dir.expand(self.num_envs, 3))
-        tilt_axis = torch.stack((up_body_w[:, 1], -up_body_w[:, 0]), dim=-1)
-        torque_w[:, :2] += self.physics_cfg.attitude_spring * tilt_axis
+        if (
+            self.physics_cfg.restoring_stiffness_roll
+            == self.physics_cfg.restoring_stiffness_pitch
+        ):
+            up_body_w = math_utils.quat_apply(
+                quat, self.up_dir.expand(self.num_envs, 3)
+            )
+            tilt_axis = torch.stack((up_body_w[:, 1], -up_body_w[:, 0]), dim=-1)
+            torque_w[:, :2] += (
+                self.physics_cfg.restoring_stiffness_roll * tilt_axis
+            )
+        else:
+            torques[:, 0, :] += restoring_torque_body(
+                quat,
+                self.physics_cfg.restoring_stiffness_roll,
+                self.physics_cfg.restoring_stiffness_pitch,
+            )
 
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_w)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
@@ -280,8 +328,9 @@ class StationKeepingBoatEnv(DirectRLEnv):
         root_state[:, :3] += self.scene.env_origins[env_ids]
         root_state[:, 0] += distances * torch.cos(spawn_angles)
         root_state[:, 1] += distances * torch.sin(spawn_angles)
+        body_yaws = headings + self._body_yaw_from_bow_offset
         root_state[:, 3:7] = math_utils.quat_from_angle_axis(
-            headings.unsqueeze(-1), self.up_dir
+            body_yaws.unsqueeze(-1), self.up_dir
         ).reshape(num_resets, 4)
         root_state[:, 7:] = 0.0
         self.robot.write_root_state_to_sim(root_state, env_ids)

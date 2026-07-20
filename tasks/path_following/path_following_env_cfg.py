@@ -7,11 +7,13 @@ import os as _os
 
 import gymnasium as gym
 import isaaclab.sim as sim_utils
-from isaaclab.assets import ArticulationCfg
+from isaaclab.assets import ArticulationCfg, RigidObjectCfg
 from isaaclab.envs import DirectRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
+
+from .._shared.vehicles import VehicleSpec, get_vehicle
 
 
 # USVBench asset directory. This locates the USD; it is not a physics knob.
@@ -21,72 +23,110 @@ _ASSET_DIR = _os.environ.get(
 )
 
 
-# Vehicle and dynamics values are copied from tasks/rov_calm_nav. Do not tune
-# them per mission: all ROV capability tasks share this realistic calm-water hull.
-ROV_CONFIG = ArticulationCfg(
-    prim_path="/World/envs/env_.*/Robot",
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=_os.path.join(_ASSET_DIR, "ROV_rigged.usd"),
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+_DEFAULT_VEHICLE = get_vehicle("rov")
+
+
+def _build_robot_cfg(spec: VehicleSpec) -> ArticulationCfg | RigidObjectCfg:
+    """Build the selected asset while preserving the legacy ROV spawn config."""
+    spawn_kwargs = {
+        "usd_path": _os.path.join(_ASSET_DIR, spec.usd_relpath),
+        "rigid_props": sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
-            # Non-binding safety limits; terminal speeds emerge from drag balance.
-            # Isaac Lab expresses max angular velocity in degrees per second.
-            max_linear_velocity=10.0,
+            # Non-binding safety bounds, not vehicle-physics parameters.
+            max_linear_velocity=10.0 if spec.asset_kind == "articulation" else 8.0,
             max_angular_velocity=573.0,
             max_depenetration_velocity=1.0,
             disable_gravity=False,
             linear_damping=0.0,
             angular_damping=0.0,
         ),
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
+        "activate_contact_sensors": False,
+    }
+    if spec.mass_kg is not None:
+        spawn_kwargs["mass_props"] = sim_utils.MassPropertiesCfg(mass=spec.mass_kg)
+
+    if spec.asset_kind == "articulation":
+        spawn_kwargs["articulation_props"] = sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
             solver_position_iteration_count=4,
             solver_velocity_iteration_count=0,
+        )
+        return ArticulationCfg(
+            prim_path="/World/envs/env_.*/Robot",
+            spawn=sim_utils.UsdFileCfg(**spawn_kwargs),
+            init_state=ArticulationCfg.InitialStateCfg(
+                pos=(0.0, 0.0, -0.15),
+                rot=(1.0, 0.0, 0.0, 0.0),
+                lin_vel=(0.0, 0.0, 0.0),
+                ang_vel=(0.0, 0.0, 0.0),
+                joint_pos={},
+                joint_vel={},
+            ),
+            actuators={},
+            collision_group=0,
+        )
+
+    return RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Robot",
+        spawn=sim_utils.UsdFileCfg(**spawn_kwargs),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.0, 0.0, 0.0),
+            rot=(1.0, 0.0, 0.0, 0.0),
+            lin_vel=(0.0, 0.0, 0.0),
+            ang_vel=(0.0, 0.0, 0.0),
         ),
-        mass_props=sim_utils.MassPropertiesCfg(mass=100.0),
-        activate_contact_sensors=False,
-    ),
-    init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, -0.15),
-        rot=(1.0, 0.0, 0.0, 0.0),
-        lin_vel=(0.0, 0.0, 0.0),
-        ang_vel=(0.0, 0.0, 0.0),
-        joint_pos={},
-        joint_vel={},
-    ),
-    actuators={},
-    collision_group=0,
-)
+        collision_group=0,
+    )
+
+
+# Public compatibility alias; values now resolve through the registry.
+ROV_CONFIG = _build_robot_cfg(_DEFAULT_VEHICLE)
 
 
 @configclass
 class UnderwaterPhysicsCfg:
-    """Realistic calm-water ROV dynamics copied from ``rov_calm_nav``.
-
-    The BlueROV2-style per-DOF linear-plus-quadratic damping values are
-    re-derived for this 100 kg hull. They give approximately 1.54 m/s terminal
-    surge speed at 400 N and 1.00 rad/s terminal yaw rate at 200 N m.
-    """
+    """Calm-water hull dynamics populated from a :class:`VehicleSpec`."""
 
     water_density: float = 1000.0
     gravity: float = 9.8
-    rov_volume: float = 0.5
-    rov_height: float = 0.6
+    rov_volume: float = _DEFAULT_VEHICLE.displaced_volume_m3
+    rov_height: float = _DEFAULT_VEHICLE.hull_height_m
     water_surface_z: float = 0.0
-    buoyancy_center_offset: float = -0.1
+    buoyancy_center_offset: float = _DEFAULT_VEHICLE.buoyancy_center_offset_m
 
-    surge_lin_damping: float = 30.0
-    surge_quad_damping: float = 150.0
-    heave_damping: float = 400.0
-    yaw_lin_damping: float = 20.0
-    yaw_quad_damping: float = 180.0
-    attitude_spring: float = 5000.0
-    rollpitch_rate_damping: float = 2000.0
+    surge_lin_damping: float = _DEFAULT_VEHICLE.surge_lin
+    surge_quad_damping: float = _DEFAULT_VEHICLE.surge_quad
+    sway_lin_damping: float | None = _DEFAULT_VEHICLE.sway_lin
+    sway_quad_damping: float | None = _DEFAULT_VEHICLE.sway_quad
+    heave_damping: float = _DEFAULT_VEHICLE.heave_damping
+    yaw_lin_damping: float = _DEFAULT_VEHICLE.yaw_lin
+    yaw_quad_damping: float = _DEFAULT_VEHICLE.yaw_quad
+    restoring_stiffness_roll: float = _DEFAULT_VEHICLE.restoring_stiffness_roll
+    restoring_stiffness_pitch: float = _DEFAULT_VEHICLE.restoring_stiffness_pitch
+    rollpitch_rate_damping: float = _DEFAULT_VEHICLE.rollpitch_rate_damping
 
     enable_current: bool = False
     current_speed_min: float = 0.2
     current_speed_max: float = 0.3
     current_drag_coeff: float = 8.0
+
+
+def _build_underwater_physics_cfg(spec: VehicleSpec) -> UnderwaterPhysicsCfg:
+    return UnderwaterPhysicsCfg(
+        rov_volume=spec.displaced_volume_m3,
+        rov_height=spec.hull_height_m,
+        buoyancy_center_offset=spec.buoyancy_center_offset_m,
+        surge_lin_damping=spec.surge_lin,
+        surge_quad_damping=spec.surge_quad,
+        sway_lin_damping=spec.sway_lin,
+        sway_quad_damping=spec.sway_quad,
+        heave_damping=spec.heave_damping,
+        yaw_lin_damping=spec.yaw_lin,
+        yaw_quad_damping=spec.yaw_quad,
+        restoring_stiffness_roll=spec.restoring_stiffness_roll,
+        restoring_stiffness_pitch=spec.restoring_stiffness_pitch,
+        rollpitch_rate_damping=spec.rollpitch_rate_damping,
+    )
 
 
 @configclass
@@ -125,6 +165,8 @@ class VisualCfg:
 
 @configclass
 class PathFollowingEnvCfg(DirectRLEnvCfg):
+    vehicle: str = "rov"
+
     decimation = 2
     episode_length_s = 120.0
 
@@ -141,10 +183,9 @@ class PathFollowingEnvCfg(DirectRLEnvCfg):
     reference_reward_gate_bonus: float = 10.0
     reference_reward_terminal_success: float = 100.0
 
-    # Blue Robotics T200 baseline: body +Y thrust and body +Z yaw torque.
-    # Actions are hard-clipped to [-1, 1] before applying these limits.
-    thrust_max: float = 400.0
-    yaw_torque_max: float = 200.0
+    thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
+    thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
+    yaw_torque_max: float = _DEFAULT_VEHICLE.yaw_torque_nm
 
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 120,
@@ -156,8 +197,10 @@ class PathFollowingEnvCfg(DirectRLEnvCfg):
         ),
     )
 
-    robot_cfg: ArticulationCfg = ROV_CONFIG
-    underwater_physics_cfg: UnderwaterPhysicsCfg = UnderwaterPhysicsCfg()
+    robot_cfg: ArticulationCfg | RigidObjectCfg = ROV_CONFIG
+    underwater_physics_cfg: UnderwaterPhysicsCfg = _build_underwater_physics_cfg(
+        _DEFAULT_VEHICLE
+    )
     wave_cfg: WavePhysicsCfg = WavePhysicsCfg()
     visual: VisualCfg = VisualCfg()
 
@@ -169,3 +212,20 @@ class PathFollowingEnvCfg(DirectRLEnvCfg):
     )
 
     dof_names = []
+
+    def __post_init__(self) -> None:
+        base_post_init = getattr(super(), "__post_init__", None)
+        if base_post_init is not None:
+            base_post_init()
+
+        spec = get_vehicle(self.vehicle)
+        self.robot_cfg = _build_robot_cfg(spec)
+        self.underwater_physics_cfg = _build_underwater_physics_cfg(spec)
+        self.thrust_max_fwd = spec.thrust_fwd_n
+        self.thrust_max_rev = spec.thrust_rev_n
+        self.yaw_torque_max = spec.yaw_torque_nm
+
+
+@configclass
+class PathFollowingBlueBoatEnvCfg(PathFollowingEnvCfg):
+    vehicle: str = "blueboat"
