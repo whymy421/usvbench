@@ -198,3 +198,17 @@ python <IsaacLab>/scripts/reinforcement_learning/skrl/train.py \
   --task=Isaac-USV-HazardNav-Direct-v1 \
   --num_envs=64 --headless --max_iterations=3000 --seed=42
 ```
+
+## v3 (recipe history)
+
+v2 post-mortem: with analytic (wall-less) obstacles, contact is a DWELL
+REGION, not an event -- the -50/step state penalty turned one blind
+transit into a -2e4 return, the value function could not fit the
+variance, and PPO degenerated into full-throttle wandering (path length
+142 m, success 0). v3: (1) contact penalty becomes an ENTRY event
+(-25 on the rising edge, one-step latch) plus a bounded -1/step dwell
+cost; progress total <= 20 remains below one entry, preserving the
+anti-farming ledger with sane variance. (2) rays 16 -> 36 (10 deg
+spacing) and minimum obstacle radius 0.5 -> 0.8 m so every hazard spans
+>= 2 rays inside the reaction envelope (two-ray coverage rule).
+Observation space 19 -> 39.
