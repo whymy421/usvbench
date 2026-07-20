@@ -24,6 +24,9 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.docking_env_cfg:DockingBlueBoatEnvCfg",
-        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+        # Light/agile hull needs lower exploration noise near the hold
+        # tolerance (sigma~0.10): -1.9 collapsed into the escape attractor,
+        # -2.3 gave a triple-checkpoint 100% golden era.
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_blueboat_cfg.yaml",
     },
 )
