@@ -240,3 +240,17 @@ python <IsaacLab>/scripts/reinforcement_learning/skrl/train.py \
 
 The copied HazardNav PPO recipe uses `initial_log_std=-1.9` and writes under
 `experiment_name=harbor_mission_v1`.
+
+## v1 campaign ledger (honest)
+
+3000-iter: P(M1) peaked 0.61. 9000-iter: P(M1) reached 0.94 but
+P(M2|M1) stayed exactly 0.00 for 288k steps. Diagnosis probe: blind
+full-throttle reaches phase 2 in <30 s in 8/8 envs -- the automaton is
+sound end-to-end; the trained policy (correctly) refuses to plow
+through the field because success forbids contact, and clean transit
+embeds the hazard-navigation capability, itself the open-problem tier
+(14.8% standalone). The composed task is capability-gated exactly as
+the bidirectional-certificate model predicts: solving stage 2 requires
+solving hazard_nav first. RL reference pending that capability;
+cross-champion certificates additionally await the frozen observation
+superset (component champions have incompatible obs dims).

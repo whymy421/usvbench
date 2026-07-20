@@ -173,3 +173,11 @@ python <IsaacLab>/scripts/reinforcement_learning/skrl/train.py \
 
 The PPO recipe copies `hazard_nav` (`initial_log_std=-1.9`), uses experiment
 name `path_hazard_v1`, and checkpoints every 3200 trainer intervals.
+
+## v2 result
+
+Rebalance (gate 25, barrier reach 0.6 m) broke zero: 12.5% SR
+(agent_19200, path_hazard_v2_s42.pt). Same hard-perception tier as
+hazard_nav (14.8%) -- consistent, since both require threading past
+sensed obstacles. Interim reference committed; open problem shared
+with hazard_nav.
