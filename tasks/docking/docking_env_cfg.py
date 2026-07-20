@@ -13,6 +13,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 
+from .._shared.vehicles import VehicleSpec, get_vehicle
+
 
 # USVBench asset directory. This locates the USD; it is not a physics knob.
 _ASSET_DIR = _os.environ.get(
@@ -21,19 +23,16 @@ _ASSET_DIR = _os.environ.get(
 )
 
 
-# Vehicle and dynamics values below are copied exactly from the realistic boat
-# baseline via tasks/station_keeping_boat. Hydrodynamic and actuator sources are
-# cited alongside the relevant constants.
-BOAT_CONFIG = RigidObjectCfg(
-    prim_path="/World/envs/env_.*/Robot",
-    spawn=sim_utils.UsdFileCfg(
-        usd_path=_os.path.join(_ASSET_DIR, "boat_physics.usdc"),
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+_DEFAULT_VEHICLE = get_vehicle("wamv")
+
+
+def _build_robot_cfg(spec: VehicleSpec) -> RigidObjectCfg:
+    """Build a docking robot spawn config without overriding authored mass."""
+    spawn_kwargs = {
+        "usd_path": _os.path.join(_ASSET_DIR, spec.usd_relpath),
+        "rigid_props": sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
-            # Non-binding safety bounds (>=2x the terminal values that emerge
-            # from thrust/drag balance: 2.0 m/s surge, 0.8 rad/s yaw).
-            # Isaac Lab units: linear is m/s and angular is deg/s; 573 deg/s is
-            # 10 rad/s and is never reached in practice.
+            # Non-binding safety bounds, not vehicle-physics parameters.
             max_linear_velocity=8.0,
             max_angular_velocity=573.0,
             max_depenetration_velocity=1.0,
@@ -41,67 +40,74 @@ BOAT_CONFIG = RigidObjectCfg(
             linear_damping=0.0,
             angular_damping=0.0,
         ),
-        mass_props=sim_utils.MassPropertiesCfg(mass=100.0),
-        activate_contact_sensors=False,
-    ),
-    init_state=RigidObjectCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.0),
-        rot=(1.0, 0.0, 0.0, 0.0),
-        lin_vel=(0.0, 0.0, 0.0),
-        ang_vel=(0.0, 0.0, 0.0),
-    ),
-    collision_group=0,
-)
+        "activate_contact_sensors": False,
+    }
+    if spec.mass_kg is not None:
+        spawn_kwargs["mass_props"] = sim_utils.MassPropertiesCfg(mass=spec.mass_kg)
+
+    return RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Robot",
+        spawn=sim_utils.UsdFileCfg(**spawn_kwargs),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.0, 0.0, 0.0),
+            rot=(1.0, 0.0, 0.0, 0.0),
+            lin_vel=(0.0, 0.0, 0.0),
+            ang_vel=(0.0, 0.0, 0.0),
+        ),
+        collision_group=0,
+    )
+
+
+# Kept as a public compatibility alias; its values now come from the registry.
+BOAT_CONFIG = _build_robot_cfg(_DEFAULT_VEHICLE)
 
 
 @configclass
 class UnderwaterPhysicsCfg:
-    """Realistic calm-water boat dynamics copied from the boat baseline.
-
-    Drag is per-DOF linear plus quadratic and Froude-scaled (lambda=0.8,
-    matching the 100 kg hull) from the VRX WAM-V coefficients in
-    ``wamv_gazebo_dynamics_plugin.xacro``: xU=100, xUU=150, yV=100,
-    yVV=100, zW=500, nR=800, nRR=800. Linear drag scales by lambda^2.5,
-    quadratic by lambda^2, yaw linear by lambda^4.5, and yaw quadratic by
-    lambda^5. The resulting surge and yaw terminal values are 2.0 m/s at
-    500 N and 0.8 rad/s at 400 N*m.
-
-    The roll and pitch restoring values are EFFECTIVE hydrostatic stiffnesses,
-    hand-tuned for this placeholder 100 kg hull rather than derived from GM.
-    Their physical form is ``k = rho * g * displaced_volume * GM``, using the
-    transverse metacentric height GM_T for roll and the longitudinal height
-    GM_L for pitch. Both are small-angle values in N·m/rad. For the real
-    17.3 kg BlueBoat hull, the CAD-derived values are approximately
-    ``k_roll = 190`` and ``k_pitch = 150 N·m/rad``.
-    """
+    """Calm-water hull dynamics populated from a :class:`VehicleSpec`."""
 
     water_density: float = 1000.0
     gravity: float = 9.8
-    # A 100 kg boat displaces 0.1 m^3; volume 0.2 m^3 balances at half submersion.
-    rov_volume: float = 0.2
-    rov_height: float = 1.0
     water_surface_z: float = 0.0
-    buoyancy_center_offset: float = 0.0
 
-    # Hull drag is anisotropic and applied in the BODY frame.
-    surge_lin_damping: float = 50.0
-    surge_quad_damping: float = 100.0
-    sway_lin_damping: float = 50.0
-    sway_quad_damping: float = 65.0
-    heave_damping: float = 300.0
-    yaw_lin_damping: float = 300.0
-    yaw_quad_damping: float = 250.0
-    # Roll/pitch are not task DOFs; restoring keeps the placeholder hull upright.
-    # See usvbench_gazebo/blueboat_hydrostatics.md for the BlueBoat CAD derivation.
-    restoring_stiffness_roll: float = 5000.0
-    restoring_stiffness_pitch: float = 5000.0
-    # V9c fixes the world-frame spring bug; this damping is plain dissipation.
-    rollpitch_rate_damping: float = 2000.0
+    rov_volume: float = _DEFAULT_VEHICLE.displaced_volume_m3
+    rov_height: float = _DEFAULT_VEHICLE.hull_height_m
+    buoyancy_center_offset: float = _DEFAULT_VEHICLE.buoyancy_center_offset_m
+
+    surge_lin_damping: float = _DEFAULT_VEHICLE.surge_lin
+    surge_quad_damping: float = _DEFAULT_VEHICLE.surge_quad
+    sway_lin_damping: float | None = _DEFAULT_VEHICLE.sway_lin
+    sway_quad_damping: float | None = _DEFAULT_VEHICLE.sway_quad
+    heave_damping: float = _DEFAULT_VEHICLE.heave_damping
+    yaw_lin_damping: float = _DEFAULT_VEHICLE.yaw_lin
+    yaw_quad_damping: float = _DEFAULT_VEHICLE.yaw_quad
+    restoring_stiffness_roll: float = _DEFAULT_VEHICLE.restoring_stiffness_roll
+    restoring_stiffness_pitch: float = _DEFAULT_VEHICLE.restoring_stiffness_pitch
+    rollpitch_rate_damping: float = _DEFAULT_VEHICLE.rollpitch_rate_damping
 
     enable_current: bool = False
     current_speed_min: float = 0.2
     current_speed_max: float = 0.3
     current_drag_coeff: float = 8.0
+
+
+def _build_underwater_physics_cfg(spec: VehicleSpec) -> UnderwaterPhysicsCfg:
+    """Translate registry names to the existing docking physics interface."""
+    return UnderwaterPhysicsCfg(
+        rov_volume=spec.displaced_volume_m3,
+        rov_height=spec.hull_height_m,
+        buoyancy_center_offset=spec.buoyancy_center_offset_m,
+        surge_lin_damping=spec.surge_lin,
+        surge_quad_damping=spec.surge_quad,
+        sway_lin_damping=spec.sway_lin,
+        sway_quad_damping=spec.sway_quad,
+        heave_damping=spec.heave_damping,
+        yaw_lin_damping=spec.yaw_lin,
+        yaw_quad_damping=spec.yaw_quad,
+        restoring_stiffness_roll=spec.restoring_stiffness_roll,
+        restoring_stiffness_pitch=spec.restoring_stiffness_pitch,
+        rollpitch_rate_damping=spec.rollpitch_rate_damping,
+    )
 
 
 @configclass
@@ -140,6 +146,8 @@ class VisualCfg:
 
 @configclass
 class DockingEnvCfg(DirectRLEnvCfg):
+    vehicle: str = "wamv"
+
     decimation = 2
     episode_length_s = 120.0
 
@@ -179,12 +187,9 @@ class DockingEnvCfg(DirectRLEnvCfg):
     reference_reward_braking_speed_scale_mps: float = 1.0
     reference_reward_success_bonus: float = 3.0
 
-    # VRX classic thrusters provide 250 N forward and 100 N reverse each.
-    # The two aft thrusters therefore give the asymmetric 500 N / 200 N limits
-    # used by the realistic boat baseline. Actions are hard-clipped to [-1, 1].
-    thrust_max_fwd: float = 500.0
-    thrust_max_rev: float = 200.0
-    yaw_torque_max: float = 400.0
+    thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
+    thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
+    yaw_torque_max: float = _DEFAULT_VEHICLE.yaw_torque_nm
 
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 120,
@@ -197,7 +202,9 @@ class DockingEnvCfg(DirectRLEnvCfg):
     )
 
     robot_cfg: RigidObjectCfg = BOAT_CONFIG
-    underwater_physics_cfg: UnderwaterPhysicsCfg = UnderwaterPhysicsCfg()
+    underwater_physics_cfg: UnderwaterPhysicsCfg = _build_underwater_physics_cfg(
+        _DEFAULT_VEHICLE
+    )
     wave_cfg: WavePhysicsCfg = WavePhysicsCfg()
     # Rendering only: this block must not affect physics, observations, reward,
     # termination, or success semantics.
@@ -210,3 +217,16 @@ class DockingEnvCfg(DirectRLEnvCfg):
     )
 
     dof_names = []
+
+    def __post_init__(self) -> None:
+        """Resolve all hull-dependent config from the selected registry entry."""
+        base_post_init = getattr(super(), "__post_init__", None)
+        if base_post_init is not None:
+            base_post_init()
+
+        spec = get_vehicle(self.vehicle)
+        self.robot_cfg = _build_robot_cfg(spec)
+        self.underwater_physics_cfg = _build_underwater_physics_cfg(spec)
+        self.thrust_max_fwd = spec.thrust_fwd_n
+        self.thrust_max_rev = spec.thrust_rev_n
+        self.yaw_torque_max = spec.yaw_torque_nm
