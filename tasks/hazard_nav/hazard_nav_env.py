@@ -86,6 +86,9 @@ class HazardNavEnv(DirectRLEnv):
         self._reached_goal = torch.zeros(
             self.num_envs, dtype=torch.bool, device=self.device
         )
+        self._contact_prev = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
         self._contact_before_goal = torch.zeros(
             self.num_envs, dtype=torch.bool, device=self.device
         )
@@ -551,18 +554,21 @@ class HazardNavEnv(DirectRLEnv):
             * self.control_step_s
             * proximity.square()
         )
-        # Ledger property: the full positive potential gain is <= progress
-        # scale (20), and one contact step costs more (50) than all possible
-        # positive progress. There is no terminal bonus. v1's unit ledger
-        # (1 vs 2) preserved the same ratios but starved learning: per-step
-        # progress ~1e-4 was three orders below every other task's reward
-        # scale and PPO plateaued at ~5% success (wandering, zero collisions,
-        # never closing on the goal). x20 restores signal without breaking
-        # the anti-farming ledger.
+        # v3 contact ledger: analytic obstacles have no physical walls, so
+        # "contact" is a REGION the hull can dwell in, not an instantaneous
+        # event. v2's -50/step turned a single blind transit into a -2e4
+        # return; that return variance blew up the value function and PPO
+        # degenerated into full-throttle wandering (path length 142 m).
+        # Penalize the ENTRY event (-25 < 0 once per crossing) plus a small
+        # bounded dwell cost (-1/step); progress total <= 20 stays below one
+        # entry, so the anti-farming ledger survives with sane variance.
+        contact_entry = contact_now & ~self._contact_prev
+        self._contact_prev.copy_(contact_now)
         return (
             self.cfg.reward_progress_scale * progress
             - safety_cost
-            - self.cfg.reward_contact_penalty * contact_now.float()
+            - self.cfg.reward_contact_entry_penalty * contact_entry.float()
+            - self.cfg.reward_contact_dwell_penalty * contact_now.float()
         )
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -728,6 +734,7 @@ class HazardNavEnv(DirectRLEnv):
         self._previous_xy[env_ids] = env_origins_xy
         self._previous_potential[env_ids] = -1.0
         self._reached_goal[env_ids] = False
+        self._contact_prev[env_ids] = False
         self._contact_before_goal[env_ids] = False
         self._success[env_ids] = False
         self._first_success_time_s[env_ids] = torch.nan

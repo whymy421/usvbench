@@ -145,7 +145,7 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     decimation = 2
     episode_length_s = 120.0
     action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
-    observation_space = 19
+    observation_space = 39
     state_space = 0
 
     goal_radius: float = 2.0
@@ -155,7 +155,7 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     collision_margin_m: float = 0.20
     safe_clearance_m: float = 0.90
 
-    ray_count: int = 16
+    ray_count: int = 36  # v3: 10 deg spacing
     ray_max_range_m: float = 30.0
     max_obstacles: int = 12
     layout_max_attempts: int = 20
@@ -169,7 +169,8 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
 
     reward_progress_scale: float = 20.0
     reward_clearance_scale: float = 1.0
-    reward_contact_penalty: float = 50.0
+    reward_contact_entry_penalty: float = 25.0
+    reward_contact_dwell_penalty: float = 1.0
 
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
@@ -209,8 +210,8 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
         self.thrust_max_rev = spec.thrust_rev_n
         self.yaw_torque_max = spec.yaw_torque_nm
 
-        if self.ray_count != 16 or self.observation_space != 3 + self.ray_count:
-            raise ValueError("HazardNav v1 requires 16 rays and observation_space=19")
+        if self.ray_count != 36 or self.observation_space != 3 + self.ray_count:
+            raise ValueError("HazardNav v3 requires 36 rays and observation_space=39")
         if self.max_obstacles < 12:
             raise ValueError("max_obstacles must accommodate curriculum level 2 (K=12)")
         if self.min_goal_distance_m != 20.0 or self.max_goal_distance_m != 40.0:
