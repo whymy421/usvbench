@@ -278,7 +278,7 @@ class HazardNavEnv(DirectRLEnv):
                 mesh.GetDisplayColorPrimvar().SetInterpolation("vertex")
                 mesh.GetDoubleSidedAttr().Set(True)
                 self._goal_translate_ops.append(
-                    UsdGeom.Xformable(mesh.GetPrim()).AddTranslateOp()
+                    self._get_or_add_translate_op(mesh.GetPrim())
                 )
 
         if self.cfg.visual.enable_obstacles:
@@ -302,7 +302,7 @@ class HazardNavEnv(DirectRLEnv):
                     cylinder.GetDisplayColorAttr().Set(colors)
                     prim = cylinder.GetPrim()
                     UsdGeom.Imageable(prim).MakeInvisible()
-                    env_ops.append(UsdGeom.Xformable(prim).AddTranslateOp())
+                    env_ops.append(self._get_or_add_translate_op(prim))
                     env_radius_attrs.append(cylinder.GetRadiusAttr())
                     env_prims.append(prim)
                 self._obstacle_translate_ops.append(env_ops)
@@ -469,6 +469,22 @@ class HazardNavEnv(DirectRLEnv):
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_world)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_world)
         self.robot.set_external_force_and_torque(forces, torques)
+
+    @staticmethod
+    def _get_or_add_translate_op(prim):
+        """Reuse an existing translate xformOp if the prim already has one.
+
+        Cloned env prim trees can carry a translate op; blindly calling
+        AddTranslateOp then raises 'xformOp:translate already exists' and the
+        guarded visual block silently disabled all hazard markers.
+        """
+        from pxr import UsdGeom
+
+        xformable = UsdGeom.Xformable(prim)
+        for op in xformable.GetOrderedXformOps():
+            if op.GetOpType() == UsdGeom.XformOp.TypeTranslate:
+                return op
+        return xformable.AddTranslateOp()
 
     def _com_xy(self) -> torch.Tensor:
         return self.robot.data.root_com_pos_w[:, :2]
