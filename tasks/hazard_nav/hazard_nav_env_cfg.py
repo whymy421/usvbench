@@ -167,8 +167,9 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     curriculum_ema_decay: float = 0.99
     curriculum_success_threshold: float = 0.60
 
-    reward_clearance_scale: float = 0.05
-    reward_contact_penalty: float = 2.0
+    reward_progress_scale: float = 20.0
+    reward_clearance_scale: float = 1.0
+    reward_contact_penalty: float = 50.0
 
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
