@@ -25,6 +25,10 @@ components describe the dock position relative to the boat's forward direction;
 `dock_dot` and `dock_cross` align boat forward with the dock heading. Actions
 are forward thrust and yaw torque in `[-1, 1]^2`.
 
+## Crossing variant
+
+The BlueBoat current crossing exercises the C3xC6 interaction: docking requires a crab-angle approach that compensates for lateral drift. The per-episode current is reportable as `current_vec` and `Episode/current_speed`, but it is intentionally absent from policy observations under the asymmetric-information principle because a real boat must infer current from its drift rather than sense the current field directly. Current magnitudes await cross-validation with the upstream fixed-direction flow implementation, and the two force paths must not be double counted when that implementation is merged.
+
 ## Reward-free success predicate
 
 All three conditions must hold simultaneously for 5 consecutive seconds:

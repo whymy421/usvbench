@@ -30,3 +30,15 @@ gym.register(
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_blueboat_cfg.yaml",
     },
 )
+
+gym.register(
+    id="Isaac-USV-Dock-BlueBoat-Current-Direct-v1",
+    entry_point=f"{__name__}.docking_env:DockingEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.docking_env_cfg:DockingBlueBoatCurrentEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_blueboat_cfg.yaml",
+    },
+)

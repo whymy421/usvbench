@@ -29,6 +29,10 @@ The environment exposes per-environment `hold_timer` (seconds) and `path_length`
 (cumulative planar metres). Completed episodes log `success`, `time_to_success_s`
 (`nan` on failure), `path_length_m`, and `final_hold_timer_s`.
 
+## Crossing variant
+
+The BlueBoat current crossing exercises the C2xC6 interaction: station keeping must hold against drift rather than exploit the calm-water sit-still solution. The per-episode current is reportable as `current_vec` and `Episode/current_speed`, but it is intentionally absent from policy observations under the asymmetric-information principle because a real boat must infer current from its drift rather than sense the current field directly. Current magnitudes await cross-validation with the upstream fixed-direction flow implementation, and the two force paths must not be double counted when that implementation is merged.
+
 ## Reference reward
 
 The included reward is a **reference baseline; methods are free to use any

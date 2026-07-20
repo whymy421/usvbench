@@ -217,3 +217,15 @@ class StationKeepingEnvCfg(DirectRLEnvCfg):
 @configclass
 class StationKeepingBlueBoatEnvCfg(StationKeepingEnvCfg):
     vehicle: str = "blueboat"
+
+
+@configclass
+class StationKeepingBlueBoatCurrentEnvCfg(StationKeepingBlueBoatEnvCfg):
+    """BlueBoat station keeping with randomized crossing current."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.underwater_physics_cfg.enable_current = True
+        self.underwater_physics_cfg.current_speed_min = 0.2
+        self.underwater_physics_cfg.current_speed_max = 0.3
+        self.underwater_physics_cfg.current_drag_coeff = 8.0

@@ -151,6 +151,9 @@ class DockingEnv(DirectRLEnv):
         self.forward_vec = torch.tensor(
             forward_components, device=self.device
         ).repeat(self.num_envs, 1)
+        # Reportable disturbance state. It remains zero for calm variants and
+        # is deliberately excluded from the policy observation.
+        self.current_vec = torch.zeros((self.num_envs, 2), device=self.device)
 
     def _create_static_water_mesh(self) -> None:
         """Create a flat, render-only water mesh with no per-step updates."""
@@ -402,6 +405,30 @@ class DockingEnv(DirectRLEnv):
         )
         return buoyancy_force_world, buoyancy_torque
 
+    def _resample_current(self, env_ids: torch.Tensor) -> None:
+        """Sample one constant world-frame current vector per reset environment."""
+        speeds = self.physics_cfg.current_speed_min + torch.rand(
+            len(env_ids), device=self.device
+        ) * (
+            self.physics_cfg.current_speed_max
+            - self.physics_cfg.current_speed_min
+        )
+        directions = torch.rand(len(env_ids), device=self.device) * 2.0 * torch.pi
+        self.current_vec[env_ids, 0] = speeds * torch.cos(directions)
+        self.current_vec[env_ids, 1] = speeds * torch.sin(directions)
+
+    def _compute_current_forces(self) -> torch.Tensor:
+        """Compute quadratic relative-velocity drag in the world frame."""
+        vel_w = self.robot.data.root_com_vel_w
+        boat_vel_xy = vel_w[:, :2]
+        v_rel = boat_vel_xy - self.current_vec
+        v_rel_mag = torch.norm(v_rel, dim=1, keepdim=True)
+        drag_force_xy = -self.physics_cfg.current_drag_coeff * v_rel * v_rel_mag
+
+        drag_force = torch.zeros((self.num_envs, 3), device=self.device)
+        drag_force[:, :2] = drag_force_xy
+        return drag_force
+
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
         # HARD action clip: the declared [-1, 1] range is enforced here.
         self.actions = torch.clamp(actions, -1.0, 1.0)
@@ -478,6 +505,12 @@ class DockingEnv(DirectRLEnv):
             self.physics_cfg.restoring_stiffness_pitch,
         )
         torques[:, 0, :2] += restoring_torque[:, :2]
+
+        # Match blueboat_calm_nav: current drag is a world-frame force and is
+        # added before the shared world-to-body rotation. Calm tasks do not
+        # enter the current-force path at all.
+        if self.physics_cfg.enable_current:
+            force_w += self._compute_current_forces()
 
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_w)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
@@ -633,6 +666,10 @@ class DockingEnv(DirectRLEnv):
             self.extras["log"]["Episode/final_hold_timer_s"] = self.hold_timer[
                 completed_ids
             ].mean()
+            if self.physics_cfg.enable_current:
+                self.extras["log"]["Episode/current_speed"] = torch.norm(
+                    self.current_vec[completed_ids], dim=1
+                ).mean()
 
             # Each completed environment contributes one episodic EMA sample.
             for episode_success in success.detach().cpu().tolist():
@@ -648,6 +685,9 @@ class DockingEnv(DirectRLEnv):
         )
 
         super()._reset_idx(env_ids)
+
+        if self.physics_cfg.enable_current:
+            self._resample_current(env_ids)
 
         num_resets = len(env_ids)
         distances = torch.full(
