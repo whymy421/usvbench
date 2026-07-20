@@ -212,3 +212,15 @@ anti-farming ledger with sane variance. (2) rays 16 -> 36 (10 deg
 spacing) and minimum obstacle radius 0.5 -> 0.8 m so every hazard spans
 >= 2 rays inside the reaction envelope (two-ray coverage rule).
 Observation space 19 -> 39.
+
+## Status after v3 (honest ledger)
+
+Interim RL reference: 14.8% SR (agent_57600 of the 3000-iter v3 run).
+A 9000-iter continuation did NOT beat it (peak-window harvest max 6.3%):
+training shows an emergence window (~40-100k steps) followed by
+collapse -- the recurring value-instability signature, amplified on
+this first perception task. The task itself is sound (build-time
+feasibility oracle on every map + real successes at 52-96 s). Open
+problems documented for the paper: (1) vanilla-PPO exploration on
+perception tasks, (2) a planner-based classical column (LOS+PID cannot
+solve this tier -- by design, this is where learning value begins).
