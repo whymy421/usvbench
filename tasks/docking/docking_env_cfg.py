@@ -230,3 +230,8 @@ class DockingEnvCfg(DirectRLEnvCfg):
         self.thrust_max_fwd = spec.thrust_fwd_n
         self.thrust_max_rev = spec.thrust_rev_n
         self.yaw_torque_max = spec.yaw_torque_nm
+
+
+@configclass
+class DockingBlueBoatEnvCfg(DockingEnvCfg):
+    vehicle: str = "blueboat"

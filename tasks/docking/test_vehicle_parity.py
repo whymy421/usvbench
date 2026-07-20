@@ -20,6 +20,7 @@ from tasks._shared.vehicles import VEHICLES, get_vehicle
 
 WAMV_SNAPSHOT = {
     "name": "wamv",
+    "asset_kind": "rigid_object",
     "usd_relpath": "boat_physics.usdc",
     "mass_kg": 100.0,
     "thrust_fwd_n": 500.0,
