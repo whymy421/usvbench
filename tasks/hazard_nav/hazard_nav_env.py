@@ -551,11 +551,16 @@ class HazardNavEnv(DirectRLEnv):
             * self.control_step_s
             * proximity.square()
         )
-        # Ledger property: the full positive potential gain is <=~1.0, so even
-        # one analytically detected contact step costs more (2.0) than all
-        # possible positive progress. There is no terminal bonus.
+        # Ledger property: the full positive potential gain is <= progress
+        # scale (20), and one contact step costs more (50) than all possible
+        # positive progress. There is no terminal bonus. v1's unit ledger
+        # (1 vs 2) preserved the same ratios but starved learning: per-step
+        # progress ~1e-4 was three orders below every other task's reward
+        # scale and PPO plateaued at ~5% success (wandering, zero collisions,
+        # never closing on the goal). x20 restores signal without breaking
+        # the anti-farming ledger.
         return (
-            progress
+            self.cfg.reward_progress_scale * progress
             - safety_cost
             - self.cfg.reward_contact_penalty * contact_now.float()
         )
