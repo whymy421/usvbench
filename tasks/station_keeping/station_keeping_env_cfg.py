@@ -226,6 +226,6 @@ class StationKeepingBlueBoatCurrentEnvCfg(StationKeepingBlueBoatEnvCfg):
     def __post_init__(self) -> None:
         super().__post_init__()
         self.underwater_physics_cfg.enable_current = True
-        self.underwater_physics_cfg.current_speed_min = 1.0
-        self.underwater_physics_cfg.current_speed_max = 1.5
+        self.underwater_physics_cfg.current_speed_min = 2.0
+        self.underwater_physics_cfg.current_speed_max = 2.5
         self.underwater_physics_cfg.current_drag_coeff = 8.0
