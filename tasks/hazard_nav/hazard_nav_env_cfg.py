@@ -159,7 +159,9 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
 
     ray_count: int = 36  # v3: 10 deg spacing
     ray_max_range_m: float = 30.0
-    max_obstacles: int = 12
+    # Level 3 spawns K=14; 12-slot buffers crashed the first level-3 reset,
+    # so no pre-v6 run ever contained level-3 experience.
+    max_obstacles: int = 14
     layout_max_attempts: int = 20
     layout_seed: int = 0
 
@@ -221,7 +223,7 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
                 f"{expected_observation_space} when "
                 f"emit_superset_obs={self.emit_superset_obs}"
             )
-        if self.max_obstacles < 12:
-            raise ValueError("max_obstacles must accommodate curriculum level 2 (K=12)")
+        if self.max_obstacles < 14:
+            raise ValueError("max_obstacles must accommodate curriculum level 3 (K=14)")
         if self.min_goal_distance_m != 20.0 or self.max_goal_distance_m != 40.0:
             raise ValueError("HazardNav v1 fixes D0 sampling to U[20, 40] m")
