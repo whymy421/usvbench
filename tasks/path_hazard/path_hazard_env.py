@@ -680,10 +680,14 @@ class PathHazardEnv(DirectRLEnv):
         contact_now = clearance < 0.0
         contact_entry = contact_now & ~self._contact_prev
         self._contact_prev.copy_(contact_now)
+        # Incentive alignment (v3): first contact kills the predicate, so it
+        # must kill the income too -- otherwise grinding along a cylinder
+        # still pays progress and gate bonuses on a dead episode.
+        alive = (~self._contact_before_last_gate).float()
         reward = (
-            self.cfg.reference_reward_progress_scale * progress
+            self.cfg.reference_reward_progress_scale * progress * alive
             + self._gates_passed_this_step.float()
-            * self.cfg.reference_reward_gate_bonus
+            * self.cfg.reference_reward_gate_bonus * alive
             - self.cfg.reward_clearance_scale
             * self.control_step_s
             * proximity.square()

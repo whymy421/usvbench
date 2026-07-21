@@ -609,8 +609,12 @@ class HazardNavEnv(DirectRLEnv):
         # entry, so the anti-farming ledger survives with sane variance.
         contact_entry = contact_now & ~self._contact_prev
         self._contact_prev.copy_(contact_now)
+        # Incentive alignment (v4): first pre-goal contact kills the predicate,
+        # so it must kill the income too -- otherwise grinding along a
+        # cylinder still pays progress on a dead episode.
+        alive = (~self._contact_before_goal).float()
         return (
-            self.cfg.reward_progress_scale * progress
+            self.cfg.reward_progress_scale * progress * alive
             - safety_cost
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
             - self.cfg.reward_contact_dwell_penalty * contact_now.float()
