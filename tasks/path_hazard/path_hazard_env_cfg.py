@@ -17,6 +17,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 
+from .._shared.obs_superset import SUPERSET_DIM
 from .._shared.vehicles import VehicleSpec, get_vehicle
 
 
@@ -156,6 +157,7 @@ class PathHazardEnvCfg(DirectRLEnvCfg):
     action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
     observation_space = 43
     state_space = 0
+    emit_superset_obs: bool = False
 
     num_waypoints: int = 4
     segment_length_min: float = 12.0
@@ -250,5 +252,12 @@ class PathHazardEnvCfg(DirectRLEnvCfg):
                 "PathHazard v1 fixes radii, hull inflation, gate disks, and "
                 "the 20-attempt layout budget"
             )
-        if self.ray_count != 36 or self.observation_space != 7 + self.ray_count:
-            raise ValueError("PathHazard v1 requires 36 rays and observation_space=43")
+        expected_observation_space = (
+            SUPERSET_DIM if self.emit_superset_obs else 7 + self.ray_count
+        )
+        if self.ray_count != 36 or self.observation_space != expected_observation_space:
+            raise ValueError(
+                "PathHazard v1 requires 36 rays and observation_space="
+                f"{expected_observation_space} when "
+                f"emit_superset_obs={self.emit_superset_obs}"
+            )
