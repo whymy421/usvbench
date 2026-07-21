@@ -824,19 +824,12 @@ class HarborMissionEnv(DirectRLEnv):
         )
         _, _, _, dock_conjunction = self._dock_state()
         dock_pay = (active & (reward_phase == 2) & dock_conjunction).float()
-        # Incentive alignment: the predicate kills the episode on FIRST
-        # contact, but v1 kept paying progress afterwards -- demos showed the
-        # policy grinding along cylinders (progress income while touching) and
-        # resuming farming after. Once contact has ever occurred, all POSITIVE
-        # terms freeze; only penalties remain. Economically dead == predicate
-        # dead. (The latch is existing augmented state.)
-        alive = (~self._contact_before_dock).float()
         return (
-            self.cfg.reward_progress_scale * progress * alive
+            self.cfg.reward_progress_scale * progress
             - barrier
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
             - self.cfg.reward_contact_dwell_penalty * (active & contact_now).float()
-            + self.cfg.reward_dock_conjunction * dock_pay * alive
+            + self.cfg.reward_dock_conjunction * dock_pay
         )
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
