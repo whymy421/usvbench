@@ -165,7 +165,7 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
 
     curriculum_start_level: float = 0.0
     curriculum_level_increment: float = 1.0
-    curriculum_max_level: float = 2.0
+    curriculum_max_level: float = 3.0  # v4: ultimate tier = 2x-beam gaps
     curriculum_ema_decay: float = 0.99
     curriculum_success_threshold: float = 0.60
 
