@@ -42,6 +42,10 @@ DIFFICULTIES: dict[int, Difficulty] = {
     0: Difficulty(level=0, obstacle_count=4, bottleneck_beams=5.0),
     1: Difficulty(level=1, obstacle_count=8, bottleneck_beams=4.0),
     2: Difficulty(level=2, obstacle_count=12, bottleneck_beams=3.0),
+    # Level 3 (user-requested ultimate tier): gaps exactly 2x hull beam --
+    # threading with fenders-width margins. Curriculum cap must be raised to
+    # reach it; also the per-episode randomized band used by Suite S.
+    3: Difficulty(level=3, obstacle_count=14, bottleneck_beams=2.0),
 }
 
 

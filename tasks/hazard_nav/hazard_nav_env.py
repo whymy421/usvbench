@@ -570,14 +570,13 @@ class HazardNavEnv(DirectRLEnv):
         return {"policy": superset_observation}
 
     def _potential(self, distance: torch.Tensor) -> torch.Tensor:
-        # Using max(distance, goal_radius) makes the potential memoryless and
-        # flat everywhere inside the goal region while retaining the stated D0
-        # denominator and the <=1 total positive-progress ledger cap.
-        potential_distance = torch.maximum(
-            distance, torch.full_like(distance, self.goal_radius)
-        )
+        # v4: the potential pulls all the way to the goal CENTER. v1-v3 floored
+        # it at goal_radius, which erased the reward gradient over the final
+        # 2 m -- demos showed the policy orbiting at the rim with no incentive
+        # for a decisive entry. Pulling to center stays memoryless and keeps
+        # the <=1 total positive-progress ledger cap (denominator unchanged).
         return -torch.clamp(
-            potential_distance / self.d0_per_env.clamp_min(1.0e-6),
+            distance / self.d0_per_env.clamp_min(1.0e-6),
             min=0.0,
             max=1.0,
         )
