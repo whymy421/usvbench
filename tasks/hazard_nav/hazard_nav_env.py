@@ -120,9 +120,19 @@ class HazardNavEnv(DirectRLEnv):
             (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
         )
 
+        # Diagnostics only -- none of these feed back into the reward.
+        # Counterfactual ledger for the CUT v6 time fee (0.01 per step with
+        # distance_norm > 0.10): measures for free what the fee would have
+        # charged, instead of spending a training arm on a predicted null.
+        self._fee_steps = torch.zeros(self.num_envs, device=self.device)
+        self._ep_prox_cost = torch.zeros(self.num_envs, device=self.device)
+        self._ep_contact_entries = torch.zeros(self.num_envs, device=self.device)
+
     @property
     def current_level(self) -> int:
         """Current integer difficulty index encoded by DockingCurriculum."""
+        if self.cfg.curriculum_frozen:
+            return int(self.cfg.eval_level)
         return int(round(self.curriculum.spawn_distance))
 
     def _setup_scene(self) -> None:
@@ -509,6 +519,28 @@ class HazardNavEnv(DirectRLEnv):
             active_mask=self.obstacle_active,
         )
 
+    def _ray_ranges_m(self) -> torch.Tensor:
+        """Analytic 36-ray ranges in METERS, shared by obs and reward.
+
+        Recomputed at every call site -- never cached across callbacks. The
+        DirectRLEnv order is dones -> rewards -> resets -> obs, so a buffer
+        written here would be stale for freshly reset envs and reusing last
+        step's obs rays would smuggle hidden history into the reward.
+        """
+        forward = self._forward_2d()
+        left = torch.stack((-forward[:, 1], forward[:, 0]), dim=-1)
+        cosine = torch.cos(self._ray_angles).view(1, -1, 1)
+        sine = torch.sin(self._ray_angles).view(1, -1, 1)
+        ray_directions = cosine * forward.unsqueeze(1) + sine * left.unsqueeze(1)
+        return ray_circle_ranges(
+            self._com_xy(),
+            ray_directions,
+            self.obstacle_centers,
+            self.obstacle_radii,
+            max_range_m=self.cfg.ray_max_range_m,
+            active_mask=self.obstacle_active,
+        )
+
     def _get_observations(self) -> dict:
         position_to_goal = self.target_pos - self._com_xy()
         distance = torch.norm(position_to_goal, dim=-1, keepdim=True)
@@ -525,18 +557,7 @@ class HazardNavEnv(DirectRLEnv):
             max=1.0,
         )
 
-        left = torch.stack((-forward[:, 1], forward[:, 0]), dim=-1)
-        cosine = torch.cos(self._ray_angles).view(1, -1, 1)
-        sine = torch.sin(self._ray_angles).view(1, -1, 1)
-        ray_directions = cosine * forward.unsqueeze(1) + sine * left.unsqueeze(1)
-        ranges = ray_circle_ranges(
-            self._com_xy(),
-            ray_directions,
-            self.obstacle_centers,
-            self.obstacle_radii,
-            max_range_m=self.cfg.ray_max_range_m,
-            active_mask=self.obstacle_active,
-        )
+        ranges = self._ray_ranges_m()
         ranges_norm = ranges / self.cfg.ray_max_range_m
         native_observation = torch.hstack((dot, cross, distance_norm, ranges_norm))
         if not self.cfg.emit_superset_obs:
@@ -607,11 +628,39 @@ class HazardNavEnv(DirectRLEnv):
         # Penalize the ENTRY event (-25 < 0 once per crossing) plus a small
         # bounded dwell cost (-1/step); progress total <= 20 stays below one
         # entry, so the anti-farming ledger survives with sane variance.
+        # v6a: per-ray log proximity field replacing the quadratic graze tax
+        # (kept above behind reward_clearance_scale=0.0 for the ablation arm).
+        # Pure closed-form function of the 36 ray obs slots: zero beyond the
+        # band cap (~2x hull-beam clearance), smooth 1/rho gradient inside,
+        # floored at half-beam so interior cost stays dwell's job. NavRL-style
+        # (RA-L 2025) log barrier, band-limited per path_hazard v2's
+        # no-distant-tax lesson.
+        rays_m = self._ray_ranges_m()
+        prox_cap_m = self.cfg.safe_clearance_m + self.cfg.half_beam_m
+        prox_cost = (
+            -self.cfg.reward_prox_scale
+            * self.control_step_s
+            * torch.log(
+                rays_m.clamp(self.cfg.prox_ray_floor_m, prox_cap_m) / prox_cap_m
+            ).mean(dim=-1)
+        )
+
+        # Diagnostics (no reward effect): counterfactual cut-fee ledger uses
+        # the exact obs[2] formula so the logged number is what the fee gate
+        # would have seen.
+        distance_norm = torch.clamp(
+            distance / self.d0_per_env.clamp_min(1.0e-6), min=0.0, max=1.0
+        )
+        self._fee_steps += (distance_norm > 0.10).float()
+        self._ep_prox_cost += prox_cost
+
         contact_entry = contact_now & ~self._contact_prev
         self._contact_prev.copy_(contact_now)
+        self._ep_contact_entries += contact_entry.float()
         return (
             self.cfg.reward_progress_scale * progress
             - safety_cost
+            - prox_cost
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
             - self.cfg.reward_contact_dwell_penalty * contact_now.float()
         )
@@ -691,9 +740,19 @@ class HazardNavEnv(DirectRLEnv):
             self.extras["log"]["Episode/route_geodesic_length_m"] = (
                 self._route_geodesic_length[completed_ids].mean()
             )
+            self.extras["log"]["Episode/counterfactual_fee"] = (
+                0.01 * self._fee_steps[completed_ids].mean()
+            )
+            self.extras["log"]["Episode/reward_prox_cost_sum"] = (
+                self._ep_prox_cost[completed_ids].mean()
+            )
+            self.extras["log"]["Episode/contact_entries"] = (
+                self._ep_contact_entries[completed_ids].mean()
+            )
 
-            for episode_success in success.detach().cpu().tolist():
-                self.curriculum.update(episode_success)
+            if not self.cfg.curriculum_frozen:
+                for episode_success in success.detach().cpu().tolist():
+                    self.curriculum.update(episode_success)
 
         self.extras.setdefault("log", {})
         self.extras["log"]["Curriculum/level"] = torch.tensor(
@@ -794,6 +853,9 @@ class HazardNavEnv(DirectRLEnv):
         self._min_clearance[env_ids] = initial_clearance
         self._contact_before_goal[env_ids] = initial_clearance < 0.0
         self.actions[env_ids] = 0.0
+        self._fee_steps[env_ids] = 0.0
+        self._ep_prox_cost[env_ids] = 0.0
+        self._ep_contact_entries[env_ids] = 0.0
 
         self._update_render_only_hazard_markers(
             env_ids, local_goals, local_centers, radii, active

@@ -132,6 +132,11 @@ class PathHazardEnv(DirectRLEnv):
             (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
         )
 
+        # Diagnostics only -- none of these feed back into the reward.
+        self._fee_steps = torch.zeros(self.num_envs, device=self.device)
+        self._ep_prox_cost = torch.zeros(self.num_envs, device=self.device)
+        self._ep_contact_entries = torch.zeros(self.num_envs, device=self.device)
+
     def _setup_scene(self) -> None:
         if self.vehicle_spec.asset_kind == "articulation":
             self.robot = Articulation(self.cfg.robot_cfg)
@@ -580,6 +585,31 @@ class PathHazardEnv(DirectRLEnv):
             active_mask=self.obstacle_active,
         )
 
+    def _ray_ranges_m(self) -> torch.Tensor:
+        """Analytic 36-ray ranges in METERS, shared by obs and reward.
+
+        Heading math replicates _heading_and_direction exactly so obs stays
+        bit-identical. Recomputed at every call site -- never cached across
+        callbacks (dones -> rewards -> resets -> obs ordering would serve
+        stale rays to freshly reset envs).
+        """
+        forwards = math_utils.quat_apply(self._root_quat(), self.forward_vec)[:, :2]
+        forwards = forwards / torch.norm(
+            forwards, dim=-1, keepdim=True
+        ).clamp_min(1.0e-6)
+        left = torch.stack((-forwards[:, 1], forwards[:, 0]), dim=-1)
+        cosine = torch.cos(self._ray_angles).view(1, -1, 1)
+        sine = torch.sin(self._ray_angles).view(1, -1, 1)
+        ray_directions = cosine * forwards.unsqueeze(1) + sine * left.unsqueeze(1)
+        return ray_circle_ranges(
+            self._com_xy(),
+            ray_directions,
+            self.obstacle_centers,
+            self.obstacle_radii,
+            max_range_m=self.cfg.ray_max_range_m,
+            active_mask=self.obstacle_active,
+        )
+
     def _get_observations(self) -> dict:
         # First seven values intentionally match path_following v4b exactly.
         target_xy = self._current_waypoint_world()
@@ -612,18 +642,7 @@ class PathHazardEnv(DirectRLEnv):
         )
         next_distance_norm = next_distance / self.cfg.segment_length_max
 
-        left = torch.stack((-forwards[:, 1], forwards[:, 0]), dim=-1)
-        cosine = torch.cos(self._ray_angles).view(1, -1, 1)
-        sine = torch.sin(self._ray_angles).view(1, -1, 1)
-        ray_directions = cosine * forwards.unsqueeze(1) + sine * left.unsqueeze(1)
-        ranges = ray_circle_ranges(
-            self._com_xy(),
-            ray_directions,
-            self.obstacle_centers,
-            self.obstacle_radii,
-            max_range_m=self.cfg.ray_max_range_m,
-            active_mask=self.obstacle_active,
-        )
+        ranges = self._ray_ranges_m()
         ranges_norm = ranges / self.cfg.ray_max_range_m
         native_observation = torch.hstack(
             (
@@ -680,6 +699,29 @@ class PathHazardEnv(DirectRLEnv):
         contact_now = clearance < 0.0
         contact_entry = contact_now & ~self._contact_prev
         self._contact_prev.copy_(contact_now)
+
+        # v6a: per-ray log proximity field replacing the quadratic graze tax
+        # (kept behind reward_clearance_scale=0.0 for the ablation arm). Same
+        # structure as hazard_nav v6a; band cap 1.05 m keeps path v2's
+        # no-distant-tax narrowing verbatim.
+        rays_m = self._ray_ranges_m()
+        prox_cap_m = self.cfg.safe_clearance_m + self.cfg.half_beam_m
+        prox_cost = (
+            -self.cfg.reward_prox_scale
+            * self.control_step_s
+            * torch.log(
+                rays_m.clamp(self.cfg.prox_ray_floor_m, prox_cap_m) / prox_cap_m
+            ).mean(dim=-1)
+        )
+
+        # Diagnostics (no reward effect): counterfactual ledger for the CUT
+        # v6 time fee (0.01 per pre-completion step, gate = the stage latch).
+        self._fee_steps += (
+            self.gates_passed < self.cfg.num_waypoints
+        ).float()
+        self._ep_prox_cost += prox_cost
+        self._ep_contact_entries += contact_entry.float()
+
         reward = (
             self.cfg.reference_reward_progress_scale * progress
             + self._gates_passed_this_step.float()
@@ -687,6 +729,7 @@ class PathHazardEnv(DirectRLEnv):
             - self.cfg.reward_clearance_scale
             * self.control_step_s
             * proximity.square()
+            - prox_cost
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
             - self.cfg.reward_contact_dwell_penalty * contact_now.float()
         )
@@ -809,6 +852,15 @@ class PathHazardEnv(DirectRLEnv):
             self.extras["log"]["Episode/route_length_m"] = self.route_length[
                 completed_ids
             ].mean()
+            self.extras["log"]["Episode/counterfactual_fee"] = (
+                0.01 * self._fee_steps[completed_ids].mean()
+            )
+            self.extras["log"]["Episode/reward_prox_cost_sum"] = (
+                self._ep_prox_cost[completed_ids].mean()
+            )
+            self.extras["log"]["Episode/contact_entries"] = (
+                self._ep_contact_entries[completed_ids].mean()
+            )
 
         super()._reset_idx(env_ids)
 
@@ -890,6 +942,9 @@ class PathHazardEnv(DirectRLEnv):
         self._gates_passed_this_step[env_ids] = False
         self._first_success_time_s[env_ids] = torch.nan
         self._episode_finished[env_ids] = False
+        self._fee_steps[env_ids] = 0.0
+        self._ep_prox_cost[env_ids] = 0.0
+        self._ep_contact_entries[env_ids] = 0.0
         self._previous_xy[env_ids] = origins_xy
         first_targets = waypoints[:, 0] + origins_xy
         first_distance = torch.norm(first_targets - origins_xy, dim=-1)
