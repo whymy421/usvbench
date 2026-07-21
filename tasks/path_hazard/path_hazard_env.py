@@ -18,6 +18,7 @@ import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
 
+from .._shared.obs_superset import SPEED_SCALE_MPS
 from .._shared.restoring import restoring_torque_body
 from .._shared.vehicles import get_vehicle
 from .path_hazard_env_cfg import PathHazardEnvCfg
@@ -623,20 +624,48 @@ class PathHazardEnv(DirectRLEnv):
             max_range_m=self.cfg.ray_max_range_m,
             active_mask=self.obstacle_active,
         )
-        return {
-            "policy": torch.hstack(
-                (
-                    dot,
-                    cross,
-                    distance_norm,
-                    stage_norm,
-                    next_dot,
-                    next_cross,
-                    next_distance_norm,
-                    ranges / self.cfg.ray_max_range_m,
-                )
+        ranges_norm = ranges / self.cfg.ray_max_range_m
+        native_observation = torch.hstack(
+            (
+                dot,
+                cross,
+                distance_norm,
+                stage_norm,
+                next_dot,
+                next_cross,
+                next_distance_norm,
+                ranges_norm,
             )
-        }
+        )
+        if not self.cfg.emit_superset_obs:
+            return {"policy": native_observation}
+
+        zero = torch.zeros_like(distance_norm)
+        speed_norm = (
+            torch.norm(
+                self.robot.data.root_com_vel_w[:, :2], dim=-1, keepdim=True
+            )
+            / SPEED_SCALE_MPS
+        )
+        phase_one_hot = torch.hstack((torch.ones_like(zero), zero, zero, zero))
+        superset_observation = torch.hstack(
+            (
+                dot,
+                cross,
+                distance_norm,
+                stage_norm,
+                next_dot,
+                next_cross,
+                next_distance_norm,
+                zero,
+                zero,  # no berth alignment
+                speed_norm,
+                ranges_norm,
+                phase_one_hot,
+                zero,  # no dwell state
+            )
+        )
+        return {"policy": superset_observation}
 
     def _get_rewards(self) -> torch.Tensor:
         # Exact path_following potential: raw distance delta against the gate

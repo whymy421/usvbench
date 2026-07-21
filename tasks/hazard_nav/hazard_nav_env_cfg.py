@@ -17,6 +17,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 
+from .._shared.obs_superset import SUPERSET_DIM
 from .._shared.vehicles import VehicleSpec, get_vehicle
 
 
@@ -147,6 +148,7 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(2,))
     observation_space = 39
     state_space = 0
+    emit_superset_obs: bool = False
 
     goal_radius: float = 2.0
     min_goal_distance_m: float = 20.0
@@ -210,8 +212,15 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
         self.thrust_max_rev = spec.thrust_rev_n
         self.yaw_torque_max = spec.yaw_torque_nm
 
-        if self.ray_count != 36 or self.observation_space != 3 + self.ray_count:
-            raise ValueError("HazardNav v3 requires 36 rays and observation_space=39")
+        expected_observation_space = (
+            SUPERSET_DIM if self.emit_superset_obs else 3 + self.ray_count
+        )
+        if self.ray_count != 36 or self.observation_space != expected_observation_space:
+            raise ValueError(
+                "HazardNav v3 requires 36 rays and observation_space="
+                f"{expected_observation_space} when "
+                f"emit_superset_obs={self.emit_superset_obs}"
+            )
         if self.max_obstacles < 12:
             raise ValueError("max_obstacles must accommodate curriculum level 2 (K=12)")
         if self.min_goal_distance_m != 20.0 or self.max_goal_distance_m != 40.0:
