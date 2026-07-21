@@ -47,3 +47,4 @@ docs/EMAIL_TO_ARIF.md
 # Reference checkpoints (small, shipped for reproduction)
 !tasks/*/checkpoints/
 !tasks/*/checkpoints/*.pt
+tasks/*/videos/
