@@ -181,7 +181,16 @@ class PathHazardEnvCfg(DirectRLEnvCfg):
 
     reference_reward_progress_scale: float = 20.0
     reference_reward_gate_bonus: float = 25.0  # v2: threading past on-line blockers must outweigh one contact entry
-    reward_clearance_scale: float = 1.0
+    # v6a: quadratic graze tax retired (0.0) but KEPT for the shape-ablation
+    # arm -- reward_clearance_scale=1.0 + reward_prox_scale=0.0 restores the
+    # exact v5 reward path.
+    reward_clearance_scale: float = 0.0
+    # v6a: per-ray log proximity field, band [0.45, 0.6 + 0.45 = 1.05] m.
+    # w=5.7 matches v5's at-touch cost averaged over ray phase at r=1.4 m.
+    # Two-flank summation inside scatter pairs is deliberate (gap centering);
+    # watched by kill criterion K3-P.
+    reward_prox_scale: float = 5.7
+    prox_ray_floor_m: float = 0.45
     reward_contact_entry_penalty: float = 25.0
     reward_contact_dwell_penalty: float = 1.0
 

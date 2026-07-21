@@ -170,9 +170,24 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     curriculum_max_level: float = 3.0  # v4: ultimate tier = 2x-beam gaps
     curriculum_ema_decay: float = 0.99
     curriculum_success_threshold: float = 0.60
+    # Eval-only: the global curriculum EMA updates on every completed episode,
+    # so a good policy can cross the 0.60 threshold MID-EVAL and silently
+    # shift the tier under a harvest run. Freeze pins the level for the whole
+    # process; every reported number must state its tier.
+    curriculum_frozen: bool = False
+    eval_level: int = 0
 
     reward_progress_scale: float = 20.0
-    reward_clearance_scale: float = 1.0
+    # v6a: quadratic graze tax retired (0.0) but KEPT for the shape-ablation
+    # arm -- reward_clearance_scale=1.0 + reward_prox_scale=0.0 restores the
+    # exact v5 reward path.
+    reward_clearance_scale: float = 0.0
+    # v6a: per-ray log proximity field over the 36 rays, band
+    # [prox_ray_floor_m, safe_clearance_m + half_beam_m] = [0.45, 1.35] m.
+    # Zero beyond ~2x hull-beam clearance; w=4.1 matches v5's at-touch cost
+    # averaged over ray phase at the r=1.4 m reference cylinder.
+    reward_prox_scale: float = 4.1
+    prox_ray_floor_m: float = 0.45
     reward_contact_entry_penalty: float = 25.0
     reward_contact_dwell_penalty: float = 1.0
 
