@@ -39,6 +39,7 @@ from isaaclab.app import AppLauncher
 
 CERTIFICATE_TARGETS = {
     "Isaac-USV-HazardNav-Direct-v1",
+    "Isaac-USV-HazardNav-Direct-v2",
     "Isaac-USV-PathHazard-Direct-v1",
 }
 

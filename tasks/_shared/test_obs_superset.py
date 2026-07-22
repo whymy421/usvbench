@@ -27,6 +27,7 @@ EXPECTED_DIMS = {
     "Isaac-USV-Dock-BlueBoat-Direct-v1": 6,
     "Isaac-USV-Dock-BlueBoat-Current-Direct-v1": 6,
     "Isaac-USV-HazardNav-Direct-v1": 39,
+    "Isaac-USV-HazardNav-Direct-v2": 41,
     "Isaac-USV-PathHazard-Direct-v1": 43,
     "Isaac-USV-HarborMission-Direct-v1": 46,
 }
@@ -69,7 +70,7 @@ def main() -> None:
 
     print(
         "PASS: frozen 51-D superset and native layouts "
-        "(3, 3, 7, 6, 39, 43, 46) are valid"
+        "(3, 3, 7, 6, 39, 41, 43, 46) are valid"
     )
 
 

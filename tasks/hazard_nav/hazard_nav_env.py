@@ -559,24 +559,38 @@ class HazardNavEnv(DirectRLEnv):
 
         ranges = self._ray_ranges_m()
         ranges_norm = ranges / self.cfg.ray_max_range_m
-        native_observation = torch.hstack((dot, cross, distance_norm, ranges_norm))
-        if not self.cfg.emit_superset_obs:
-            return {"policy": native_observation}
 
-        zero = torch.zeros_like(distance_norm)
         speed_norm = (
             torch.norm(
                 self.robot.data.root_com_vel_w[:, :2], dim=-1, keepdim=True
             )
             / SPEED_SCALE_MPS
         )
+        # B1 (v2): the reached latch enters the obs (cross-task "stage
+        # complete" slot), making latch-gated reward terms augmented-Markov.
+        # v1 keeps its historical layouts bit-stable.
+        reached = self._reached_goal.float().unsqueeze(-1)
+
+        if self.cfg.obs_v2:
+            native_observation = torch.hstack(
+                (dot, cross, distance_norm, reached, speed_norm, ranges_norm)
+            )
+        else:
+            native_observation = torch.hstack(
+                (dot, cross, distance_norm, ranges_norm)
+            )
+        if not self.cfg.emit_superset_obs:
+            return {"policy": native_observation}
+
+        zero = torch.zeros_like(distance_norm)
+        stage_slot = reached if self.cfg.obs_v2 else zero
         phase_one_hot = torch.hstack((torch.ones_like(zero), zero, zero, zero))
         superset_observation = torch.hstack(
             (
                 dot,
                 cross,
                 distance_norm,
-                zero,  # no ordered gates
+                stage_slot,  # v2: reached latch; v1: no ordered gates
                 dot,
                 cross,
                 distance_norm,  # no look-ahead: next == current
@@ -657,10 +671,29 @@ class HazardNavEnv(DirectRLEnv):
         contact_entry = contact_now & ~self._contact_prev
         self._contact_prev.copy_(contact_now)
         self._ep_contact_entries += contact_entry.float()
+
+        # B1 swiftness (v2 only): idling is taxed until the reached latch
+        # flips. Closed-form in obs slots 9 (speed) and 3 (latch); one-
+        # transition form like the entry edge (latch updated in _get_dones
+        # this step = part of s_{t+1}).
+        swift_cost = torch.zeros_like(prox_cost)
+        if self.cfg.obs_v2:
+            speed_norm = (
+                torch.norm(self.robot.data.root_com_vel_w[:, :2], dim=-1)
+                / SPEED_SCALE_MPS
+            )
+            swift_cost = (
+                self.cfg.reward_swift_scale
+                * self.control_step_s
+                * (1.0 - speed_norm.clamp(max=1.0))
+                * (~self._reached_goal).float()
+            )
+
         return (
             self.cfg.reward_progress_scale * progress
             - safety_cost
             - prox_cost
+            - swift_cost
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
             - self.cfg.reward_contact_dwell_penalty * contact_now.float()
         )
