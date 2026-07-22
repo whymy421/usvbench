@@ -149,6 +149,9 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     observation_space = 39
     state_space = 0
     emit_superset_obs: bool = False
+    # B1 (v2 id): native obs gains the reached latch + speed_norm (41-D), the
+    # superset stage slot carries the latch, and the swiftness term activates.
+    obs_v2: bool = False
 
     goal_radius: float = 2.0
     min_goal_distance_m: float = 20.0
@@ -190,6 +193,11 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     prox_ray_floor_m: float = 0.45
     reward_contact_entry_penalty: float = 25.0
     reward_contact_dwell_penalty: float = 1.0
+    # B1 swiftness (v2 only): -scale * dt * (1 - speed_norm) while the reached
+    # latch is off. Memoryless: speed is obs slot 9, the latch obs slot 3.
+    # Full-idle episode cost = scale * 120 s = 6.0 -- bounded well under the
+    # 20-pt progress ledger; per-step max 1e-3 is critic-safe.
+    reward_swift_scale: float = 0.05
 
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
@@ -229,16 +237,30 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
         self.thrust_max_rev = spec.thrust_rev_n
         self.yaw_torque_max = spec.yaw_torque_nm
 
+        native_dim = (5 if self.obs_v2 else 3) + self.ray_count
         expected_observation_space = (
-            SUPERSET_DIM if self.emit_superset_obs else 3 + self.ray_count
+            SUPERSET_DIM if self.emit_superset_obs else native_dim
         )
         if self.ray_count != 36 or self.observation_space != expected_observation_space:
             raise ValueError(
-                "HazardNav v3 requires 36 rays and observation_space="
+                "HazardNav requires 36 rays and observation_space="
                 f"{expected_observation_space} when "
-                f"emit_superset_obs={self.emit_superset_obs}"
+                f"emit_superset_obs={self.emit_superset_obs}, "
+                f"obs_v2={self.obs_v2}"
             )
         if self.max_obstacles < 14:
             raise ValueError("max_obstacles must accommodate curriculum level 3 (K=14)")
         if self.min_goal_distance_m != 20.0 or self.max_goal_distance_m != 40.0:
             raise ValueError("HazardNav v1 fixes D0 sampling to U[20, 40] m")
+
+
+@configclass
+class HazardNavV2EnvCfg(HazardNavEnvCfg):
+    """B1 wave: velocity observability + reached latch + swiftness term.
+
+    Registered under the append-only gym id Isaac-USV-HazardNav-Direct-v2;
+    the v1 id, layout, champions, and certificates stay untouched.
+    """
+
+    obs_v2: bool = True
+    observation_space = 41

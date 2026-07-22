@@ -32,6 +32,9 @@ _NAV = [0, 1, 2]
 _PATH = [0, 1, 2, 3, 4, 5, 6]
 _DOCK = [0, 1, 2, 7, 8, 9]
 _HAZARD = [0, 1, 2] + list(range(10, 46))
+# B1 (v2): + reached latch (slot 3, cross-task "stage complete" semantics) and
+# self speed (slot 9, docking's 2 m/s scale). Append-only: v1 untouched.
+_HAZARD_V2 = [0, 1, 2, 3, 9] + list(range(10, 46))
 _PATH_HAZARD = _PATH + list(range(10, 46))
 _HARBOR = (
     [0, 1, 2]
@@ -57,6 +60,7 @@ NATIVE_LAYOUTS = {
     "Isaac-USV-Dock-BlueBoat-Direct-v1": list(_DOCK),
     "Isaac-USV-Dock-BlueBoat-Current-Direct-v1": list(_DOCK),
     "Isaac-USV-HazardNav-Direct-v1": list(_HAZARD),
+    "Isaac-USV-HazardNav-Direct-v2": list(_HAZARD_V2),
     "Isaac-USV-PathHazard-Direct-v1": list(_PATH_HAZARD),
     "Isaac-USV-HarborMission-Direct-v1": list(_HARBOR),
 }
