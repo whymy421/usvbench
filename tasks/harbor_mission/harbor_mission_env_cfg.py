@@ -181,13 +181,16 @@ class HarborMissionEnvCfg(DirectRLEnvCfg):
     layout_seed: int = 0
 
     reward_progress_scale: float = 20.0
-    # v6: quadratic graze tax retired (0.0) but KEPT for the ablation arm --
-    # reward_clearance_scale=1.0 + reward_prox_scale=0.0 restores the exact
-    # pre-v6 reward path.
-    reward_clearance_scale: float = 0.0
-    # v6: per-ray log proximity field, band [0.45, 0.90 + 0.45 = 1.35] m --
-    # identical to the certified hazard_nav v6a calibration (w=4.1).
-    reward_prox_scale: float = 4.1
+    # v6.1: quadratic tax RESTORED for harbor. The v6.0 log field (w=4.1,
+    # band 1.35 m) chronically taxed the dense transit zone: s43 found the
+    # exit at 14.4k steps then LEARNED TO STAY HOME (accumulated in-band tax
+    # over a multi-thousand-step transit dwarfs the +25 milestone). The log
+    # field is certified for sparse fields (hazard tier 0, 5x-beam gaps);
+    # dense-field adaptation (narrower band / mean-log cap) is a separate
+    # experiment. v6.1 isolates ONE variable: milestone bonuses on the
+    # unchanged v1 reward base.
+    reward_clearance_scale: float = 1.0
+    reward_prox_scale: float = 0.0
     prox_ray_floor_m: float = 0.45
     # v6: one-time bonus on each milestone latch rising edge (M1 exit, M2
     # transit, M3 dock-hold). +25 = one contact entry = proven event scale;
