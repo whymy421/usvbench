@@ -60,9 +60,11 @@ agent:
   time_limit_bootstrap: False
   experiment:
     directory: "usvbench"
-    experiment_name: "harbor_mission_v1"
+    experiment_name: "harbor_mission_v6"
     write_interval: auto
-    checkpoint_interval: auto
+    # Dense checkpoints for the eval-ladder harvest (the training cliff is
+    # stochastic per-seed; champions are selected mid-run).
+    checkpoint_interval: 3200
     wandb: true
     wandb_kwargs:
       project: "usvbench"
