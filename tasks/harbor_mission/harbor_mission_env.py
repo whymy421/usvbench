@@ -96,6 +96,15 @@ class HarborMissionEnv(DirectRLEnv):
         self._m1 = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._m2 = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._m3 = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._m1_at_step_start = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self._m2_at_step_start = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self._m3_at_step_start = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
         self._m1_step = torch.full(
             (self.num_envs,), -1, dtype=torch.long, device=self.device
         )
@@ -588,6 +597,12 @@ class HarborMissionEnv(DirectRLEnv):
         self._potential_at_step_start.copy_(
             self._phase_potential(self._com_xy(), self.phase)
         )
+        # v6: milestone latches at step start, so the reward can pay each
+        # rising edge exactly once (one-transition form; the phase one-hot in
+        # obs carries the same information, keeping the bonus augmented-Markov).
+        self._m1_at_step_start.copy_(self._m1)
+        self._m2_at_step_start.copy_(self._m2)
+        self._m3_at_step_start.copy_(self._m3)
 
     def _apply_action(self) -> None:
         num_bodies = self.robot.num_bodies
@@ -736,6 +751,27 @@ class HarborMissionEnv(DirectRLEnv):
         )
         return normalized / 3.0
 
+    def _ray_ranges_m(self) -> torch.Tensor:
+        """Analytic 36-ray ranges in METERS, shared by obs and reward.
+
+        Recomputed at every call site -- never cached across callbacks
+        (dones -> rewards -> resets -> obs ordering would serve stale rays
+        to freshly reset envs).
+        """
+        forward = self._forward_2d()
+        left = torch.stack((-forward[:, 1], forward[:, 0]), dim=-1)
+        cosine = torch.cos(self._ray_angles).view(1, -1, 1)
+        sine = torch.sin(self._ray_angles).view(1, -1, 1)
+        ray_directions = cosine * forward.unsqueeze(1) + sine * left.unsqueeze(1)
+        return ray_circle_ranges(
+            self._com_xy(),
+            ray_directions,
+            self.obstacle_centers,
+            self.obstacle_radii,
+            max_range_m=self.cfg.ray_max_range_m,
+            active_mask=self.obstacle_active,
+        )
+
     def _get_observations(self) -> dict:
         current_xy = self._com_xy()
         target = self._phase_target()
@@ -758,18 +794,7 @@ class HarborMissionEnv(DirectRLEnv):
         base = torch.hstack((dot, cross, distance_norm))
         base = torch.where((self.phase < 3).unsqueeze(-1), base, torch.zeros_like(base))
 
-        left = torch.stack((-forward[:, 1], forward[:, 0]), dim=-1)
-        cosine = torch.cos(self._ray_angles).view(1, -1, 1)
-        sine = torch.sin(self._ray_angles).view(1, -1, 1)
-        ray_directions = cosine * forward.unsqueeze(1) + sine * left.unsqueeze(1)
-        ranges = ray_circle_ranges(
-            current_xy,
-            ray_directions,
-            self.obstacle_centers,
-            self.obstacle_radii,
-            max_range_m=self.cfg.ray_max_range_m,
-            active_mask=self.obstacle_active,
-        )
+        ranges = self._ray_ranges_m()
         ranges_norm = ranges / self.cfg.ray_max_range_m
 
         phase_one_hot = functional.one_hot(self.phase, num_classes=4).float()
@@ -817,6 +842,32 @@ class HarborMissionEnv(DirectRLEnv):
             * self.control_step_s
             * proximity.square()
         )
+        # v6: per-ray log proximity field replacing the quadratic graze tax
+        # (kept above behind reward_clearance_scale=0.0 for the ablation arm).
+        # Same band/coefficient as the certified hazard_nav v6a (cap = 0.90 +
+        # 0.45 = 1.35 m, w = 4.1). Zeroed once the mission is complete.
+        rays_m = self._ray_ranges_m()
+        prox_cap_m = self.cfg.safe_clearance_m + self.cfg.half_beam_m
+        prox_cost = (
+            -self.cfg.reward_prox_scale
+            * self.control_step_s
+            * torch.log(
+                rays_m.clamp(self.cfg.prox_ray_floor_m, prox_cap_m) / prox_cap_m
+            ).mean(dim=-1)
+        ) * active.float()
+
+        # v6 milestone bonuses (the Task-A "decisive entry" lesson, applied at
+        # the stage gates): one-time payout on each latch rising edge. The
+        # value cliff at the boundary is what cures boundary hesitation; the
+        # phase one-hot in obs carries the latch, so this is one-transition
+        # legal. +25 = one contact entry = proven-safe event scale.
+        milestone_edges = (
+            (self._m1 & ~self._m1_at_step_start).float()
+            + (self._m2 & ~self._m2_at_step_start).float()
+            + (self._m3 & ~self._m3_at_step_start).float()
+        )
+        milestone_bonus = self.cfg.reward_milestone_bonus * milestone_edges
+
         contact_now = clearance < 0.0
         contact_entry = active & contact_now & ~self._contact_prev
         self._contact_prev.copy_(
@@ -827,6 +878,8 @@ class HarborMissionEnv(DirectRLEnv):
         return (
             self.cfg.reward_progress_scale * progress
             - barrier
+            - prox_cost
+            + milestone_bonus
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
             - self.cfg.reward_contact_dwell_penalty * (active & contact_now).float()
             + self.cfg.reward_dock_conjunction * dock_pay
@@ -1102,6 +1155,9 @@ class HarborMissionEnv(DirectRLEnv):
         self._m1[env_ids] = False
         self._m2[env_ids] = False
         self._m3[env_ids] = False
+        self._m1_at_step_start[env_ids] = False
+        self._m2_at_step_start[env_ids] = False
+        self._m3_at_step_start[env_ids] = False
         self._m1_step[env_ids] = -1
         self._m2_step[env_ids] = -1
         self._m3_step[env_ids] = -1

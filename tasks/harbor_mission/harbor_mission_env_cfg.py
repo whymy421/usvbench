@@ -181,7 +181,18 @@ class HarborMissionEnvCfg(DirectRLEnvCfg):
     layout_seed: int = 0
 
     reward_progress_scale: float = 20.0
-    reward_clearance_scale: float = 1.0
+    # v6: quadratic graze tax retired (0.0) but KEPT for the ablation arm --
+    # reward_clearance_scale=1.0 + reward_prox_scale=0.0 restores the exact
+    # pre-v6 reward path.
+    reward_clearance_scale: float = 0.0
+    # v6: per-ray log proximity field, band [0.45, 0.90 + 0.45 = 1.35] m --
+    # identical to the certified hazard_nav v6a calibration (w=4.1).
+    reward_prox_scale: float = 4.1
+    prox_ray_floor_m: float = 0.45
+    # v6: one-time bonus on each milestone latch rising edge (M1 exit, M2
+    # transit, M3 dock-hold). +25 = one contact entry = proven event scale;
+    # cures stage-boundary hesitation by putting a value cliff at each gate.
+    reward_milestone_bonus: float = 25.0
     reward_contact_entry_penalty: float = 25.0
     reward_contact_dwell_penalty: float = 1.0
     reward_dock_conjunction: float = 3.0
