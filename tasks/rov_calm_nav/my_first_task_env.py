@@ -1138,6 +1138,9 @@ class MyFirstTaskEnv(DirectRLEnv):
         reach_reward = reached * reach_bonus
 
         reached_mask = reached.squeeze(-1).bool()
+        # Per-step event mask for benchmark evaluators. Unlike reached_count, this
+        # is never affected by the environment's periodic metric-counter reset.
+        self._last_reached_mask = reached_mask.detach().clone()
         if reached_mask.any():
             env_ids = torch.where(reached_mask)[0]
             distances = self.min_spawn_distance + \
