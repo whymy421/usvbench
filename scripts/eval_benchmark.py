@@ -137,7 +137,8 @@ def _seeded_reset(env, seed):
         raw_env = getattr(env, "_env", None)
         if raw_env is not None and hasattr(raw_env, "seed"):
             raw_env.seed(seed)
-    return env.reset()
+    with torch.inference_mode():
+        return env.reset()
 
 
 def _deterministic_action(agent, observations):

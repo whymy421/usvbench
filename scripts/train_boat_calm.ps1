@@ -41,6 +41,6 @@ $env:WANDB_NAME = "boat_calm_nav_s42"
 $TRAIN = "$ISAACLAB\scripts\reinforcement_learning\skrl\train_with_eval.py"
 
 python $TRAIN `
-    --task=Isaac-My-First-Task-Calm-Boat-Direct-v1 `
+    --task=Isaac-USVBench-Boat-Calm-Direct-v1 `
     --num_envs=64 --headless --max_iterations=3000 --seed=42 `
     --video --video_interval 50000 --video_length 200

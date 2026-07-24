@@ -12,8 +12,10 @@ from . import agents
 ##
 
 
+# Local NavRL checkouts often contain older packages that register the generic
+# reference id, so this collision-free alias is the canonical launcher target.
 gym.register(
-    id="Isaac-My-First-Task-Calm-Boat-Direct-v1",
+    id="Isaac-USVBench-Boat-Calm-Direct-v1",
     entry_point=f"{__name__}.my_first_task_env:MyFirstTaskEnv",
     disable_env_checker=True,
     kwargs={

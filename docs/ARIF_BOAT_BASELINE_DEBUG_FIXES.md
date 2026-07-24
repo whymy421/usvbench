@@ -29,6 +29,13 @@ Both the terminal condition and `OOB_PENALTY` trigger at
 `max_spawn_distance + 20 m` (50 m for the boat task). The debug branch had a
 50 m terminal boundary but still started the reward penalty at 30 m.
 
+### IsaacLab task registration
+
+The launcher uses `Isaac-USVBench-Boat-Calm-Direct-v1`, a namespaced alias for
+this checkout. NavRL workspaces commonly contain older boat packages that also
+register `Isaac-My-First-Task-Calm-Boat-Direct-v1`; using the generic id can
+silently instantiate the old environment and asset instead of this task.
+
 ### Checkpoint selection
 
 `scripts/train_with_eval.py` now:
@@ -45,6 +52,10 @@ Both the terminal condition and `OOB_PENALTY` trigger at
 - preserves the original as `best_agent_by_reward.pt` if the eval sweep selects
   a different checkpoint;
 - writes `eval_sweep.csv` and `best_agent_selection.json`.
+- always materializes the sweep winner as `checkpoints/best_agent.pt`, even
+  when skrl's auto checkpointing did not create a reward-selected best file.
+- runs deterministic resets inside PyTorch inference mode, matching IsaacLab's
+  simulator tensor mode after skrl rollouts.
 
 The training run is closed in Weights & Biases before the sweep so evaluation
 resets do not contaminate training metrics.
@@ -88,6 +99,8 @@ The launcher installs the task from this checkout, invokes the scripts from this
 checkout, clears leaked experimental environment variables, records the exact
 Git commit, evaluates every training seed on the same evaluation seed, and
 writes logs/CSV under `outputs/boat_baseline_fixed_<timestamp>/`.
+Native Isaac Sim output is redirected directly to each log file so W&B helper
+processes cannot keep a PowerShell pipe open after simulator shutdown.
 
 ## ROV checkpoint for P0 Task A
 
