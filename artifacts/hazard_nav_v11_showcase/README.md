@@ -55,6 +55,10 @@ v11 as the current navigation showcase, not as a solved forward-transit policy.
 
 After synchronizing `tasks/hazard_nav` into the Isaac Lab task installation:
 
+The v3 viewer uses a fixed-angle boat-centered camera. It follows environment
+0's boat position at every render update while keeping the same world-frame
+view angle, so the hull remains near the center without camera rotation.
+
 ```powershell
 conda activate isaaclab
 $env:USVBENCH_ASSETS="C:\path\to\usvbench\assets"
@@ -64,6 +68,19 @@ python .\scripts\reinforcement_learning\skrl\play.py `
   --task=Isaac-USV-HazardNav-Direct-v3 `
   --num_envs=1 `
   --seed=42 `
+  --checkpoint="C:\path\to\usvbench\tasks\hazard_nav\checkpoints\hazard_nav_v11_best_s42.pt"
+```
+
+To record a 60-second centered-view clip (3600 simulation frames at 60 fps):
+
+```powershell
+python .\scripts\reinforcement_learning\skrl\play.py `
+  --task=Isaac-USV-HazardNav-Direct-v3 `
+  --num_envs=1 `
+  --seed=42 `
+  --headless `
+  --video `
+  --video_length=3600 `
   --checkpoint="C:\path\to\usvbench\tasks\hazard_nav\checkpoints\hazard_nav_v11_best_s42.pt"
 ```
 

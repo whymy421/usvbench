@@ -12,7 +12,7 @@ import os as _os
 import gymnasium as gym
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, RigidObjectCfg
-from isaaclab.envs import DirectRLEnvCfg
+from isaaclab.envs import DirectRLEnvCfg, ViewerCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
@@ -305,3 +305,14 @@ class HazardNavV3EnvCfg(HazardNavEnvCfg):
 
     obs_v3: bool = True
     observation_space = 42
+    # Fixed-angle chase view for v11 playback and video capture. Isaac Lab's
+    # viewport controller translates this camera with env 0's boat at every
+    # render update, but does not rotate it with the hull.
+    viewer: ViewerCfg = ViewerCfg(
+        eye=(0.0, -6.0, 11.0),
+        lookat=(0.0, 0.0, 0.30),
+        origin_type="asset_root",
+        env_index=0,
+        asset_name="robot",
+        resolution=(1280, 720),
+    )
