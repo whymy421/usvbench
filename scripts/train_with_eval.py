@@ -12,7 +12,7 @@ Usage:
     python train_with_eval.py --task=Isaac-My-First-Task-Direct-v0 \
         --video --video_interval 50000 --video_length 200
 
-    python train_with_eval.py --task=Isaac-My-First-Task-Calm-Boat-Direct-v1 \
+    python train_with_eval.py --task=Isaac-USVBench-Boat-Calm-Direct-v1 \
         --num_envs=64 --headless --max_iterations=9375 --seed=42 \
         --eval_mini_steps=1500 --eval_sweep_seed=2026
 
@@ -227,7 +227,11 @@ def _seeded_full_reset(env, seed, common_step_counter):
         raw_env = getattr(env, "_env", None)
         if raw_env is not None and hasattr(raw_env, "seed"):
             raw_env.seed(seed)
-    return env.reset()
+    # skrl's trainer leaves the simulator tensors in inference mode after the
+    # rollout. IsaacLab reset writes into those tensors, so keep the reset in
+    # the same mode instead of triggering PyTorch's inference-tensor guard.
+    with torch.inference_mode():
+        return env.reset()
 
 
 def _deterministic_action(agent, observations):
@@ -352,8 +356,12 @@ def _run_checkpoint_sweep(runner, env, log_dir, n_steps, eval_seed, num_envs):
         writer.writerows(results)
 
     reward_backup_path = os.path.join(checkpoint_dir, "best_agent_by_reward.pt")
-    if os.path.isfile(reward_best_path) and os.path.abspath(best_path) != os.path.abspath(reward_best_path):
-        shutil.copy2(reward_best_path, reward_backup_path)
+    if os.path.abspath(best_path) != os.path.abspath(reward_best_path):
+        # Keep the trainer's reward-selected checkpoint for auditability, but
+        # always materialize the sweep winner at the launcher's stable path.
+        # skrl's auto checkpointing may not create best_agent.pt at all.
+        if os.path.isfile(reward_best_path):
+            shutil.copy2(reward_best_path, reward_backup_path)
         shutil.copy2(best_path, reward_best_path)
 
     selection = {

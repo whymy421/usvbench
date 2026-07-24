@@ -4,7 +4,7 @@
 > **Condition**: calm water (no waves, no current)
 > **Algorithm**: PPO (single agent)
 > **Status**: ✅ validated — V26 = 4.76 targets/episode @ 3000 iter (Yutong, seed 42)
-> **Gym id**: `Isaac-My-First-Task-Calm-Boat-Direct-v1`
+> **Gym id**: `Isaac-USVBench-Boat-Calm-Direct-v1`
 > **wandb**: https://wandb.ai/whymysong321-university-of-southampton/usvbench/runs/si1f8sq1
 
 Same task as Task A (point navigation, calm water) but on a **real boat hull**. The
@@ -70,7 +70,7 @@ the `V23` + `speed_coupling` branch.
 OBS_DIM=9 OBS_EXTENDED=1 REWARD_VARIANT=V23 SPEED_COUPLE=1 \
 REACH_BONUS=50.0 \
 python <IsaacLab>/scripts/reinforcement_learning/skrl/train_with_eval.py \
-  --task=Isaac-My-First-Task-Calm-Boat-Direct-v1 \
+  --task=Isaac-USVBench-Boat-Calm-Direct-v1 \
   --num_envs=64 --headless --max_iterations=3000 --seed=42 \
   --video --video_interval 50000 --video_length 200
 ```
@@ -88,7 +88,7 @@ The V26 reference policy is shipped at `checkpoints/boat_calm_v26_s42.pt`:
 ```bash
 USVBENCH_ASSETS=<repo>/assets OBS_DIM=9 OBS_EXTENDED=1 REWARD_VARIANT=V23 SPEED_COUPLE=1 REACH_BONUS=50.0 \
 python <IsaacLab>/scripts/reinforcement_learning/skrl/play.py \
-  --task=Isaac-My-First-Task-Calm-Boat-Direct-v1 --num_envs=16 \
+  --task=Isaac-USVBench-Boat-Calm-Direct-v1 --num_envs=16 \
   --checkpoint=<repo>/tasks/boat_calm_nav/checkpoints/boat_calm_v26_s42.pt
 ```
 
@@ -99,7 +99,7 @@ python <IsaacLab>/scripts/reinforcement_learning/skrl/play.py \
 Score any checkpoint with the benchmark eval (deterministic policy, fixed budget):
 ```bash
 USVBENCH_ASSETS=<repo>/assets OBS_DIM=9 OBS_EXTENDED=1 \
-python scripts/eval_benchmark.py --task=Isaac-My-First-Task-Calm-Boat-Direct-v1 \
+python scripts/eval_benchmark.py --task=Isaac-USVBench-Boat-Calm-Direct-v1 \
   --num_envs=64 --eval_steps=6000 --headless \
   --checkpoint=<repo>/tasks/boat_calm_nav/checkpoints/boat_calm_v26_s42.pt
 ```

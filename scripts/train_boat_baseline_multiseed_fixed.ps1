@@ -22,7 +22,7 @@ $TaskDestination = Join-Path $IsaacLabRoot "source\isaaclab_tasks\isaaclab_tasks
 $RunStamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $OutputRoot = Join-Path $RepoRoot "outputs\boat_baseline_fixed_$RunStamp"
 $CsvPath = Join-Path $OutputRoot "benchmark.csv"
-$Task = "Isaac-My-First-Task-Calm-Boat-Direct-v1"
+$Task = "Isaac-USVBench-Boat-Calm-Direct-v1"
 
 if (-not (Test-Path -LiteralPath $IsaacLabBat)) {
     throw "Isaac Lab launcher not found: $IsaacLabBat. Pass -IsaacLabRoot or set ISAACLAB_ROOT."
@@ -73,9 +73,18 @@ function Invoke-IsaacPython {
         [Parameter(Mandatory = $true)][string]$LogPath
     )
 
-    & $IsaacLabBat -p $Script @Arguments 2>&1 | Tee-Object -FilePath $LogPath
-    if ($LASTEXITCODE -ne 0) {
-        throw "Isaac Lab command failed with exit code $LASTEXITCODE. See $LogPath"
+    # Redirect both native streams in cmd.exe. W&B's helper process can inherit
+    # stdout/stderr; reading a PowerShell redirection file before that helper
+    # exits would block the launcher from reaching eval.
+    $QuotedArgs = @($Arguments | ForEach-Object {
+        $text = [string]$_
+        if ($text -match '[\s"]') { '"' + $text.Replace('"', '\"') + '"' } else { $text }
+    }) -join ' '
+    $CommandLine = '"{0}" -p "{1}" {2} >> "{3}" 2>&1' -f $IsaacLabBat, $Script, $QuotedArgs, $LogPath
+    & cmd.exe /d /c $CommandLine
+    $ExitCode = $LASTEXITCODE
+    if ($ExitCode -ne 0) {
+        throw "Isaac Lab command failed with exit code $ExitCode. See $LogPath"
     }
 }
 
