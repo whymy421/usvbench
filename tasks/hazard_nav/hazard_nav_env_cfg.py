@@ -152,6 +152,19 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # B1 (v2 id): native obs gains the reached latch + speed_norm (41-D), the
     # superset stage slot carries the latch, and the swiftness term activates.
     obs_v2: bool = False
+    # v3 exposes the minimal planar dynamic state: body-frame surge, sway, and
+    # yaw rate. It is mutually exclusive with the append-only v2 layout.
+    obs_v3: bool = False
+    yaw_rate_obs_scale_rad_s: float = 1.0
+
+    # Render-only official Blue Robotics model. The gray physics mesh remains
+    # authoritative for mass, inertia, collision, buoyancy, and drag.
+    use_official_blueboat_visual: bool = True
+    official_blueboat_visual_usd_path: str = _os.path.join(
+        _ASSET_DIR, "BB120_official_visual_only.usd"
+    )
+    official_blueboat_visual_translation: tuple = (-0.60396, -0.59322, -0.22357)
+    official_blueboat_visual_orientation: tuple = (0.5, 0.5, 0.5, 0.5)
 
     goal_radius: float = 2.0
     min_goal_distance_m: float = 20.0
@@ -193,11 +206,18 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     prox_ray_floor_m: float = 0.45
     reward_contact_entry_penalty: float = 25.0
     reward_contact_dwell_penalty: float = 1.0
-    # B1 swiftness (v2 only): -scale * dt * (1 - speed_norm) while the reached
-    # latch is off. Memoryless: speed is obs slot 9, the latch obs slot 3.
-    # Full-idle episode cost = scale * 120 s = 6.0 -- bounded well under the
-    # 20-pt progress ledger; per-step max 1e-3 is critic-safe.
-    reward_swift_scale: float = 0.05
+    # Paid once on the first collision-free goal entry. The bounded 50..100
+    # range rewards decisive entry without letting lucky exploratory successes
+    # dominate PPO's value targets.
+    reward_goal_entry_bonus: float = 50.0
+    reward_goal_time_bonus: float = 50.0
+    # Integrated squared negative surge command. A full 120 s reverse episode
+    # costs 6 points; a one-second escape manoeuvre costs at most 0.05.
+    reward_reverse_action_scale: float = 0.05
+    # Swiftness applies only when velocity is observable (v2/v3).
+    # Full-idle episode cost = scale * 120 s = 30.0, making a timeout worse
+    # than active progress while remaining comparable to one contact penalty.
+    reward_swift_scale: float = 0.25
 
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
@@ -237,7 +257,14 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
         self.thrust_max_rev = spec.thrust_rev_n
         self.yaw_torque_max = spec.yaw_torque_nm
 
-        native_dim = (5 if self.obs_v2 else 3) + self.ray_count
+        if self.obs_v2 and self.obs_v3:
+            raise ValueError("obs_v2 and obs_v3 are mutually exclusive")
+        if self.obs_v3:
+            native_dim = 6 + self.ray_count
+        elif self.obs_v2:
+            native_dim = 5 + self.ray_count
+        else:
+            native_dim = 3 + self.ray_count
         expected_observation_space = (
             SUPERSET_DIM if self.emit_superset_obs else native_dim
         )
@@ -246,12 +273,18 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
                 "HazardNav requires 36 rays and observation_space="
                 f"{expected_observation_space} when "
                 f"emit_superset_obs={self.emit_superset_obs}, "
-                f"obs_v2={self.obs_v2}"
+                f"obs_v2={self.obs_v2}, obs_v3={self.obs_v3}"
             )
+        if self.yaw_rate_obs_scale_rad_s <= 0.0:
+            raise ValueError("yaw_rate_obs_scale_rad_s must be positive")
         if self.max_obstacles < 14:
             raise ValueError("max_obstacles must accommodate curriculum level 3 (K=14)")
         if self.min_goal_distance_m != 20.0 or self.max_goal_distance_m != 40.0:
             raise ValueError("HazardNav v1 fixes D0 sampling to U[20, 40] m")
+        if self.reward_goal_entry_bonus < 0.0 or self.reward_goal_time_bonus < 0.0:
+            raise ValueError("goal-entry reward scales must be non-negative")
+        if self.reward_reverse_action_scale < 0.0:
+            raise ValueError("reward_reverse_action_scale must be non-negative")
 
 
 @configclass
@@ -264,3 +297,11 @@ class HazardNavV2EnvCfg(HazardNavEnvCfg):
 
     obs_v2: bool = True
     observation_space = 41
+
+
+@configclass
+class HazardNavV3EnvCfg(HazardNavEnvCfg):
+    """Minimal Markov planar observation for inertia-aware navigation."""
+
+    obs_v3: bool = True
+    observation_space = 42
