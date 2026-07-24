@@ -93,14 +93,12 @@ class MyFirstTaskEnv(DirectRLEnv):
 
     def _load_water_from_usd(self):
         """从ROV_TEST.usd复制水面mesh及其动画"""
-        import omni.usd, os
+        import omni.usd
         from pxr import Usd, UsdGeom, Sdf
 
         print("\n🌊 Loading water surface from ROV_TEST.usd...")
 
-        # Optional visual water surface (calm benchmark works without it — wrapped in try/except).
-        _assets = os.environ.get("USVBENCH_ASSETS", os.path.join(os.path.expanduser("~"), "usvbench", "assets"))
-        source_usd_path = os.environ.get("USVBENCH_WATER_USD", os.path.join(_assets, "ROV_TEST.usd"))
+        source_usd_path = "C:/Users/Yutong/NavRL/NavRL2026/isaac_underwater/ROV_TEST.usd"
         source_water_path = "/World/Water"
 
         try:
@@ -1359,7 +1357,7 @@ class MyFirstTaskEnv(DirectRLEnv):
             dist_from_origin = torch.norm(
                 self.robot.data.root_pos_w[:, :2] - origin_2d, dim=-1, keepdim=True
             )
-            oob = (dist_from_origin > (self.max_spawn_distance + 20.0)).float()
+            oob = (dist_from_origin > self.max_spawn_distance).float()  # fixed: was +20
             reward = reward - oob_penalty * oob
 
         # 更新 prev_distance(在 respawn 之后,用当前 boat 位置到当前目标),供下一步 progress 用。
