@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 import math
+import os
 
 import numpy as np
 import torch
@@ -96,6 +97,9 @@ class HazardNavEnv(DirectRLEnv):
         self._success = torch.zeros(
             self.num_envs, dtype=torch.bool, device=self.device
         )
+        self._clean_goal_entry_this_step = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
         self._first_success_time_s = torch.full(
             (self.num_envs,), torch.nan, device=self.device
         )
@@ -127,6 +131,8 @@ class HazardNavEnv(DirectRLEnv):
         self._fee_steps = torch.zeros(self.num_envs, device=self.device)
         self._ep_prox_cost = torch.zeros(self.num_envs, device=self.device)
         self._ep_contact_entries = torch.zeros(self.num_envs, device=self.device)
+        self._ep_goal_bonus = torch.zeros(self.num_envs, device=self.device)
+        self._ep_reverse_cost = torch.zeros(self.num_envs, device=self.device)
 
     @property
     def current_level(self) -> int:
@@ -140,6 +146,14 @@ class HazardNavEnv(DirectRLEnv):
             self.robot = Articulation(self.cfg.robot_cfg)
         else:
             self.robot = RigidObject(self.cfg.robot_cfg)
+        if (
+            self.vehicle_spec.name == "blueboat"
+            and self.cfg.use_official_blueboat_visual
+        ):
+            try:
+                self._attach_official_blueboat_visual()
+            except Exception as exc:
+                print(f"[WARN] Official BlueBoat visual could not be attached: {exc}")
         self.scene.clone_environments(copy_from_source=False)
         if self.vehicle_spec.asset_kind == "articulation":
             self.scene.articulations["robot"] = self.robot
@@ -197,6 +211,28 @@ class HazardNavEnv(DirectRLEnv):
         self._ray_angles = torch.arange(
             self.cfg.ray_count, device=self.device, dtype=torch.float32
         ) * (2.0 * torch.pi / self.cfg.ray_count)
+
+    def _attach_official_blueboat_visual(self) -> None:
+        """Replace only the gray render mesh with the collision-free blue model."""
+        import omni.usd
+        from pxr import UsdGeom
+
+        visual_path = self.cfg.official_blueboat_visual_usd_path
+        if not os.path.isfile(visual_path):
+            raise FileNotFoundError(visual_path)
+
+        stage = omni.usd.get_context().get_stage()
+        body_path = "/World/envs/env_0/Robot/BlueBoat"
+        visual_cfg = sim_utils.UsdFileCfg(usd_path=visual_path)
+        visual_cfg.func(
+            f"{body_path}/OfficialVisual",
+            visual_cfg,
+            translation=self.cfg.official_blueboat_visual_translation,
+            orientation=self.cfg.official_blueboat_visual_orientation,
+        )
+        gray_visuals = stage.GetPrimAtPath(f"{body_path}/Visuals")
+        if gray_visuals.IsValid():
+            UsdGeom.Imageable(gray_visuals).MakeInvisible()
 
     def _create_static_water_mesh(self) -> None:
         """Create one flat display-only water plane."""
@@ -510,6 +546,35 @@ class HazardNavEnv(DirectRLEnv):
             forward_2d, dim=-1, keepdim=True
         ).clamp_min(1.0e-6)
 
+    def _body_motion_observation(self) -> tuple[torch.Tensor, ...]:
+        velocity_world = self.robot.data.root_com_vel_w
+        if velocity_world.shape[-1] == 6:
+            linear_velocity = velocity_world[:, :3]
+            angular_velocity = velocity_world[:, 3:]
+        else:
+            linear_velocity = velocity_world
+            angular_velocity = self.robot.data.root_ang_vel_w
+
+        quat = self._root_quat()
+        linear_body = math_utils.quat_apply_inverse(quat, linear_velocity)
+        angular_body = math_utils.quat_apply_inverse(quat, angular_velocity)
+        surge = (
+            linear_body[:, 0:1] * self._fwd_x
+            + linear_body[:, 1:2] * self._fwd_y
+        )
+        sway = (
+            linear_body[:, 0:1] * -self._fwd_y
+            + linear_body[:, 1:2] * self._fwd_x
+        )
+        surge_norm = torch.clamp(surge / SPEED_SCALE_MPS, min=-1.0, max=1.0)
+        sway_norm = torch.clamp(sway / SPEED_SCALE_MPS, min=-1.0, max=1.0)
+        yaw_rate_norm = torch.clamp(
+            angular_body[:, 2:3] / self.cfg.yaw_rate_obs_scale_rad_s,
+            min=-1.0,
+            max=1.0,
+        )
+        return surge_norm, sway_norm, yaw_rate_norm
+
     def _clearance(self) -> torch.Tensor:
         return analytic_min_clearance(
             self._com_xy(),
@@ -571,7 +636,20 @@ class HazardNavEnv(DirectRLEnv):
         # v1 keeps its historical layouts bit-stable.
         reached = self._reached_goal.float().unsqueeze(-1)
 
-        if self.cfg.obs_v2:
+        if self.cfg.obs_v3:
+            surge_norm, sway_norm, yaw_rate_norm = self._body_motion_observation()
+            native_observation = torch.hstack(
+                (
+                    dot,
+                    cross,
+                    distance_norm,
+                    surge_norm,
+                    sway_norm,
+                    yaw_rate_norm,
+                    ranges_norm,
+                )
+            )
+        elif self.cfg.obs_v2:
             native_observation = torch.hstack(
                 (dot, cross, distance_norm, reached, speed_norm, ranges_norm)
             )
@@ -672,12 +750,8 @@ class HazardNavEnv(DirectRLEnv):
         self._contact_prev.copy_(contact_now)
         self._ep_contact_entries += contact_entry.float()
 
-        # B1 swiftness (v2 only): idling is taxed until the reached latch
-        # flips. Closed-form in obs slots 9 (speed) and 3 (latch); one-
-        # transition form like the entry edge (latch updated in _get_dones
-        # this step = part of s_{t+1}).
         swift_cost = torch.zeros_like(prox_cost)
-        if self.cfg.obs_v2:
+        if self.cfg.obs_v2 or self.cfg.obs_v3:
             speed_norm = (
                 torch.norm(self.robot.data.root_com_vel_w[:, :2], dim=-1)
                 / SPEED_SCALE_MPS
@@ -689,11 +763,32 @@ class HazardNavEnv(DirectRLEnv):
                 * (~self._reached_goal).float()
             )
 
+        reverse_action = torch.relu(-self.actions[:, 0])
+        reverse_cost = (
+            self.cfg.reward_reverse_action_scale
+            * self.control_step_s
+            * reverse_action.square()
+        )
+        remaining_fraction = torch.clamp(
+            (self.max_episode_length - self.episode_length_buf.float())
+            / max(float(self.max_episode_length), 1.0),
+            min=0.0,
+            max=1.0,
+        )
+        goal_bonus = self._clean_goal_entry_this_step.float() * (
+            self.cfg.reward_goal_entry_bonus
+            + self.cfg.reward_goal_time_bonus * remaining_fraction
+        )
+        self._ep_goal_bonus += goal_bonus
+        self._ep_reverse_cost += reverse_cost
+
         return (
             self.cfg.reward_progress_scale * progress
+            + goal_bonus
             - safety_cost
             - prox_cost
             - swift_cost
+            - reverse_cost
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
             - self.cfg.reward_contact_dwell_penalty * contact_now.float()
         )
@@ -722,6 +817,7 @@ class HazardNavEnv(DirectRLEnv):
             self._horizontal_distance() <= self.goal_radius
         )
         success_now = reached_now & ~self._contact_before_goal
+        self._clean_goal_entry_this_step.copy_(success_now)
         elapsed_s = self.episode_length_buf.float() * self.control_step_s
         self._first_success_time_s.copy_(
             torch.where(success_now, elapsed_s, self._first_success_time_s)
@@ -730,9 +826,12 @@ class HazardNavEnv(DirectRLEnv):
         self._reached_goal |= reached_now
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        self._episode_finished.copy_(time_out)
-        # C1+C5 is trajectory-scored only: no success or collision early exits.
-        terminated = torch.zeros_like(time_out)
+        # Single-goal NavRL episodes terminate on either outcome: reaching
+        # the goal or entering an obstacle's contact region. The contact
+        # ledger is updated before ``success_now``, so simultaneous contact
+        # and goal entry is correctly scored as a failed episode.
+        terminated = reached_now | contact_now
+        self._episode_finished.copy_(terminated | time_out)
         return terminated, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None) -> None:
@@ -781,6 +880,12 @@ class HazardNavEnv(DirectRLEnv):
             )
             self.extras["log"]["Episode/contact_entries"] = (
                 self._ep_contact_entries[completed_ids].mean()
+            )
+            self.extras["log"]["Episode/reward_goal_bonus_sum"] = (
+                self._ep_goal_bonus[completed_ids].mean()
+            )
+            self.extras["log"]["Episode/reward_reverse_cost_sum"] = (
+                self._ep_reverse_cost[completed_ids].mean()
             )
 
             if not self.cfg.curriculum_frozen:
@@ -874,6 +979,7 @@ class HazardNavEnv(DirectRLEnv):
         self._contact_prev[env_ids] = False
         self._contact_before_goal[env_ids] = False
         self._success[env_ids] = False
+        self._clean_goal_entry_this_step[env_ids] = False
         self._first_success_time_s[env_ids] = torch.nan
         self._episode_finished[env_ids] = False
         initial_clearance = analytic_min_clearance(
@@ -889,6 +995,8 @@ class HazardNavEnv(DirectRLEnv):
         self._fee_steps[env_ids] = 0.0
         self._ep_prox_cost[env_ids] = 0.0
         self._ep_contact_entries[env_ids] = 0.0
+        self._ep_goal_bonus[env_ids] = 0.0
+        self._ep_reverse_cost[env_ids] = 0.0
 
         self._update_render_only_hazard_markers(
             env_ids, local_goals, local_centers, radii, active
