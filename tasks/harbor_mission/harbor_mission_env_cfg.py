@@ -200,6 +200,22 @@ class HarborMissionEnvCfg(DirectRLEnvCfg):
     reward_contact_dwell_penalty: float = 1.0
     reward_dock_conjunction: float = 3.0
 
+    # Staged curriculum (advisor's plan): 1 = exit only, 2 = exit + transit,
+    # 3 = full mission. The stage's terminal milestone scores the episode.
+    mission_depth: int = 3
+    # v11 recipe (adopted from the certified hazard v11): the stage terminal
+    # milestone and (optionally) any contact END the episode, and the clean
+    # terminal step pays entry + time bonuses. Defaults keep the original
+    # fixed-horizon task id byte-compatible; stage variants turn them on.
+    terminate_on_milestone: bool = False
+    terminate_on_contact: bool = False
+    reward_stage_goal_bonus: float = 50.0
+    reward_stage_time_bonus: float = 50.0
+    # v11-style kinematic observation: body-frame surge, sway, yaw rate
+    # appended after distance_norm (46 -> 49 dims, new gym ids only).
+    obs_kinematic: bool = False
+    yaw_rate_obs_scale_rad_s: float = 1.0
+
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
     yaw_torque_max: float = _DEFAULT_VEHICLE.yaw_torque_nm
@@ -237,11 +253,54 @@ class HarborMissionEnvCfg(DirectRLEnvCfg):
         self.thrust_max_rev = spec.thrust_rev_n
         self.yaw_torque_max = spec.yaw_torque_nm
 
-        if self.observation_space != 3 + 36 + 4 + 2 + 1:
-            raise ValueError("HarborMission requires observation_space=46")
+        expected_obs = (3 + 36 + 4 + 2 + 1) + (3 if self.obs_kinematic else 0)
+        if self.observation_space != expected_obs:
+            raise ValueError(
+                f"HarborMission requires observation_space={expected_obs} "
+                f"when obs_kinematic={self.obs_kinematic}"
+            )
+        if self.mission_depth not in (1, 2, 3):
+            raise ValueError("mission_depth must be 1, 2, or 3")
+        if self.reward_stage_goal_bonus < 0.0 or self.reward_stage_time_bonus < 0.0:
+            raise ValueError("stage bonus scales must be non-negative")
         if self.ray_count != 36:
             raise ValueError("HarborMission v1 requires exactly 36 rays")
         if self.max_obstacles < 10:
             raise ValueError("max_obstacles must accommodate the specified 6--10 range")
         if self.goal_radius != self.success_position_tolerance_m:
             raise ValueError("goal_radius must alias the docking position tolerance")
+
+
+@configclass
+class HarborStage1EnvCfg(HarborMissionEnvCfg):
+    """Stage 1 of the advisor curriculum: harbor exit only (M1), v11 recipe."""
+
+    mission_depth: int = 1
+    episode_length_s = 60.0
+    terminate_on_milestone: bool = True
+    terminate_on_contact: bool = True
+    obs_kinematic: bool = True
+    observation_space = 49
+
+
+@configclass
+class HarborStage2EnvCfg(HarborMissionEnvCfg):
+    """Stage 2: exit + hazard transit (M2), warm-started from Stage 1."""
+
+    mission_depth: int = 2
+    episode_length_s = 150.0
+    terminate_on_milestone: bool = True
+    terminate_on_contact: bool = True
+    obs_kinematic: bool = True
+    observation_space = 49
+
+
+@configclass
+class HarborStage3EnvCfg(HarborMissionEnvCfg):
+    """Stage 3: full ordered mission (M3), warm-started from Stage 2."""
+
+    mission_depth: int = 3
+    terminate_on_milestone: bool = True
+    terminate_on_contact: bool = True
+    obs_kinematic: bool = True
+    observation_space = 49
