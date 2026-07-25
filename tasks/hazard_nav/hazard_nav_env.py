@@ -23,7 +23,12 @@ from .._shared.obs_superset import SPEED_SCALE_MPS
 from .._shared.restoring import restoring_torque_body
 from .._shared.vehicles import get_vehicle
 from ..docking.curriculum import DockingCurriculum
-from .hazard_geometry import analytic_min_clearance, ray_circle_ranges, sample_layout
+from .hazard_geometry import (
+    analytic_min_clearance,
+    ray_circle_ranges,
+    sample_layout,
+    sample_ring_layout,
+)
 from .hazard_nav_env_cfg import HazardNavEnvCfg
 
 
@@ -915,11 +920,20 @@ class HazardNavEnv(DirectRLEnv):
         counts_np = np.zeros(num_resets, dtype=np.int64)
         level = self.current_level
         for row in range(num_resets):
-            layout = sample_layout(
-                level,
-                rng=self._layout_rng,
-                max_attempts=self.cfg.layout_max_attempts,
-            )
+            if self.cfg.layout_mode == "ring":
+                # Ring siege: spawn encircled, exactly one tier-width gap.
+                # Avoidance stops being optional -- escape requires threading.
+                layout = sample_ring_layout(
+                    level,
+                    rng=self._layout_rng,
+                    max_attempts=max(40, self.cfg.layout_max_attempts),
+                )
+            else:
+                layout = sample_layout(
+                    level,
+                    rng=self._layout_rng,
+                    max_attempts=self.cfg.layout_max_attempts,
+                )
             goal_angle = float(self._layout_rng.uniform(0.0, 2.0 * math.pi))
             cosine, sine = math.cos(goal_angle), math.sin(goal_angle)
             rotation = np.array(((cosine, -sine), (sine, cosine)))

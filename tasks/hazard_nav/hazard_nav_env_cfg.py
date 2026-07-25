@@ -173,6 +173,11 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     collision_margin_m: float = 0.20
     safe_clearance_m: float = 0.90
 
+    # "scatter" = the certified corridor layout; "ring" = the siege variant
+    # (spawn encircled by a sealed ring with exactly one tier-width gap, so
+    # avoidance is mandatory from the first second, not optional).
+    layout_mode: str = "scatter"
+
     ray_count: int = 36  # v3: 10 deg spacing
     ray_max_range_m: float = 30.0
     # Level 3 spawns K=14; 12-slot buffers crashed the first level-3 reset,
@@ -277,8 +282,14 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             )
         if self.yaw_rate_obs_scale_rad_s <= 0.0:
             raise ValueError("yaw_rate_obs_scale_rad_s must be positive")
-        if self.max_obstacles < 14:
-            raise ValueError("max_obstacles must accommodate curriculum level 3 (K=14)")
+        if self.layout_mode not in ("scatter", "ring"):
+            raise ValueError("layout_mode must be 'scatter' or 'ring'")
+        min_obstacles = 18 if self.layout_mode == "ring" else 14
+        if self.max_obstacles < min_obstacles:
+            raise ValueError(
+                f"max_obstacles must be >= {min_obstacles} for "
+                f"layout_mode={self.layout_mode}"
+            )
         if self.min_goal_distance_m != 20.0 or self.max_goal_distance_m != 40.0:
             raise ValueError("HazardNav v1 fixes D0 sampling to U[20, 40] m")
         if self.reward_goal_entry_bonus < 0.0 or self.reward_goal_time_bonus < 0.0:
@@ -316,3 +327,17 @@ class HazardNavV3EnvCfg(HazardNavEnvCfg):
         asset_name="robot",
         resolution=(1280, 720),
     )
+
+
+@configclass
+class HazardRingEnvCfg(HazardNavV3EnvCfg):
+    """Ring-siege variant on the v11 recipe: encircled spawn, one gap.
+
+    Inherits v3's kinematic observation, goal-entry bonus, and terminate-on
+    -outcome behaviour; only the layout sampler changes, so a v11 champion
+    can be evaluated here directly as a zero-shot structural-generalisation
+    probe (same observation contract, same reward, different geometry).
+    """
+
+    layout_mode: str = "ring"
+    max_obstacles: int = 18
