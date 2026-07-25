@@ -190,6 +190,9 @@ class DockingEnvCfg(DirectRLEnvCfg):
     # C3 x C5 (solid berth walls). Off by default so the certified open-water
     # docking ids stay byte-identical; the wall variant gets its own gym id.
     berth_walls: bool = False
+    # v11 kinematic channels; append-only, enabled by dedicated gym ids.
+    obs_kinematic: bool = False
+    yaw_rate_obs_scale_rad_s: float = 1.0
     slip_width_beams: float = 4.0  # tier ladder, as in hazard (5/4/3/2.5)
     slip_length_m: float = 7.0
     half_beam_m: float = 0.45
@@ -275,3 +278,27 @@ class DockingBlueBoatWallEnvCfg(DockingBlueBoatEnvCfg):
     observation_space = 6 + 36
     slip_width_beams: float = 4.0
     slip_length_m: float = 7.0
+
+
+@configclass
+class DockingBlueBoatKinEnvCfg(DockingBlueBoatEnvCfg):
+    """Open-water docking with the v11 kinematic observation block."""
+
+    obs_kinematic: bool = True
+    observation_space = 9
+
+
+@configclass
+class DockingBlueBoatCurrentKinEnvCfg(DockingBlueBoatCurrentEnvCfg):
+    """Docking x current with the v11 kinematic observation block."""
+
+    obs_kinematic: bool = True
+    observation_space = 9
+
+
+@configclass
+class DockingBlueBoatWallKinEnvCfg(DockingBlueBoatWallEnvCfg):
+    """Solid-berth docking with the v11 kinematic observation block."""
+
+    obs_kinematic: bool = True
+    observation_space = 6 + 3 + 36

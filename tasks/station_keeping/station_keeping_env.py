@@ -431,7 +431,25 @@ class StationKeepingEnv(DirectRLEnv):
         )
         distance_norm = distance / self.cfg.max_spawn_distance
 
-        return {"policy": torch.hstack([dot, cross, distance_norm])}
+        observation = torch.hstack([dot, cross, distance_norm])
+        if getattr(self.cfg, "obs_kinematic", False):
+            # Shared v11-style block: body-frame surge, sway, yaw rate. A
+            # scalar speed cannot tell "driving forward" from "sliding
+            # sideways" from "still spinning"; station keeping needs all three.
+            from .._shared.kinematics import body_planar_kinematics
+
+            observation = torch.hstack(
+                (
+                    observation,
+                    body_planar_kinematics(
+                        forwards_2d,
+                        self.robot.data.root_com_vel_w[:, :3],
+                        self.robot.data.root_ang_vel_w[:, 2],
+                        yaw_rate_scale_rad_s=self.cfg.yaw_rate_obs_scale_rad_s,
+                    ),
+                )
+            )
+        return {"policy": observation}
 
     def _get_rewards(self) -> torch.Tensor:
         """Reference baseline only; methods may use any reward shaping."""

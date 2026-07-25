@@ -163,6 +163,11 @@ class StationKeepingEnvCfg(DirectRLEnvCfg):
     action_space = 2
     observation_space = 3
     state_space = 0
+    # v11-style kinematic channels (body-frame surge / sway / yaw rate). Off
+    # here so the certified 3-D ids stay byte-identical; kinematic variants
+    # register their own gym ids (append-only discipline).
+    obs_kinematic: bool = False
+    yaw_rate_obs_scale_rad_s: float = 1.0
 
     hold_radius: float = 2.0
     required_hold_time_s: float = 60.0
@@ -229,3 +234,19 @@ class StationKeepingBlueBoatCurrentEnvCfg(StationKeepingBlueBoatEnvCfg):
         self.underwater_physics_cfg.current_speed_min = 2.0
         self.underwater_physics_cfg.current_speed_max = 2.5
         self.underwater_physics_cfg.current_drag_coeff = 8.0
+
+
+@configclass
+class StationKeepingBlueBoatKinEnvCfg(StationKeepingBlueBoatEnvCfg):
+    """Calm-water station keeping with the v11 kinematic observation block."""
+
+    obs_kinematic: bool = True
+    observation_space = 6
+
+
+@configclass
+class StationKeepingBlueBoatCurrentKinEnvCfg(StationKeepingBlueBoatCurrentEnvCfg):
+    """Station keeping x current with the v11 kinematic observation block."""
+
+    obs_kinematic: bool = True
+    observation_space = 6
