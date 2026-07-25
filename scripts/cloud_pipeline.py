@@ -74,6 +74,9 @@ def train(task: str, seed: int, name: str, timesteps: int = 96000,
     cmd = [PY, TRAIN, "--task", task, "--num_envs", str(num_envs),
            "--seed", str(seed), "--headless",
            f"agent.agent.experiment.experiment_name={name}",
+           # The cloud box has no wandb credentials; skrl imports the module
+           # eagerly when the flag is on, so disable it explicitly.
+           "agent.agent.experiment.wandb=False",
            f"agent.trainer.timesteps={timesteps}"]
     if warm_start:
         cmd += ["--checkpoint", warm_start]
