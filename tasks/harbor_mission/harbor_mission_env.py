@@ -170,6 +170,12 @@ class HarborMissionEnv(DirectRLEnv):
             (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
         )
 
+        # v11 recipe: set in _get_dones on the stage-terminal clean milestone,
+        # consumed by _get_rewards the same step (dones -> rewards ordering).
+        self._stage_goal_entry_this_step = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+
     def _setup_scene(self) -> None:
         if self.vehicle_spec.asset_kind == "articulation":
             self.robot = Articulation(self.cfg.robot_cfg)
@@ -793,6 +799,20 @@ class HarborMissionEnv(DirectRLEnv):
         distance_norm = torch.clamp(distance / span.clamp_min(1.0e-6), 0.0, 1.0)
         base = torch.hstack((dot, cross, distance_norm))
         base = torch.where((self.phase < 3).unsqueeze(-1), base, torch.zeros_like(base))
+        if self.cfg.obs_kinematic:
+            # v11 kinematic channels: body-frame surge, sway, yaw rate.
+            velocity_2d = self._linear_velocity_world()[:, :2]
+            left = torch.stack((-forward[:, 1], forward[:, 0]), dim=-1)
+            surge = torch.sum(velocity_2d * forward, dim=-1, keepdim=True)
+            sway = torch.sum(velocity_2d * left, dim=-1, keepdim=True)
+            from .._shared.obs_superset import SPEED_SCALE_MPS as _SPD
+            surge_norm = torch.clamp(surge / _SPD, min=-1.0, max=1.0)
+            sway_norm = torch.clamp(sway / _SPD, min=-1.0, max=1.0)
+            yaw_rate = self.robot.data.root_ang_vel_w[:, 2:3]
+            yaw_rate_norm = torch.clamp(
+                yaw_rate / self.cfg.yaw_rate_obs_scale_rad_s, min=-1.0, max=1.0
+            )
+            base = torch.hstack((base, surge_norm, sway_norm, yaw_rate_norm))
 
         ranges = self._ray_ranges_m()
         ranges_norm = ranges / self.cfg.ray_max_range_m
@@ -875,11 +895,26 @@ class HarborMissionEnv(DirectRLEnv):
         )
         _, _, _, dock_conjunction = self._dock_state()
         dock_pay = (active & (reward_phase == 2) & dock_conjunction).float()
+
+        # v11 stage-terminal bonus: entry + time-remaining scaled, paid once
+        # on the clean stage milestone (flag set by _get_dones this step).
+        remaining_fraction = torch.clamp(
+            (self.max_episode_length - self.episode_length_buf.float())
+            / max(float(self.max_episode_length), 1.0),
+            min=0.0,
+            max=1.0,
+        )
+        stage_bonus = self._stage_goal_entry_this_step.float() * (
+            self.cfg.reward_stage_goal_bonus
+            + self.cfg.reward_stage_time_bonus * remaining_fraction
+        )
+
         return (
             self.cfg.reward_progress_scale * progress
             - barrier
             - prox_cost
             + milestone_bonus
+            + stage_bonus
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
             - self.cfg.reward_contact_dwell_penalty * (active & contact_now).float()
             + self.cfg.reward_dock_conjunction * dock_pay
@@ -1006,7 +1041,29 @@ class HarborMissionEnv(DirectRLEnv):
             & (self._m1_step < self._m2_step)
             & (self._m2_step < self._m3_step)
         )
-        success_now = dock_completed & ordered_trace & ~self._contact_before_dock
+        success_full = dock_completed & ordered_trace & ~self._contact_before_dock
+
+        # Staged curriculum: the stage-terminal milestone (M1/M2/M3 by
+        # mission_depth) scores the episode; a clean terminal step also pays
+        # the v11 entry + time bonus and (if configured) ends the episode.
+        depth = int(self.cfg.mission_depth)
+        if depth == 1:
+            stage_done_now = gate2_crossed
+            stage_success_now = gate2_crossed & ~self._contact_before_dock
+        elif depth == 2:
+            stage_done_now = field_exit_crossed
+            stage_success_now = (
+                field_exit_crossed
+                & self._m1
+                & (self._m1_step < self._m2_step)
+                & ~self._contact_before_dock
+            )
+        else:
+            stage_done_now = dock_completed
+            stage_success_now = success_full
+        self._stage_goal_entry_this_step.copy_(stage_success_now)
+
+        success_now = stage_success_now
         elapsed_s = self.episode_length_buf.float() * self.control_step_s
         self._first_success_time_s.copy_(
             torch.where(success_now, elapsed_s, self._first_success_time_s)
@@ -1016,8 +1073,12 @@ class HarborMissionEnv(DirectRLEnv):
         self._previous_xy.copy_(current_xy)
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        self._episode_finished.copy_(time_out)
         terminated = torch.zeros_like(time_out)
+        if self.cfg.terminate_on_milestone:
+            terminated = terminated | stage_done_now
+        if self.cfg.terminate_on_contact:
+            terminated = terminated | (prefix_active & (clearance < 0.0))
+        self._episode_finished.copy_(terminated | time_out)
         return terminated, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None) -> None:
@@ -1158,6 +1219,7 @@ class HarborMissionEnv(DirectRLEnv):
         self._m1_at_step_start[env_ids] = False
         self._m2_at_step_start[env_ids] = False
         self._m3_at_step_start[env_ids] = False
+        self._stage_goal_entry_this_step[env_ids] = False
         self._m1_step[env_ids] = -1
         self._m2_step[env_ids] = -1
         self._m3_step[env_ids] = -1
