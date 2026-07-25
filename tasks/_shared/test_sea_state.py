@@ -84,12 +84,35 @@ def main() -> None:
         force[:, :2].norm(dim=-1).mean()
     )
 
+    # 9. VRX interoperability: at gamma = 1 the JONSWAP spectrum reduces
+    # exactly to Pierson-Moskowitz, the spectrum used by the VRX competition.
+    # This lets us state sea states in VRX-comparable terms.
+    pm = SeaState(
+        SeaStateCfg(hs_range=(hs, hs), tp_range=(tp, tp), gamma_range=(1.0, 1.0)),
+        4,
+        device,
+    )
+    fp = 1.0 / tp
+    f = pm.freqs
+    alpha = 5.0 / 16.0 * hs**2 * fp**4
+    pm_closed_form = alpha * f.pow(-5) * torch.exp(-1.25 * (fp / f) ** 4)
+    pm_amp = torch.sqrt(2.0 * pm_closed_form * pm.df)
+    # Our amplitudes are energy-normalised, so compare SHAPE, not scale. The
+    # lowest components underflow to zero in both (exp(-1.25*(fp/f)^4) with
+    # fp/f > 4), so restrict the comparison to components carrying energy.
+    live = pm_amp > 1e-9
+    ratio = pm.amplitude[0][live] / pm_amp[live]
+    assert float(ratio.std() / ratio.mean()) < 1e-5, ratio
+    hs_pm = 4.0 * math.sqrt(float((pm.amplitude[0] ** 2 / 2.0).sum()))
+    assert abs(hs_pm - hs) / hs < 0.02, (hs_pm, hs)
+
     print(
         f"H_s {hs:.2f} m -> spectral {hs_spec:.3f} m, realised {hs_measured:.3f} m | "
         f"peak planar force {peak_planar:.1f} N | trim moment {peak_yawless_moment:.1f} N*m "
-        f"| spatial corr {corr:.2f}"
+        f"| spatial corr {corr:.2f} | gamma=1 matches Pierson-Moskowitz shape "
+        f"(H_s {hs_pm:.3f} m)"
     )
-    print("PASS: JONSWAP sea state (spectrum, H_s, determinism, bounds, obs)")
+    print("PASS: JONSWAP sea state (spectrum, H_s, determinism, bounds, obs, P-M limit)")
 
 
 if __name__ == "__main__":
