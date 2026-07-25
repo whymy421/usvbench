@@ -5,33 +5,28 @@
 
 """Irregular wave field (sea state) as a shared, task-agnostic modifier.
 
-Design constraints inherited from the benchmark constitution:
+Merged implementation:
 
-* **Deterministic given the episode seed.** Phases are drawn once per reset
-  from the environment RNG, so a scenario replays byte for byte.
-* **Closed-form in time.** The field is a finite sum of Airy components; the
-  force at step ``t`` depends only on ``(position, t)``, never on history, so
-  the memoryless-reward rule and fixed-horizon scoring are unaffected.
-* **Same interface as the certified current.** Waves produce a world-frame
-  force/torque added exactly where ``_compute_current_forces`` is added; a
-  task enables them with a config flag and nothing else changes.
+* **Spectrum from Yutong's** ``jonswap_wave.py`` (repo ``main``): a proper
+  JONSWAP spectrum -- Phillips constant normalised to H_s, Pierson-Moskowitz
+  shape, peak-enhancement factor gamma with the standard sigma = 0.07/0.09
+  split -- with component amplitudes drawn from the spectrum as
+  ``a_i = sqrt(2 S(f_i) df)``, 30 components over 0.04-0.5 Hz, and per-episode
+  randomised (H_s, T_p, gamma, mean heading, +/-30 deg directional spread).
+* **Force interface and acceptance tests from this codebase**: the hull sees
+  the same quadratic relative-velocity law as the certified current, so a
+  current and a sea state simply add their water velocities, and the module
+  ships with physics tests (dispersion, H_s recovery, zero mean, determinism,
+  bounded force).
 
-Model. A JONSWAP-shaped set of ``n_components`` regular waves with directional
-spread around a mean heading. For deep water, omega^2 = g k. Each component
-contributes an orbital-velocity field; the hull feels
-
-    F = c_d * (v_water - v_hull) * |v_water - v_hull|        (quadratic drag)
-    M = k_slope * slope_perpendicular                        (pitch/roll moment)
-
-plus a heave force from the local surface elevation. The wave *elevation* is
-also exposed so tasks that want a "sea state" observation can add it without
-re-deriving the field.
+Constitution compliance: the field is closed-form in ``(position, time)`` with
+phases fixed at reset, so rewards stay memoryless and episodes stay replayable.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 
@@ -41,23 +36,28 @@ GRAVITY = 9.81
 
 @dataclass
 class SeaStateCfg:
-    """One sea state. ``significant_height_m`` = H_s, the usual scale."""
+    """One sea state band. Per-episode draws are uniform inside each range."""
 
     enable: bool = False
-    significant_height_m: float = 0.25
-    peak_period_s: float = 3.0
-    mean_direction_rad: float = 0.0
-    direction_spread_rad: float = 0.35
-    n_components: int = 8
-    # Hull coupling. Orbital drag reuses the current drag coefficient so a
-    # wave field and a current push the hull on the same physical scale.
+    # Significant wave height H_s (m). The default band is DELIBERATELY mild;
+    # a sea state must pass the admission protocol (measurable behaviour change
+    # vs calm) before it may be used as a benchmark modifier.
+    hs_range: tuple = (0.3, 1.0)
+    tp_range: tuple = (4.0, 7.0)          # peak period (s)
+    gamma_range: tuple = (1.0, 5.0)       # JONSWAP peak enhancement
+    direction_spread_rad: float = math.pi / 6.0   # +/- 30 deg, per component
+    n_components: int = 30
+    f_min: float = 0.04
+    f_max: float = 0.5
+    # Hull coupling. Orbital drag reuses the current drag coefficient so a wave
+    # field and a current push the hull on the same physical scale.
     orbital_drag_coeff: float = 8.0
-    heave_force_scale: float = 60.0
-    slope_moment_scale: float = 40.0
+    heave_force_scale: float = 100.0
+    slope_moment_scale: float = 200.0
 
 
 class SeaState:
-    """Vectorised irregular wave field, one independent realisation per env."""
+    """Vectorised JONSWAP wave field, one independent realisation per env."""
 
     def __init__(self, cfg: SeaStateCfg, num_envs: int, device: torch.device):
         self.cfg = cfg
@@ -67,39 +67,72 @@ class SeaState:
         if n < 1:
             raise ValueError("n_components must be >= 1")
 
-        # JONSWAP-ish discretisation: components spread around the peak.
-        peak_omega = 2.0 * math.pi / float(cfg.peak_period_s)
-        ratios = torch.linspace(0.6, 1.6, n, device=device)
-        self.omega = peak_omega * ratios  # (n,)
+        self.df = (cfg.f_max - cfg.f_min) / n
+        self.freqs = torch.linspace(
+            cfg.f_min + self.df / 2.0, cfg.f_max - self.df / 2.0, n, device=device
+        )
+        self.omega = 2.0 * math.pi * self.freqs
         self.k = self.omega**2 / GRAVITY  # deep-water dispersion
 
-        # Equal-energy split of H_s across components. With m0 = sum(a_i^2/2)
-        # = n a^2 / 2 and H_s = 4 sqrt(m0), the amplitude that reproduces the
-        # requested significant height is a = H_s / (2 sqrt(2n)).
-        self.amplitude = torch.full(
-            (n,),
-            float(cfg.significant_height_m) / (2.0 * math.sqrt(2.0 * n)),
-            device=device,
-        )
-
+        self.hs = torch.zeros(num_envs, device=device)
+        self.tp = torch.zeros(num_envs, device=device)
+        self.gamma = torch.zeros(num_envs, device=device)
+        self.mean_direction = torch.zeros(num_envs, device=device)
+        self.amplitude = torch.zeros((num_envs, n), device=device)
         self.phase = torch.zeros((num_envs, n), device=device)
         self.direction = torch.zeros((num_envs, n), device=device)
         self.resample(torch.arange(num_envs, device=device))
 
+    def _jonswap(
+        self, hs: torch.Tensor, tp: torch.Tensor, gamma: torch.Tensor
+    ) -> torch.Tensor:
+        """S(f) = alpha f^-5 exp(-1.25 (fp/f)^4) gamma^r, per env."""
+        fp = (1.0 / tp).unsqueeze(1)
+        hs_e = hs.unsqueeze(1)
+        gamma_e = gamma.unsqueeze(1)
+        f = self.freqs.unsqueeze(0)
+        alpha = 5.0 / 16.0 * hs_e**2 * fp**4
+        pm = alpha * f.pow(-5) * torch.exp(-1.25 * (fp / f).pow(4))
+        sigma = torch.where(f <= fp, 0.07, 0.09)
+        r = torch.exp(-0.5 * ((f - fp) / (sigma * fp)).pow(2))
+        return torch.clamp(pm * gamma_e.pow(r), min=0.0)
+
     def resample(self, env_ids: torch.Tensor) -> None:
-        """Draw fresh phases and directional spread for the given envs."""
-        n = self.omega.numel()
+        """Draw a fresh sea state (H_s, T_p, gamma, heading, phases) per env."""
+        n = self.freqs.numel()
         count = len(env_ids)
+
+        def uniform(rng: tuple) -> torch.Tensor:
+            return torch.rand(count, device=self.device) * (rng[1] - rng[0]) + rng[0]
+
+        self.hs[env_ids] = uniform(self.cfg.hs_range)
+        self.tp[env_ids] = uniform(self.cfg.tp_range)
+        self.gamma[env_ids] = uniform(self.cfg.gamma_range)
+        self.mean_direction[env_ids] = (
+            torch.rand(count, device=self.device) * 2.0 * math.pi
+        )
         self.phase[env_ids] = torch.rand((count, n), device=self.device) * (
             2.0 * math.pi
         )
         spread = (torch.rand((count, n), device=self.device) - 0.5) * (
             2.0 * self.cfg.direction_spread_rad
         )
-        self.direction[env_ids] = self.cfg.mean_direction_rad + spread
+        self.direction[env_ids] = self.mean_direction[env_ids].unsqueeze(1) + spread
+        spectrum = self._jonswap(
+            self.hs[env_ids], self.tp[env_ids], self.gamma[env_ids]
+        )
+        amplitude = torch.sqrt(2.0 * spectrum * self.df)
+        # Energy normalisation. The Phillips constant alpha = 5/16 H_s^2 fp^4
+        # is exact only for gamma = 1; with peak enhancement the discretised
+        # spectrum carries ~20% too much energy, so the realised sea would be
+        # taller than requested. Rescale each realisation so the identity
+        # H_s = 4 sqrt(m0), m0 = sum(a_i^2 / 2), holds exactly.
+        m0 = (amplitude**2 / 2.0).sum(dim=1, keepdim=True)
+        target_m0 = (self.hs[env_ids] / 4.0).pow(2).unsqueeze(1)
+        scale = torch.sqrt(target_m0 / m0.clamp_min(1.0e-12))
+        self.amplitude[env_ids] = amplitude * scale
 
     def _phase_at(self, xy: torch.Tensor, t: float) -> torch.Tensor:
-        """Per-component phase argument at planar positions ``xy`` and time t."""
         kx = self.k.view(1, -1) * torch.cos(self.direction)
         ky = self.k.view(1, -1) * torch.sin(self.direction)
         return (
@@ -111,23 +144,20 @@ class SeaState:
 
     def elevation(self, xy: torch.Tensor, t: float) -> torch.Tensor:
         """Free-surface elevation (m) at each environment's hull position."""
-        theta = self._phase_at(xy, t)
-        return (self.amplitude.view(1, -1) * torch.cos(theta)).sum(dim=-1)
+        return (self.amplitude * torch.cos(self._phase_at(xy, t))).sum(dim=-1)
 
     def orbital_velocity(self, xy: torch.Tensor, t: float) -> torch.Tensor:
-        """Horizontal orbital velocity (m/s) at the surface, per environment."""
+        """Surface horizontal orbital velocity (m/s), per environment."""
         theta = self._phase_at(xy, t)
-        # Surface horizontal orbital velocity of component i: a_i * omega_i,
-        # aligned with the component's propagation direction.
-        speed = self.amplitude.view(1, -1) * self.omega.view(1, -1) * torch.cos(theta)
+        speed = self.amplitude * self.omega.view(1, -1) * torch.cos(theta)
         vx = (speed * torch.cos(self.direction)).sum(dim=-1)
         vy = (speed * torch.sin(self.direction)).sum(dim=-1)
         return torch.stack((vx, vy), dim=-1)
 
     def surface_slope(self, xy: torch.Tensor, t: float) -> torch.Tensor:
-        """Surface gradient (d(eta)/dx, d(eta)/dy), drives the trim moment."""
+        """Surface gradient (d eta/dx, d eta/dy); drives the trim moment."""
         theta = self._phase_at(xy, t)
-        common = -self.amplitude.view(1, -1) * self.k.view(1, -1) * torch.sin(theta)
+        common = -self.amplitude * self.k.view(1, -1) * torch.sin(theta)
         sx = (common * torch.cos(self.direction)).sum(dim=-1)
         sy = (common * torch.sin(self.direction)).sum(dim=-1)
         return torch.stack((sx, sy), dim=-1)
@@ -135,14 +165,8 @@ class SeaState:
     def forces(
         self, xy: torch.Tensor, hull_velocity_xy: torch.Tensor, t: float
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """World-frame (force_xyz, torque_xyz) exerted on the hull.
-
-        Drop-in companion to the certified current force: same quadratic
-        relative-velocity law, so enabling both simply adds their water
-        velocities.
-        """
-        v_water = self.orbital_velocity(xy, t)
-        v_rel = v_water - hull_velocity_xy
+        """World-frame (force_xyz, torque_xyz) on the hull."""
+        v_rel = self.orbital_velocity(xy, t) - hull_velocity_xy
         v_mag = torch.norm(v_rel, dim=-1, keepdim=True)
         drag_xy = self.cfg.orbital_drag_coeff * v_rel * v_mag
 
@@ -154,10 +178,23 @@ class SeaState:
         force[:, 2] = self.cfg.heave_force_scale * eta
 
         torque = torch.zeros((xy.shape[0], 3), device=xy.device)
-        # A surface tilted along +x pitches the hull about -y, and vice versa.
         torque[:, 0] = self.cfg.slope_moment_scale * slope[:, 1]
         torque[:, 1] = -self.cfg.slope_moment_scale * slope[:, 0]
         return force, torque
+
+    def observation(self, forward_2d: torch.Tensor) -> torch.Tensor:
+        """Sea-state channels for tasks that expose it: (cos, sin, H_s norm).
+
+        Encoding mirrors the goal-direction convention already used across the
+        benchmark, so a policy reads "where the sea comes from" the same way it
+        reads "where the goal is".
+        """
+        wave_x = torch.cos(self.mean_direction)
+        wave_y = torch.sin(self.mean_direction)
+        dot = forward_2d[:, 0] * wave_x + forward_2d[:, 1] * wave_y
+        cross = forward_2d[:, 0] * wave_y - forward_2d[:, 1] * wave_x
+        hs_norm = self.hs / max(self.cfg.hs_range[1], 1.0e-6)
+        return torch.stack((dot, cross, hs_norm), dim=-1)
 
 
 __all__ = ["GRAVITY", "SeaState", "SeaStateCfg"]
