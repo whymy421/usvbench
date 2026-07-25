@@ -42,3 +42,17 @@ gym.register(
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_blueboat_cfg.yaml",
     },
 )
+
+# C3 x C5 (the fourth double crossing): the berth becomes solid geometry --
+# a U-shaped slip the hull must thread and hold inside without contact.
+gym.register(
+    id="Isaac-USV-DockWall-BlueBoat-Direct-v1",
+    entry_point=f"{__name__}.docking_env:DockingEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.docking_env_cfg:DockingBlueBoatWallEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_blueboat_cfg.yaml",
+    },
+)

@@ -187,6 +187,18 @@ class DockingEnvCfg(DirectRLEnvCfg):
     reference_reward_braking_speed_scale_mps: float = 1.0
     reference_reward_success_bonus: float = 3.0
 
+    # C3 x C5 (solid berth walls). Off by default so the certified open-water
+    # docking ids stay byte-identical; the wall variant gets its own gym id.
+    berth_walls: bool = False
+    slip_width_beams: float = 4.0  # tier ladder, as in hazard (5/4/3/2.5)
+    slip_length_m: float = 7.0
+    half_beam_m: float = 0.45
+    ray_count: int = 36
+    ray_max_range_m: float = 30.0
+    # Contact economics carried over verbatim from the certified hazard ledger.
+    reward_contact_entry_penalty: float = 25.0
+    reward_contact_dwell_penalty: float = 1.0
+
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
     yaw_torque_max: float = _DEFAULT_VEHICLE.yaw_torque_nm
@@ -247,3 +259,19 @@ class DockingBlueBoatCurrentEnvCfg(DockingBlueBoatEnvCfg):
         self.underwater_physics_cfg.current_speed_min = 1.0
         self.underwater_physics_cfg.current_speed_max = 1.5
         self.underwater_physics_cfg.current_drag_coeff = 8.0
+
+
+@configclass
+class DockingBlueBoatWallEnvCfg(DockingBlueBoatEnvCfg):
+    """C3 x C5: docking into a slip with SOLID walls (the fourth crossing).
+
+    The berth stops being a virtual tolerance region and becomes a U of
+    collision geometry: the hull must thread the opening and hold the pose
+    without ever touching a wall (prefix semantics). Observation gains the
+    frozen 36-ray contract, so the policy can actually see the slip.
+    """
+
+    berth_walls: bool = True
+    observation_space = 6 + 36
+    slip_width_beams: float = 4.0
+    slip_length_m: float = 7.0

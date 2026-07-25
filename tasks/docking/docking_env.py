@@ -91,10 +91,89 @@ class DockingEnv(DirectRLEnv):
             (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
         )
 
+        # C3 x C5: solid berth walls. Cylinders reuse hazard_nav's certified
+        # clearance/ray kernels so the contact predicate and the 36-ray sensor
+        # keep identical semantics across tasks.
+        self._wall_centers = torch.zeros((self.num_envs, 1, 2), device=self.device)
+        self._wall_radii = torch.zeros((self.num_envs, 1), device=self.device)
+        self._wall_active = torch.zeros(
+            (self.num_envs, 1), dtype=torch.bool, device=self.device
+        )
+        self._contact_prev = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self._contact_before_success = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self._min_clearance = torch.full((self.num_envs,), torch.inf, device=self.device)
+        self.episode_min_clearance = torch.full(
+            (self.num_envs,), torch.nan, device=self.device
+        )
+        if self.cfg.berth_walls:
+            self._build_berth_walls()
+            self._ray_angles = torch.arange(
+                self.cfg.ray_count, device=self.device, dtype=torch.float32
+            ) * (2.0 * torch.pi / self.cfg.ray_count)
+
     @property
     def current_spawn_distance(self) -> float:
         """Current curriculum spawn radius in metres."""
         return self.curriculum.spawn_distance
+
+    def _build_berth_walls(self) -> None:
+        """Author the U-shaped slip once: geometry is fixed per environment."""
+        import numpy as np
+
+        from .berth_geometry import berth_wall_cylinders, slip_width_for_beams, to_world
+
+        width = slip_width_for_beams(self.cfg.slip_width_beams)
+        local, radii = berth_wall_cylinders(
+            width, slip_length_m=self.cfg.slip_length_m
+        )
+        dock_np = self.dock_point.detach().cpu().numpy()
+        heading_np = self.dock_heading.detach().cpu().numpy()
+        stacked = np.stack(
+            [to_world(local, dock_np[i], heading_np[i]) for i in range(self.num_envs)]
+        )
+        self._wall_centers = torch.as_tensor(
+            stacked, device=self.device, dtype=torch.float32
+        )
+        self._wall_radii = torch.as_tensor(
+            np.tile(radii, (self.num_envs, 1)), device=self.device, dtype=torch.float32
+        )
+        self._wall_active = torch.ones(
+            self._wall_radii.shape, dtype=torch.bool, device=self.device
+        )
+
+    def _wall_clearance(self) -> torch.Tensor:
+        from ..hazard_nav.hazard_geometry import analytic_min_clearance
+
+        if not self.cfg.berth_walls:
+            return torch.full((self.num_envs,), torch.inf, device=self.device)
+        return analytic_min_clearance(
+            self.robot.data.root_com_pos_w[:, :2],
+            self._wall_centers,
+            self._wall_radii,
+            half_beam_m=self.cfg.half_beam_m,
+            active_mask=self._wall_active,
+        )
+
+    def _wall_ray_ranges_m(self) -> torch.Tensor:
+        from ..hazard_nav.hazard_geometry import ray_circle_ranges
+
+        forward = self._forward_2d()
+        left = torch.stack((-forward[:, 1], forward[:, 0]), dim=-1)
+        cosine = torch.cos(self._ray_angles).view(1, -1, 1)
+        sine = torch.sin(self._ray_angles).view(1, -1, 1)
+        directions = cosine * forward.unsqueeze(1) + sine * left.unsqueeze(1)
+        return ray_circle_ranges(
+            self.robot.data.root_com_pos_w[:, :2],
+            directions,
+            self._wall_centers,
+            self._wall_radii,
+            max_range_m=self.cfg.ray_max_range_m,
+            active_mask=self._wall_active,
+        )
 
     def _setup_scene(self):
         self.robot = RigidObject(self.cfg.robot_cfg)
@@ -575,11 +654,14 @@ class DockingEnv(DirectRLEnv):
             torch.norm(self._linear_velocity_world()[:, :2], dim=-1, keepdim=True)
             / self.cfg.observation_speed_scale_mps
         )
-        return {
-            "policy": torch.hstack(
-                [dot, cross, distance_norm, dock_dot, dock_cross, speed_norm]
-            )
-        }
+        base = torch.hstack(
+            [dot, cross, distance_norm, dock_dot, dock_cross, speed_norm]
+        )
+        if self.cfg.berth_walls:
+            # Same 36-ray contract as hazard_nav so the sensor stays frozen.
+            rays_norm = self._wall_ray_ranges_m() / self.cfg.ray_max_range_m
+            base = torch.hstack([base, rays_norm])
+        return {"policy": base}
 
     def _get_rewards(self) -> torch.Tensor:
         """Reference baseline only; benchmark methods may use any reward shaping."""
@@ -594,7 +676,7 @@ class DockingEnv(DirectRLEnv):
                 max=1.0,
             )
         )
-        return (
+        reward = (
             -distance / self.cfg.reference_reward_distance_scale_m
             + self.cfg.reference_reward_alignment_scale
             * dock_dot
@@ -602,6 +684,19 @@ class DockingEnv(DirectRLEnv):
             + braking_credit
             + self.cfg.reference_reward_success_bonus * instantaneous_success.float()
         )
+        if self.cfg.berth_walls:
+            # Contact economics carried over verbatim from the certified
+            # hazard ledger: one entry event dominates, dwell stays bounded.
+            clearance = self._wall_clearance()
+            contact_now = clearance < 0.0
+            contact_entry = contact_now & ~self._contact_prev
+            self._contact_prev.copy_(contact_now)
+            reward = (
+                reward
+                - self.cfg.reward_contact_entry_penalty * contact_entry.float()
+                - self.cfg.reward_contact_dwell_penalty * contact_now.float()
+            )
+        return reward
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         # COM travel: the origin arcs around the COM during yaw, which would
@@ -621,14 +716,33 @@ class DockingEnv(DirectRLEnv):
         )
         self.hold_timer.copy_(self._hold_steps * self.control_step_s)
 
+        if self.cfg.berth_walls:
+            # Prefix semantics: only contact BEFORE the hold completes voids
+            # the episode, mirroring hazard_nav's "clean until achieved" rule.
+            clearance = self._wall_clearance()
+            pre_success = ~self._success
+            self._min_clearance.copy_(
+                torch.where(
+                    pre_success,
+                    torch.minimum(self._min_clearance, clearance),
+                    self._min_clearance,
+                )
+            )
+            self._contact_before_success |= pre_success & (clearance < 0.0)
+
         achieved_now = (
             ~self._success & (self._max_hold_steps >= self.required_hold_steps)
         )
+        if self.cfg.berth_walls:
+            achieved_now = achieved_now & ~self._contact_before_success
         elapsed_s = self.episode_length_buf.float() * self.control_step_s
         self._first_success_time_s.copy_(
             torch.where(achieved_now, elapsed_s, self._first_success_time_s)
         )
-        self._success.copy_(self._max_hold_steps >= self.required_hold_steps)
+        held = self._max_hold_steps >= self.required_hold_steps
+        if self.cfg.berth_walls:
+            held = held & ~self._contact_before_success
+        self._success.copy_(held)
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         self._episode_finished.copy_(time_out)
@@ -751,5 +865,8 @@ class DockingEnv(DirectRLEnv):
         self.hold_timer[env_ids] = 0.0
         self.path_length[env_ids] = 0.0
         self._success[env_ids] = False
+        self._contact_prev[env_ids] = False
+        self._contact_before_success[env_ids] = False
+        self._min_clearance[env_ids] = torch.inf
         self._episode_finished[env_ids] = False
         self._previous_xy[env_ids] = com_target_xy
