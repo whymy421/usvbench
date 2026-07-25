@@ -43,6 +43,24 @@ gym.register(
     },
 )
 
+# Kinematic-observation variants (v11 block). Append-only; the certified
+# ids above keep their exact observation contract and champions.
+for _suffix, _cfg in (
+    ("Dock-BlueBoat-Kin", "DockingBlueBoatKinEnvCfg"),
+    ("Dock-BlueBoat-Current-Kin", "DockingBlueBoatCurrentKinEnvCfg"),
+    ("DockWall-BlueBoat-Kin", "DockingBlueBoatWallKinEnvCfg"),
+):
+    gym.register(
+        id=f"Isaac-USV-{_suffix}-Direct-v1",
+        entry_point=f"{__name__}.docking_env:DockingEnv",
+        disable_env_checker=True,
+        kwargs={
+            "env_cfg_entry_point": f"{__name__}.docking_env_cfg:{_cfg}",
+            "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_blueboat_cfg.yaml",
+        },
+    )
+
+
 # C3 x C5 (the fourth double crossing): the berth becomes solid geometry --
 # a U-shaped slip the hull must thread and hold inside without contact.
 gym.register(

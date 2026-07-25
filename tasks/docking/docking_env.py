@@ -657,6 +657,22 @@ class DockingEnv(DirectRLEnv):
         base = torch.hstack(
             [dot, cross, distance_norm, dock_dot, dock_cross, speed_norm]
         )
+        if getattr(self.cfg, "obs_kinematic", False):
+            # v11 block: scalar speed_norm above cannot separate surge, sway
+            # and residual yaw -- exactly the states a final approach needs.
+            from .._shared.kinematics import body_planar_kinematics
+
+            base = torch.hstack(
+                (
+                    base,
+                    body_planar_kinematics(
+                        forwards_2d,
+                        self._linear_velocity_world()[:, :3],
+                        self.robot.data.root_ang_vel_w[:, 2],
+                        yaw_rate_scale_rad_s=self.cfg.yaw_rate_obs_scale_rad_s,
+                    ),
+                )
+            )
         if self.cfg.berth_walls:
             # Same 36-ray contract as hazard_nav so the sensor stays frozen.
             rays_norm = self._wall_ray_ranges_m() / self.cfg.ray_max_range_m
