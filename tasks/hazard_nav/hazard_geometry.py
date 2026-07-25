@@ -368,6 +368,144 @@ def sample_layout(
     )
 
 
+# --- Ring-siege variant (user-requested): spawn encircled, exactly one
+# passable gap whose inflated width follows the tier ladder. Escape requires
+# threading from the very first second -- avoidance as a mandatory skill.
+RING_RADIUS_M = 10.5  # >= ENDPOINT_CLEAR (5.0) + 2 * max inflated radius
+RING_OBSTACLE_RADIUS_MIN_M = 1.5
+RING_OBSTACLE_RADIUS_MAX_M = 2.0
+RING_NEIGHBOR_OVERLAP_M = 0.30  # inflated neighbors overlap: sealed by construction
+RING_GAP_SLACK_M = 0.50  # accepted gap width band: [bottleneck, bottleneck + slack]
+RING_GOAL_DISTANCE_RANGE_M = (24.0, 40.0)  # 24 keeps the goal disk clear of the ring
+
+
+def _ring_seal_check(
+    start: np.ndarray,
+    goal: np.ndarray,
+    centers: np.ndarray,
+    radii: np.ndarray,
+    gap_mid_xy: np.ndarray,
+) -> bool:
+    """Layout is a true siege iff plugging the gap makes the goal unreachable."""
+    plug_radius = 0.5 * (RING_OBSTACLE_RADIUS_MIN_M + RING_OBSTACLE_RADIUS_MAX_M)
+    plugged_centers = np.vstack([centers, gap_mid_xy[None, :]])
+    plugged_radii = np.concatenate([radii, [plug_radius]])
+    return bfs_geodesic_length(start, goal, plugged_centers, plugged_radii) is None
+
+
+def sample_ring_layout(
+    level: int,
+    rng: np.random.Generator | None = None,
+    *,
+    max_attempts: int = 40,
+) -> HazardLayout:
+    """Rejection-sample a sealed ring around the spawn with one tier-width gap.
+
+    Admission differs from the scatter sampler on purpose: ring neighbors
+    intentionally violate the pairwise-bottleneck rule (they overlap after
+    inflation -- that is what seals the ring), so admission is instead
+    (a) exactly one passable gap with inflated width in
+    [bottleneck, bottleneck + RING_GAP_SLACK_M], (b) BFS-feasible as built,
+    (c) BFS-INFEASIBLE with the gap plugged, (d) endpoint disks clear.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least one")
+    difficulty = difficulty_for_level(level)
+    rng = np.random.default_rng() if rng is None else rng
+    start = np.zeros(2, dtype=np.float64)
+
+    def chord_angle(chord: float) -> float:
+        return 2.0 * math.asin(min(1.0, chord / (2.0 * RING_RADIUS_M)))
+
+    overlap_max = RING_NEIGHBOR_OVERLAP_M  # tightest packing (most sealed)
+    overlap_min = 0.05  # loosest packing that still overlaps after inflation
+
+    for attempt in range(1, max_attempts + 1):
+        distance = float(rng.uniform(*RING_GOAL_DISTANCE_RANGE_M))
+        goal = np.array((distance, 0.0), dtype=np.float64)
+        gap_bearing = float(rng.uniform(0.0, 2.0 * math.pi))
+        gap_free = float(difficulty.bottleneck_m) + 0.5 * RING_GAP_SLACK_M
+
+        # Grow the radii list until the circle is over-full at the TIGHTEST
+        # packing; then the exact closure overlap is solved by bisection so
+        # the ring closes with the gap at exactly the tier width. Closure is
+        # guaranteed whenever total angle straddles 2*pi between the two
+        # packing extremes -- no acceptance-window lottery.
+        radii_list = [
+            float(rng.uniform(RING_OBSTACLE_RADIUS_MIN_M, RING_OBSTACLE_RADIUS_MAX_M))
+        ]
+
+        def total_angle(overlap: float) -> float:
+            infl = [r + OBSTACLE_INFLATION_M for r in radii_list]
+            total = chord_angle(gap_free + infl[-1] + infl[0])
+            for a, b in zip(infl[:-1], infl[1:]):
+                total += chord_angle(a + b - overlap)
+            return total
+
+        # total_angle DECREASES in overlap. Grow until even the TIGHTEST
+        # packing overfills the circle, then drop the last obstacle: K-1
+        # obstacles satisfy total(overlap_max) < 2*pi; solvable iff their
+        # loosest packing can still fill it (total(overlap_min) >= 2*pi).
+        while total_angle(overlap_max) < 2.0 * math.pi and len(radii_list) <= 24:
+            radii_list.append(
+                float(rng.uniform(RING_OBSTACLE_RADIUS_MIN_M, RING_OBSTACLE_RADIUS_MAX_M))
+            )
+        if len(radii_list) > 24:
+            continue
+        radii_list.pop()
+        if len(radii_list) < 3 or total_angle(overlap_min) < 2.0 * math.pi:
+            continue  # this radii draw cannot straddle 2*pi; resample
+
+        lo, hi = overlap_min, overlap_max  # total(lo) >= 2pi > total(hi)
+        for _ in range(40):
+            mid = 0.5 * (lo + hi)
+            if total_angle(mid) >= 2.0 * math.pi:
+                lo = mid
+            else:
+                hi = mid
+        overlap = lo
+
+        infl = [r + OBSTACLE_INFLATION_M for r in radii_list]
+        angles = [gap_bearing + 0.5 * chord_angle(gap_free + infl[-1] + infl[0])]
+        for a, b in zip(infl[:-1], infl[1:]):
+            angles.append(angles[-1] + chord_angle(a + b - overlap))
+
+        centers = np.stack(
+            [
+                RING_RADIUS_M * np.cos(np.asarray(angles)),
+                RING_RADIUS_M * np.sin(np.asarray(angles)),
+            ],
+            axis=1,
+        )
+        radii = np.asarray(radii_list, dtype=np.float64)
+        if not start_goal_disks_clear(start, goal, centers, radii):
+            continue
+        geodesic = bfs_geodesic_length(start, goal, centers, radii)
+        if geodesic is None:
+            continue
+        gap_mid_angle = angles[0] - 0.5 * (2.0 * math.pi - (angles[-1] - angles[0]))
+        gap_mid = np.array(
+            (RING_RADIUS_M * math.cos(gap_mid_angle), RING_RADIUS_M * math.sin(gap_mid_angle))
+        )
+        if not _ring_seal_check(start, goal, centers, radii, gap_mid):
+            continue
+        return HazardLayout(
+            level=difficulty.level,
+            requested_obstacle_count=len(radii_list),
+            start=start,
+            goal=goal,
+            centers=centers,
+            radii=radii,
+            geodesic_length=float(geodesic),
+            direct_blocked=direct_segment_blocked(start, goal, centers, radii),
+            attempts=attempt,
+        )
+
+    raise RuntimeError(
+        f"Could not generate a sealed ring layout for level {level} in {max_attempts} attempts."
+    )
+
+
 def analytic_min_clearance(
     points: torch.Tensor,
     centers: torch.Tensor,
