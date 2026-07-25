@@ -86,8 +86,12 @@ def train(task: str, seed: int, name: str, timesteps: int = 96000,
     return rd
 
 
-def screen(run_dir: str, task: str, every: int = 6, level: int = 0,
+def screen(run_dir: str, task: str, every: int = 2, level: int = 0,
            tag: str = "screen") -> tuple[str, float] | None:
+    # NOTE: peaks are NARROW. A path_hazard run peaked at step 22400 and was
+    # back to zero by 38400; an every-6 ladder stepped over it and reported
+    # 1.6% instead of ~31%. Keep this dense, and use peak_rescreen.py (which
+    # reads the training curve for free) when a result looks suspiciously low.
     """Ladder-screen checkpoints; return (best_ckpt_path, best_sr)."""
     if not run_dir:
         return None
