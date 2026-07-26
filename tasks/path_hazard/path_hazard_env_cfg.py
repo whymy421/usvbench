@@ -194,6 +194,17 @@ class PathHazardEnvCfg(DirectRLEnvCfg):
     reward_contact_entry_penalty: float = 25.0
     reward_contact_dwell_penalty: float = 1.0
 
+    # --- v11 recipe (co-advisor's HazardNav v3), OFF by default ---------------
+    # Kinematic observability + a terminal anchor at the last gate + outcome
+    # termination. These only take effect on the dedicated v2 gym id.
+    obs_kinematic: bool = False
+    yaw_rate_obs_scale_rad_s: float = 1.0
+    reward_goal_entry_bonus: float = 0.0
+    reward_goal_time_bonus: float = 0.0
+    reward_reverse_action_scale: float = 0.0
+    reward_swift_scale: float = 0.0
+    terminate_on_outcome: bool = False
+
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
     yaw_torque_max: float = _DEFAULT_VEHICLE.yaw_torque_nm
@@ -264,9 +275,30 @@ class PathHazardEnvCfg(DirectRLEnvCfg):
         expected_observation_space = (
             SUPERSET_DIM if self.emit_superset_obs else 7 + self.ray_count
         )
+        if self.obs_kinematic:
+            expected_observation_space += 3
         if self.ray_count != 36 or self.observation_space != expected_observation_space:
             raise ValueError(
                 "PathHazard v1 requires 36 rays and observation_space="
                 f"{expected_observation_space} when "
                 f"emit_superset_obs={self.emit_superset_obs}"
             )
+
+
+@configclass
+class PathHazardV2EnvCfg(PathHazardEnvCfg):
+    """Line x hazard on the v11 recipe (the recipe that fixed dock x current).
+
+    Adds, relative to v1: body-frame surge/sway/yaw-rate channels, a terminal
+    bonus at the last gate scaled by remaining time, reverse and idling costs,
+    and termination on outcome. Registered under its own gym id so the
+    certified v1 champion and its numbers stay untouched.
+    """
+
+    obs_kinematic: bool = True
+    observation_space = 46
+    reward_goal_entry_bonus: float = 50.0
+    reward_goal_time_bonus: float = 50.0
+    reward_reverse_action_scale: float = 0.05
+    reward_swift_scale: float = 0.25
+    terminate_on_outcome: bool = True
