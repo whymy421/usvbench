@@ -135,6 +135,9 @@ class PathHazardEnv(DirectRLEnv):
         # Diagnostics only -- none of these feed back into the reward.
         self._fee_steps = torch.zeros(self.num_envs, device=self.device)
         self._ep_prox_cost = torch.zeros(self.num_envs, device=self.device)
+        self._clean_last_gate_this_step = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
         self._ep_contact_entries = torch.zeros(self.num_envs, device=self.device)
 
     def _setup_scene(self) -> None:
@@ -656,6 +659,22 @@ class PathHazardEnv(DirectRLEnv):
                 ranges_norm,
             )
         )
+        if getattr(self.cfg, "obs_kinematic", False):
+            # v11 block: a scalar speed cannot separate surging, sliding and
+            # spinning -- exactly the states that threading a gap needs.
+            from .._shared.kinematics import body_planar_kinematics
+
+            native_observation = torch.hstack(
+                (
+                    native_observation,
+                    body_planar_kinematics(
+                        forwards,
+                        self.robot.data.root_com_vel_w[:, :3],
+                        self.robot.data.root_ang_vel_w[:, 2],
+                        yaw_rate_scale_rad_s=self.cfg.yaw_rate_obs_scale_rad_s,
+                    ),
+                )
+            )
         if not self.cfg.emit_superset_obs:
             return {"policy": native_observation}
 
@@ -739,6 +758,36 @@ class PathHazardEnv(DirectRLEnv):
         self._prev_target_distance.copy_(
             torch.norm(target_xy - self._com_xy(), dim=-1)
         )
+        if self.cfg.terminate_on_outcome:
+            # Terminal anchor. Without it, terminating on the last gate would
+            # just end the reward stream early and teach the boat to stall.
+            remaining_fraction = torch.clamp(
+                1.0
+                - self.episode_length_buf.float() / float(self.max_episode_length),
+                min=0.0,
+                max=1.0,
+            )
+            reward = reward + self._clean_last_gate_this_step.float() * (
+                self.cfg.reward_goal_entry_bonus
+                + self.cfg.reward_goal_time_bonus * remaining_fraction
+            )
+        if self.cfg.reward_reverse_action_scale > 0.0:
+            reverse_action = torch.relu(-self.actions[:, 0])
+            reward = reward - (
+                self.cfg.reward_reverse_action_scale
+                * self.control_step_s
+                * reverse_action.square()
+            )
+        if self.cfg.reward_swift_scale > 0.0:
+            speed_norm = (
+                torch.norm(self.robot.data.root_com_vel_w[:, :2], dim=-1)
+                / SPEED_SCALE_MPS
+            )
+            reward = reward - (
+                self.cfg.reward_swift_scale
+                * self.control_step_s
+                * (1.0 - speed_norm.clamp(max=1.0))
+            )
         return reward
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -802,10 +851,17 @@ class PathHazardEnv(DirectRLEnv):
         self._success |= success_now
         self._last_gate_reached |= reached_last_now
 
+        self._clean_last_gate_this_step.copy_(success_now)
+
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         self._episode_finished.copy_(time_out)
-        # Fixed-horizon trajectory scoring: success and contact never terminate.
-        terminated = torch.zeros_like(time_out)
+        if self.cfg.terminate_on_outcome:
+            # v11 semantics: the episode ends on the outcome, and the terminal
+            # bonus above is what keeps that from being a reward for stalling.
+            terminated = success_now | (prefix_active & contact_now)
+        else:
+            # Fixed-horizon trajectory scoring: nothing terminates early.
+            terminated = torch.zeros_like(time_out)
         return terminated, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None) -> None:
