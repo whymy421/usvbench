@@ -82,3 +82,23 @@ python <IsaacLab>/scripts/reinforcement_learning/skrl/train.py \
 
 The asset is the authority for mass, center of mass, and inertia. Do not add a
 spawn-time mass-properties block to the task configuration.
+
+## Reference checkpoint
+
+Jinshi's reference policy is shipped at
+`checkpoints/blueboat_calm_v1_s42.pt`. Its first layer is 3D, so evaluate it
+with `OBS_DIM=3` and without `OBS_EXTENDED`; the 9D/V23 training example above
+is not checkpoint-compatible.
+
+```bash
+USVBENCH_ASSETS=<repo>/assets OBS_DIM=3 \
+python scripts/eval_benchmark.py \
+  --task=Isaac-USV-BlueBoat-Calm-Direct-v1 \
+  --num_envs=64 --eval_steps=6000 --headless --seed=2026 \
+  --checkpoint=<repo>/tasks/blueboat_calm_nav/checkpoints/blueboat_calm_v1_s42.pt
+```
+
+The corrected fixed-seed evaluator reports **12.731 targets/episode**, mean
+speed **2.842 m/s**, and **0 OOB**. The checkpoint commit recorded an interim
+training metric of 13.39 targets/episode at 40% training; use 12.731 as the
+reproducible standardized result.

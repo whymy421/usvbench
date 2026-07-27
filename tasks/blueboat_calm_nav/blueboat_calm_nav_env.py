@@ -82,6 +82,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         # 到达率统计
         self.episode_count = 0
         self.reached_count = 0
+        self._last_reached_mask = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._trajectory_points = []
         # V41 航行质量 metric 累积器
         self._metric_path_length = 0.0      # 实际轨迹长度
@@ -1268,6 +1269,9 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         reach_reward = reached * reach_bonus
 
         reached_mask = reached.squeeze(-1).bool()
+        # Per-step event mask for benchmark evaluators. Unlike reached_count, this
+        # is never affected by the environment's periodic metric-counter reset.
+        self._last_reached_mask = reached_mask.detach().clone()
         if reached_mask.any():
             env_ids = torch.where(reached_mask)[0]
             distances = self.min_spawn_distance + \

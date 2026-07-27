@@ -28,7 +28,7 @@ with what I'm building. The examples are a default, not a requirement.
 
 | Vessel | Task | Owner | Status |
 |--------|------|-------|--------|
-| ROV | calm nav | Yutong | ✅ done (Task A, ~24 tgt/ep) |
+| ROV | calm nav | Yutong | ✅ done (Task A current physics, 6.863 tgt/ep) |
 | 5 m monohull | calm nav | Yutong | ✅ done (Task B, ~4.8 tgt/ep) |
 | **Arif's task 1** | *e.g.* catamaran high-speed patrol | **Arif (P1)** | ⬜ TODO (your call) |
 | **Arif's task 2** | *e.g.* ~100 m ship harbor approach | **Arif (P2)** | ⬜ TODO (your call) |
@@ -39,7 +39,7 @@ with what I'm building. The examples are a default, not a requirement.
 
 | Week | Phase | Goal | Deliverable |
 |------|-------|------|-------------|
-| **1** | P0 | Setup + reproduce **Task A (ROV calm)** | wandb run, `targets_per_episode` ≥ 20 |
+| **1** | P0 | Setup + reproduce **Task A (ROV calm)** | current-physics fixed eval, `targets_per_episode` >= 5.5 |
 | **2** | P0 | Reproduce **Task B (boat calm)**, 3 seeds | 3 wandb runs ≥ 4.0 tgt/ep; Friday: "P0 done" |
 | **3** | P1 | Get a **catamaran USD**, verify forward-axis with a debug thrust | USD in `assets/`, axis noted |
 | **4** | P1 | Fork `boat_calm_nav` → `catamaran_patrol`, make it **float + move** (no RL yet) | stable physics demo |
@@ -73,7 +73,9 @@ This proves your Isaac Lab + skrl + wandb pipeline works before you build anythi
 2. Get repo access (send me your GitHub username) and clone to `~/usvbench`.
 3. Copy `tasks/rov_calm_nav/` into `<IsaacLab>/source/isaaclab_tasks/isaaclab_tasks/direct/`.
 4. Follow `tasks/rov_calm_nav/STARTER_TASK.md`. Run ~30 min.
-5. **Success**: `targets_per_episode` ≥ 20. Send me the wandb link.
+5. **Success**: current-physics fixed eval `targets_per_episode >= 5.5`. The old
+   `>=20` threshold belongs to the pre-July unclipped-action/old-drag task and
+   is not physically comparable. Send me the W&B link and benchmark CSV.
 
 **Week 2 — Task B (boat), 3 seeds:**
 1. Same install steps for `tasks/boat_calm_nav/`.

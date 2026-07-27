@@ -14,8 +14,9 @@ with reproducible RL baselines for each vessel × task combination.
 
 | Task | Vessel | Condition | Baseline | Folder |
 |------|--------|-----------|----------|--------|
-| **A — ROV calm nav** | Doc Ricketts ROV | calm | ~24 targets/ep | [`tasks/rov_calm_nav/`](tasks/rov_calm_nav/STARTER_TASK.md) |
-| **B — Boat calm nav** | 5 m monohull | calm | ~4.8 targets/ep | [`tasks/boat_calm_nav/`](tasks/boat_calm_nav/STARTER_TASK.md) |
+| **A — ROV calm nav** | Doc Ricketts ROV | calm | 6.863 targets/ep (current physics) | [`tasks/rov_calm_nav/`](tasks/rov_calm_nav/STARTER_TASK.md) |
+| **B — Boat calm nav** | 5 m monohull | calm | 9.375 targets/ep (n=2 fixed eval) | [`tasks/boat_calm_nav/`](tasks/boat_calm_nav/STARTER_TASK.md) |
+| **BlueBoat calm nav** | Blue Robotics BlueBoat | calm | 12.731 targets/ep | [`tasks/blueboat_calm_nav/`](tasks/blueboat_calm_nav/STARTER_TASK.md) |
 
 Both are single-agent PPO point-navigation tasks. **Task A is the recommended Day-1
 warmup** (trains in ~30 min with the simplest reward). Task B is the same task on a real
@@ -67,12 +68,13 @@ the network. Reward env-vars don't affect evaluation.)
 
 | Task | targets/ep (primary) | mean speed | notes |
 |------|----------------------|------------|-------|
-| ROV calm | **27.1 ± 2.4** (n=3) | 6.6 m/s | robust across seeds |
-| boat calm | ~5.1 (seed 42 only) | 4.6 m/s | 3-seed baseline pending; higher seed-variance |
+| ROV calm, current physics | **6.863** (seed 42) | 1.495 m/s | 0 OOB; current matched checkpoint |
+| boat calm, corrected workflow | **9.375 +/- 0.056** (n=2) | see task results | seeds 42 and 456; seed 123 pending rerun |
+| BlueBoat calm | **12.731** (seed 42) | 2.842 m/s | Jinshi checkpoint; corrected reach-event evaluator |
 
-> The **Reference tasks** table above quotes *training-time* throughput (~24 / ~4.8);
-> the numbers here are the *standardized deterministic eval* (`eval_benchmark.py`), which
-> runs a little higher (~27 / ~5). Compare new methods against these eval numbers.
+> The old ROV checkpoint's documented **27.1 +/- 2.4** result belongs to the
+> pre-July unclipped-action and old-hydrodynamics task. It must not be compared
+> with or reported as a result on the current realistic-drag ROV physics.
 
 **Metrics**: `targets_per_episode` (navigation throughput, **primary**) · `mean_speed` ·
 `oob_per_episode` (out-of-bounds events per episode — a control-quality diagnostic; in

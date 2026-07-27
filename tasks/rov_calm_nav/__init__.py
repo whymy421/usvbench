@@ -13,7 +13,7 @@ from . import agents
 
 
 gym.register(
-    id="Isaac-My-First-Task-Calm-Direct-v1",
+    id="Isaac-USVBench-ROV-Calm-Direct-v1",
     entry_point=f"{__name__}.my_first_task_env:MyFirstTaskEnv",
     disable_env_checker=True,
     kwargs={

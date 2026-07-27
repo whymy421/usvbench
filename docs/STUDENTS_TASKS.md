@@ -9,8 +9,8 @@
 ## 史进的任务清单
 
 1. **复现 ROV calm baseline**（Week 1–2）
-   - 跑通 `Isaac-My-First-Task-Calm-Direct-v1`
-   - 复现基线 ~27 targets/episode
+   - 跑通 `Isaac-USVBench-ROV-Calm-Direct-v1`
+   - 复现当前物理基线 ~6.9 targets/episode（旧物理 ~27 不可直接比较）
    - 确认整个流程（Isaac Lab + skrl + wandb）可用
 
 2. **Gazebo sim-to-sim 验证**（Week 3–4）
