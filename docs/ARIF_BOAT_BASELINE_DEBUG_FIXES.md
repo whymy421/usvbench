@@ -102,12 +102,19 @@ writes logs/CSV under `outputs/boat_baseline_fixed_<timestamp>/`.
 Native Isaac Sim output is redirected directly to each log file so W&B helper
 processes cannot keep a PowerShell pipe open after simulator shutdown.
 
-## ROV checkpoint for P0 Task A
+## Checkpoints for Arif
 
-The repository already contains:
+Use the checkpoint that matches the installed task:
 
-`tasks/rov_calm_nav/checkpoints/rov_calm_s42.pt`
+| Task | Checkpoint | Fixed eval seed 2026 |
+|---|---|---:|
+| Current ROV calm | `tasks/rov_calm_nav/checkpoints/rov_calm_current_s42.pt` | 6.863 tgt/ep |
+| Current ROV calm, legacy-weight compatibility check | `tasks/rov_calm_nav/checkpoints/rov_calm_s42.pt` | 6.769 tgt/ep |
+| BlueBoat calm | `tasks/blueboat_calm_nav/checkpoints/blueboat_calm_v1_s42.pt` | 12.731 tgt/ep |
 
-The task documentation reports approximately `27.1 +/- 2.4 targets/episode`
-across the reference training seeds. The shipped seed-42 checkpoint can be used
-for the P0 pipeline check with the corrected benchmark evaluator.
+All fixed results use 64 environments and 6000 evaluation steps. The legacy
+ROV checkpoint's documented `27.1 +/- 2.4 targets/episode` belongs to the old
+unclipped-action, old-hydrodynamics task. It must not be reported as a result on
+the current ROV physics. For current P0 code, use `rov_calm_current_s42.pt` and
+report the current-task score honestly. The BlueBoat checkpoint is only for
+`Isaac-USV-BlueBoat-Calm-Direct-v1`; it is not interchangeable with the ROV.

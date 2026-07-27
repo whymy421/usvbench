@@ -15,6 +15,7 @@ except ImportError:  # Direct execution from the repository root.
 # this test must remain runnable without Isaac Sim or Isaac Lab.
 EXPECTED_DIMS = {
     "Isaac-My-First-Task-Calm-Direct-v1": 3,
+    "Isaac-USVBench-ROV-Calm-Direct-v1": 3,
     "Isaac-My-First-Task-Calm-Boat-Direct-v1": 3,
     "Isaac-USVBench-Boat-Calm-Direct-v1": 3,
     "Isaac-USV-BlueBoat-Calm-Direct-v1": 3,

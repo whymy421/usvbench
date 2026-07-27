@@ -48,6 +48,7 @@ _HARBOR = (
 # variants share their task family's native policy-observation order.
 NATIVE_LAYOUTS = {
     "Isaac-My-First-Task-Calm-Direct-v1": list(_NAV),
+    "Isaac-USVBench-ROV-Calm-Direct-v1": list(_NAV),
     "Isaac-My-First-Task-Calm-Boat-Direct-v1": list(_NAV),
     "Isaac-USVBench-Boat-Calm-Direct-v1": list(_NAV),
     "Isaac-USV-BlueBoat-Calm-Direct-v1": list(_NAV),

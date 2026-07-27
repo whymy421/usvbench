@@ -3,8 +3,8 @@
 > **Vessel**: Doc Ricketts ROV (`ROV_rigged.usd`)
 > **Condition**: calm water (no waves, no current)
 > **Algorithm**: PPO (single agent)
-> **Status**: ✅ validated — 24 targets/episode @ 3000 iter (Yutong, seed 42)
-> **Gym id**: `Isaac-My-First-Task-Calm-Direct-v1`
+> **Status**: current-physics baseline validated at 6.863 targets/episode (seed 42)
+> **Gym id**: `Isaac-USVBench-ROV-Calm-Direct-v1`
 
 This is the **easiest task in USVBench** and the recommended Day-1 warmup. The ROV
 trains cleanly with the simplest possible reward, so you can confirm your whole
@@ -44,16 +44,19 @@ a new target spawns — so a good policy reaches **many** targets per episode.
 
 ## Run
 
-**Easiest** — use the provided script (edit the `$ISAACLAB` line at the top first):
+**Easiest** - use the reproducible current-physics launcher:
 ```powershell
-.\scripts\train_rov_calm.ps1
+.\scripts\train_rov_baseline_current.ps1 `
+  -IsaacLabRoot "C:\path\to\IsaacLab" `
+  -Seed 42 -MaxIterations 3000 `
+  -EvalSweepSteps 1500 -BenchmarkSteps 6000 -EvalSeed 2026
 ```
 
 **Manual** — the exact command (cross-platform):
 ```bash
 OBS_DIM=3 \
 python <IsaacLab>/scripts/reinforcement_learning/skrl/train_with_eval.py \
-  --task=Isaac-My-First-Task-Calm-Direct-v1 \
+  --task=Isaac-USVBench-ROV-Calm-Direct-v1 \
   --num_envs=64 --headless --max_iterations=3000 --seed=42 \
   --video --video_interval 50000 --video_length 200
 ```
@@ -65,14 +68,18 @@ Takes ~30 min on an RTX 5080.
 
 ## Play my trained checkpoint (no training needed)
 
-A reference policy is shipped at `checkpoints/rov_calm_s42.pt`. Load it to watch the ROV
-navigate immediately and confirm your setup matches mine:
+Use `checkpoints/rov_calm_current_s42.pt` with the current task code:
 ```bash
 USVBENCH_ASSETS=<repo>/assets OBS_DIM=3 \
 python <IsaacLab>/scripts/reinforcement_learning/skrl/play.py \
-  --task=Isaac-My-First-Task-Calm-Direct-v1 --num_envs=16 \
-  --checkpoint=<repo>/tasks/rov_calm_nav/checkpoints/rov_calm_s42.pt
+  --task=Isaac-USVBench-ROV-Calm-Direct-v1 --num_envs=16 \
+  --checkpoint=<repo>/tasks/rov_calm_nav/checkpoints/rov_calm_current_s42.pt
 ```
+
+`rov_calm_s42.pt` is the legacy June checkpoint. It loads with the current
+3D policy architecture, but it predates action clipping and the realistic
+hydrodynamics introduced in July. Do not attach its historical 27.1 score to
+the current task physics.
 
 ---
 
@@ -81,28 +88,36 @@ python <IsaacLab>/scripts/reinforcement_learning/skrl/play.py \
 Score any checkpoint with the benchmark eval (deterministic policy, fixed budget):
 ```bash
 USVBENCH_ASSETS=<repo>/assets OBS_DIM=3 \
-python scripts/eval_benchmark.py --task=Isaac-My-First-Task-Calm-Direct-v1 \
+python scripts/eval_benchmark.py --task=Isaac-USVBench-ROV-Calm-Direct-v1 \
   --num_envs=64 --eval_steps=6000 --headless \
-  --checkpoint=<repo>/tasks/rov_calm_nav/checkpoints/rov_calm_s42.pt
+  --seed=2026 \
+  --checkpoint=<repo>/tasks/rov_calm_nav/checkpoints/rov_calm_current_s42.pt
 ```
-Reference: `targets_per_episode` ≈ **27.1 ± 2.4** over seeds 42 / 123 / 456.
+
+| Checkpoint | Physics used for evaluation | Fixed eval result |
+|---|---|---:|
+| `rov_calm_current_s42.pt` | current clipped-action, realistic-drag task | **6.863 tgt/ep**, 1.495 m/s, 0 OOB |
+| `rov_calm_s42.pt` | current task (compatibility check only) | **6.769 tgt/ep**, 1.525 m/s, 0 OOB |
+| `rov_calm_s42.pt` | legacy task physics | **27.1 +/- 2.4 tgt/ep** (historical documentation) |
+
+The current-task rows use 64 environments, 6000 evaluation steps, and fixed
+evaluation seed 2026. The legacy and current scores are not directly comparable.
 
 ---
 
 ## What success looks like
 
-Reference run (Yutong, seed 42, 3000 iter): **`rov_calm_benchmark_s42`** on the
-`usvbench` wandb project.
+Current-physics reference run: seed 42, 3000 iterations, with the best checkpoint
+selected by a 1500-step fixed-seed sweep.
 
 | Metric | Reference | Meaning |
 |--------|-----------|---------|
-| `Metrics/targets_per_episode` | **~24** | reaches a new target every ~5 s |
-| `Reward / Instantaneous reward (mean)` | ~15 | policy strongly navigating |
-| `Nav/distance` | < 17 m | consistently closing on targets |
-| `Nav/speed` | > 4 m/s | moving fast, not stuck |
+| `targets_per_episode` | **6.863** | standardized 6000-step benchmark |
+| `mean_speed` | **1.495 m/s** | near the 1.54 m/s thrust/drag terminal speed |
+| `oob_per_episode` | **0.000** | no boundary terminations |
 
-You should reproduce within ~20%. Watch the auto-uploaded wandb videos to confirm
-the ROV drives smoothly to targets (not spinning in place).
+Watch a rendered evaluation to confirm the ROV drives smoothly to targets rather
+than spinning in place.
 
 **If `targets_per_episode` < 5 or `speed` ≈ 0 after 3000 iter → message Yutong before continuing.**
 

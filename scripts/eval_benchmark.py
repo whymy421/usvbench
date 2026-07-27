@@ -56,17 +56,18 @@ agent_cfg_entry_point = "skrl_cfg_entry_point" if algorithm == "ppo" else f"skrl
 
 def _base_env(env):
     e = env
+    seen = {id(e)}
     for _ in range(12):
-        if hasattr(e, "reached_count"):
-            return e
-        if hasattr(e, "unwrapped") and e.unwrapped is not e:
-            e = e.unwrapped
-        elif hasattr(e, "_env"):
-            e = e._env
-        elif hasattr(e, "env"):
-            e = e.env
-        else:
+        next_env = None
+        for attr in ("_unwrapped", "unwrapped", "_env", "env"):
+            candidate = getattr(e, attr, None)
+            if candidate is not None and candidate is not e and id(candidate) not in seen:
+                next_env = candidate
+                break
+        if next_env is None:
             break
+        e = next_env
+        seen.add(id(e))
     return e
 
 
