@@ -48,3 +48,7 @@ docs/EMAIL_TO_ARIF.md
 !tasks/*/checkpoints/
 !tasks/*/checkpoints/*.pt
 tasks/*/videos/
+
+# local diagnostic outputs (per-episode telemetry, regenerable)
+diagnostics/
+run_diag.ps1
