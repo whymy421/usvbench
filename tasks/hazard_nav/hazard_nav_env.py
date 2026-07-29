@@ -139,6 +139,17 @@ class HazardNavEnv(DirectRLEnv):
         self._ep_goal_bonus = torch.zeros(self.num_envs, device=self.device)
         self._ep_reverse_cost = torch.zeros(self.num_envs, device=self.device)
 
+        # Owner's one-shot half-sine threading bonus. Off unless the amplitude
+        # is positive, so every certified id keeps its exact reward.
+        self._threading = None
+        if self.cfg.reward_threading_amplitude > 0.0:
+            from .._shared.threading_gate import ThreadingLatch
+
+            self._threading = ThreadingLatch(
+                self.num_envs, self.device,
+                amplitude=self.cfg.reward_threading_amplitude,
+            )
+
     @property
     def current_level(self) -> int:
         """Current integer difficulty index encoded by DockingCurriculum."""
@@ -641,6 +652,21 @@ class HazardNavEnv(DirectRLEnv):
         # v1 keeps its historical layouts bit-stable.
         reached = self._reached_goal.float().unsqueeze(-1)
 
+        if self.cfg.obs_feasibility:
+            # Replace the raw ray block with per-sector feasible travel
+            # distance. A gap the hull fits through then reads as open water
+            # instead of two threats.
+            from .._shared.feasibility import feasibility_pool
+
+            pooled = feasibility_pool(
+                self._ray_ranges_m(),
+                n_sectors=self.cfg.feasibility_sectors,
+                vessel_width_m=2.0 * self.cfg.half_beam_m,
+                ray_spacing_rad=2.0 * torch.pi / self.cfg.ray_count,
+                width_multiplier=self.cfg.feasibility_width_multiplier,
+            )
+            ranges_norm = pooled / self.cfg.ray_max_range_m
+
         if self.cfg.obs_v3:
             surge_norm, sway_norm, yaw_rate_norm = self._body_motion_observation()
             native_observation = torch.hstack(
@@ -782,6 +808,28 @@ class HazardNavEnv(DirectRLEnv):
                 * (~self._reached_goal).float()
             )
 
+        threading_bonus = torch.zeros(self.num_envs, device=self.device)
+        if self._threading is not None:
+            surge_n, sway_n, yaw_n = self._body_motion_observation()
+            to_goal = self.target_pos - self._com_xy()
+            direction = to_goal / torch.norm(
+                to_goal, dim=-1, keepdim=True
+            ).clamp_min(1.0e-6)
+            forward = self._forward_2d()
+            g_dot = torch.sum(forward * direction, dim=-1)
+            g_cross = forward[:, 0] * direction[:, 1] - forward[:, 1] * direction[:, 0]
+            threading_bonus = self._threading.step(
+                self._ray_ranges_m(),
+                ray_spacing_rad=2.0 * torch.pi / self.cfg.ray_count,
+                half_beam_m=self.cfg.half_beam_m,
+                surge_norm=surge_n.squeeze(-1),
+                sway_norm=sway_n.squeeze(-1),
+                yaw_rate_norm=yaw_n.squeeze(-1),
+                goal_dot=g_dot,
+                goal_cross=g_cross,
+                contact=contact_now,
+            )
+
         reverse_action = torch.relu(-self.actions[:, 0])
         reverse_cost = (
             self.cfg.reward_reverse_action_scale
@@ -804,6 +852,7 @@ class HazardNavEnv(DirectRLEnv):
         return (
             self.cfg.reward_progress_scale * progress
             + goal_bonus
+            + threading_bonus
             - safety_cost
             - prox_cost
             - swift_cost
@@ -1008,6 +1057,10 @@ class HazardNavEnv(DirectRLEnv):
         self._contact_before_goal[env_ids] = False
         self._success[env_ids] = False
         self._clean_goal_entry_this_step[env_ids] = False
+        if self._threading is not None:
+            # Clear the once-per-episode latch, or the bonus would pay on the
+            # first episode of the run and never again.
+            self._threading.reset(env_ids)
         self._first_success_time_s[env_ids] = torch.nan
         self._episode_finished[env_ids] = False
         initial_clearance = analytic_min_clearance(
