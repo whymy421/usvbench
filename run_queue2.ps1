@@ -24,7 +24,7 @@ function TrainAndScreen($task, $seed, $name, $steps) {
           Where-Object { $_.Name -like "*$name*" } | Sort-Object CreationTime -Desc | Select-Object -First 1
     if (-not $rd) { Beacon "  $name : NO RUN DIR"; return }
     $n = (Get-ChildItem "$($rd.FullName)\checkpoints" -Filter '*.pt' -ErrorAction SilentlyContinue).Count
-    Beacon "  $name run_dir ok, $n 个存档"
+    Beacon "  $name run_dir ok, $n checkpoints"
     & $py "$repo\scripts\screen_v6_ladder.py" --run-dir $rd.FullName --task $task `
         --every 2 --level 0 --eval-seed 42 --headless *> "$out\screen_$name.log"
     $best = Select-String -Path "$out\screen_$name.log" -Pattern 'LADDER (agent_\d+\.pt): SR=([\d.]+)' -AllMatches |
