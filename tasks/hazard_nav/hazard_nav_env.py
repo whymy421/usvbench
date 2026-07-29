@@ -736,10 +736,16 @@ class HazardNavEnv(DirectRLEnv):
             # (AAMAS 2017) requires Phi = 0 there, for EVERY way an episode can
             # end (success, contact, timeout), or the leftover gamma^N Phi(s_N)
             # is action-dependent and changes the optimal policy.
-            episode_ends = self.reset_terminated | self.reset_time_outs
-            next_potential = torch.where(
-                episode_ends, torch.zeros_like(potential), potential
-            )
+            if self.cfg.pbrs_zero_at_terminal:
+                # TRUE terminals only. A time-limit truncation is not an
+                # absorbing state -- the critic bootstraps through it -- so
+                # zeroing Phi there would pay 20*(d/D0) for running out of
+                # time far from the goal (measured: 75.8% -> 0.0%).
+                next_potential = torch.where(
+                    self.reset_terminated, torch.zeros_like(potential), potential
+                )
+            else:
+                next_potential = potential
             progress = self.cfg.pbrs_gamma * next_potential - self._previous_potential
         else:
             progress = potential - self._previous_potential
