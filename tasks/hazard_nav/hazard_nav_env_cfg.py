@@ -236,6 +236,21 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     pbrs_correct: bool = False
     pbrs_gamma: float = 0.999
 
+    # --- Feasibility pooling (observation layer) -----------------------------
+    # Raw ranges encode a passable gap as two nearby threats and leave the
+    # policy to infer whether its own beam fits. Pooling replaces them with
+    # "how far can THIS hull travel in this direction", so a gap wider than the
+    # beam reads as open water (Meyer et al., IEEE Access 2020).
+    obs_feasibility: bool = False
+    feasibility_sectors: int = 9
+    feasibility_width_multiplier: float = 1.0
+
+    # --- One-shot threading bonus (owner's half-sine arc) --------------------
+    # Paid once per episode on a completed clean passage; maximum on the gap
+    # centreline, zero where the hull would touch, self-normalising by gap
+    # width so one formula covers every tier.
+    reward_threading_amplitude: float = 0.0
+
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
     yaw_torque_max: float = _DEFAULT_VEHICLE.yaw_torque_nm
@@ -276,12 +291,17 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
 
         if self.obs_v2 and self.obs_v3:
             raise ValueError("obs_v2 and obs_v3 are mutually exclusive")
+        # Feasibility pooling collapses the ray block into one number per
+        # sector, so the range part of the observation shrinks accordingly.
+        range_dim = (
+            self.feasibility_sectors if self.obs_feasibility else self.ray_count
+        )
         if self.obs_v3:
-            native_dim = 6 + self.ray_count
+            native_dim = 6 + range_dim
         elif self.obs_v2:
-            native_dim = 5 + self.ray_count
+            native_dim = 5 + range_dim
         else:
-            native_dim = 3 + self.ray_count
+            native_dim = 3 + range_dim
         expected_observation_space = (
             SUPERSET_DIM if self.emit_superset_obs else native_dim
         )
@@ -366,3 +386,24 @@ class HazardNavV3PbrsEnvCfg(HazardNavV3EnvCfg):
     """
 
     pbrs_correct: bool = True
+
+
+@configclass
+class HazardNavV3FeasEnvCfg(HazardNavV3EnvCfg):
+    """v11 recipe with feasibility-pooled ranges instead of raw rays.
+
+    Observation width drops from 3 + 3 + 36 to 3 + 3 + 9, because each sector
+    now carries one number -- the distance THIS hull can actually travel that
+    way -- rather than nine raw ranges the policy must interpret.
+    """
+
+    obs_feasibility: bool = True
+    feasibility_sectors: int = 9
+    observation_space = 3 + 3 + 9
+
+
+@configclass
+class HazardNavV3ThreadEnvCfg(HazardNavV3EnvCfg):
+    """v11 recipe plus the one-shot half-sine threading bonus."""
+
+    reward_threading_amplitude: float = 5.0
