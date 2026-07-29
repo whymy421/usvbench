@@ -68,3 +68,17 @@ gym.register(
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },
 )
+
+
+# C2 x waves: station keeping in an irregular short-period sea.
+gym.register(
+    id="Isaac-USV-StationKeep-BlueBoat-Wave-Direct-v1",
+    entry_point=f"{__name__}.station_keeping_env:StationKeepingEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.station_keeping_env_cfg:StationKeepingBlueBoatWaveEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)

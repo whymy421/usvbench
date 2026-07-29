@@ -12,6 +12,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 
+from .._shared.sea_state import SeaStateCfg
 from .._shared.vehicles import VehicleSpec, get_vehicle
 
 
@@ -169,6 +170,11 @@ class StationKeepingEnvCfg(DirectRLEnvCfg):
     obs_kinematic: bool = False
     yaw_rate_obs_scale_rad_s: float = 1.0
 
+    # Sea state (JONSWAP). Enters through the SAME world-frame force path as
+    # the certified current, so a task may carry both. Off by default.
+    sea_state: SeaStateCfg = SeaStateCfg()
+    obs_sea_state: bool = False
+
     hold_radius: float = 2.0
     required_hold_time_s: float = 60.0
     min_spawn_distance: float = 5.0
@@ -250,3 +256,24 @@ class StationKeepingBlueBoatCurrentKinEnvCfg(StationKeepingBlueBoatCurrentEnvCfg
 
     obs_kinematic: bool = True
     observation_space = 6
+
+
+@configclass
+class StationKeepingBlueBoatWaveEnvCfg(StationKeepingBlueBoatKinEnvCfg):
+    """C2 x waves: hold station in an irregular sea.
+
+    Peak periods are pinned SHORT on purpose. For a 1.2 m hull, a 6 s wave has
+    a 56 m wavelength -- 47 boat lengths, which the boat simply rides. The
+    band that actually disturbs this vessel is 1-3 s (1.6-14 m wavelength), so
+    copying a competition's "hard" tier verbatim would manufacture a fake
+    difficulty of exactly the kind the admission protocol exists to catch.
+    """
+
+    obs_sea_state: bool = True
+    observation_space = 6 + 3
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.sea_state.enable = True
+        self.sea_state.hs_range = (0.30, 0.60)
+        self.sea_state.tp_range = (1.5, 3.0)
