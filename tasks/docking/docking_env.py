@@ -60,6 +60,13 @@ class DockingEnv(DirectRLEnv):
 
         self.hold_timer = torch.zeros(self.num_envs, device=self.device)
         self.path_length = torch.zeros(self.num_envs, device=self.device)
+        if getattr(self.cfg, "curriculum_frozen", False):
+            # Evaluation contract: pin the spawn distance to the requested
+            # level and never advance it, so a 128-episode score measures one
+            # difficulty instead of drifting upward as successes accumulate.
+            levels = self.cfg.eval_level_distances
+            index = min(max(int(self.cfg.eval_level), 0), len(levels) - 1)
+            self.curriculum.spawn_distance = float(levels[index])
         self.curriculum_spawn_distance = torch.tensor(
             self.curriculum.spawn_distance, device=self.device
         )
@@ -802,8 +809,11 @@ class DockingEnv(DirectRLEnv):
                 ).mean()
 
             # Each completed environment contributes one episodic EMA sample.
-            for episode_success in success.detach().cpu().tolist():
-                self.curriculum.update(episode_success)
+            # Frozen evaluation skips this entirely -- otherwise the difficulty
+            # rises inside the eval run and the 128 episodes are not comparable.
+            if not getattr(self.cfg, "curriculum_frozen", False):
+                for episode_success in success.detach().cpu().tolist():
+                    self.curriculum.update(episode_success)
 
         self.extras.setdefault("log", {})
         self.curriculum_spawn_distance.fill_(self.current_spawn_distance)

@@ -224,6 +224,18 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # than active progress while remaining comparable to one contact penalty.
     reward_swift_scale: float = 0.25
 
+    # --- Potential-shaping correctness (OFF by default; new gym ids opt in) ---
+    # Our progress term is a RAW difference Phi(s') - Phi(s). The policy-
+    # invariance guarantee (Ng, Harada & Russell 1999, Thm 1) requires
+    # gamma*Phi(s') - Phi(s); the missing factor is worth up to ~20 discounted
+    # reward units over a 7200-step episode, and its sign is a standing "hurry
+    # up and cut the straight-line distance" pressure. Grzes (AAMAS 2017)
+    # further shows that with MULTIPLE terminal states -- ours are success,
+    # contact and timeout -- Phi must be forced to zero at termination, or the
+    # residual gamma^N Phi(s_N) term is action-dependent and flips the optimum.
+    pbrs_correct: bool = False
+    pbrs_gamma: float = 0.999
+
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
     yaw_torque_max: float = _DEFAULT_VEHICLE.yaw_torque_nm
@@ -341,3 +353,16 @@ class HazardRingEnvCfg(HazardNavV3EnvCfg):
 
     layout_mode: str = "ring"
     max_obstacles: int = 18
+
+
+@configclass
+class HazardNavV3PbrsEnvCfg(HazardNavV3EnvCfg):
+    """v11 recipe with the potential term in its policy-invariant form.
+
+    Identical to v3 except the progress shaping becomes gamma*Phi(s') - Phi(s)
+    with Phi forced to zero at every terminal state. This is the single change
+    whose omission adds a standing "cut the straight-line distance now"
+    pressure worth up to ~20 discounted units per episode.
+    """
+
+    pbrs_correct: bool = True

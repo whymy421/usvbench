@@ -170,6 +170,17 @@ class DockingEnvCfg(DirectRLEnvCfg):
     curriculum_ema_decay: float = 0.99
     curriculum_success_threshold: float = 0.6
 
+    # Evaluation contract. Without these, a fresh env starts the curriculum at
+    # `curriculum_start_distance_m` (2 m) and then ADVANCES during the eval run
+    # itself, so a 128-episode score mixes difficulties and is not comparable
+    # across checkpoints. hazard_nav has had this since the v6 campaign; the
+    # docking family did not, which is why its certified numbers must be read
+    # as "starting from the easiest curriculum level".
+    curriculum_frozen: bool = False
+    eval_level: int = 0
+    # Spawn distance used at each frozen level, in metres.
+    eval_level_distances: tuple = (25.0, 15.0, 8.0, 2.0)
+
     # V5 spawns on the approach lane behind the berth, with positions and bow
     # headings sampled relative to each environment's dock_heading rather than
     # in fixed world coordinates. Bow-ward drift and forward thrust therefore
