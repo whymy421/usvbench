@@ -235,6 +235,12 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # residual gamma^N Phi(s_N) term is action-dependent and flips the optimum.
     pbrs_correct: bool = False
     pbrs_gamma: float = 0.999
+    # Zeroing Phi at TRUE terminals (goal reached / contact) is what Grzes
+    # requires. It must NOT be applied at a time-limit truncation: that state
+    # is not absorbing -- the critic bootstraps through it -- so forcing Phi=0
+    # there injects a reward of 20*(d/D0) for "time ran out far from the goal".
+    # Measured cost of getting this wrong: certified SR 75.8% -> 0.0%.
+    pbrs_zero_at_terminal: bool = False
 
     # --- Feasibility pooling (observation layer) -----------------------------
     # Raw ranges encode a passable gap as two nearby threats and leave the
@@ -407,3 +413,16 @@ class HazardNavV3ThreadEnvCfg(HazardNavV3EnvCfg):
     """v11 recipe plus the one-shot half-sine threading bonus."""
 
     reward_threading_amplitude: float = 5.0
+
+
+@configclass
+class HazardNavV3PbrsTermEnvCfg(HazardNavV3EnvCfg):
+    """Discounted potential difference AND Phi = 0 at true terminals only.
+
+    Separated from the plain discounted-difference variant so the two changes
+    can be attributed independently; the first attempt bundled them and also
+    (wrongly) zeroed at timeouts, which cost 75.8 points of success.
+    """
+
+    pbrs_correct: bool = True
+    pbrs_zero_at_terminal: bool = True
