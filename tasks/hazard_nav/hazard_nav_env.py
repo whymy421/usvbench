@@ -702,7 +702,21 @@ class HazardNavEnv(DirectRLEnv):
     def _get_rewards(self) -> torch.Tensor:
         distance = self._horizontal_distance()
         potential = self._potential(distance)
-        progress = potential - self._previous_potential
+        if self.cfg.pbrs_correct:
+            # gamma*Phi(s') - Phi(s): the form that provably leaves the optimal
+            # policy unchanged (Ng, Harada & Russell 1999). IsaacLab fills
+            # reset_terminated/reset_time_outs from _get_dones BEFORE calling
+            # this, so the terminal state is already known here -- and Grzes
+            # (AAMAS 2017) requires Phi = 0 there, for EVERY way an episode can
+            # end (success, contact, timeout), or the leftover gamma^N Phi(s_N)
+            # is action-dependent and changes the optimal policy.
+            episode_ends = self.reset_terminated | self.reset_time_outs
+            next_potential = torch.where(
+                episode_ends, torch.zeros_like(potential), potential
+            )
+            progress = self.cfg.pbrs_gamma * next_potential - self._previous_potential
+        else:
+            progress = potential - self._previous_potential
         self._previous_potential.copy_(potential)
 
         clearance = self._clearance()

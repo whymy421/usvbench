@@ -51,3 +51,16 @@ gym.register(
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },
 )
+
+
+# v11 recipe + policy-invariant potential shaping. Append-only: v3 and its
+# certified numbers are untouched, so the pair is a clean single-variable test.
+gym.register(
+    id="Isaac-USV-HazardNav-Direct-v4",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.hazard_nav_env_cfg:HazardNavV3PbrsEnvCfg",
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
