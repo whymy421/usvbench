@@ -58,6 +58,11 @@ class StationKeepingEnv(DirectRLEnv):
         self._episode_finished = torch.zeros(
             self.num_envs, dtype=torch.bool, device=self.device
         )
+        self._sea = None
+        if getattr(self.cfg, "sea_state", None) is not None and self.cfg.sea_state.enable:
+            from .._shared.sea_state import SeaState
+
+            self._sea = SeaState(self.cfg.sea_state, self.num_envs, self.device)
         self._previous_xy = self.robot.data.root_pos_w[:, :2].clone()
         self.actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
 
@@ -401,6 +406,17 @@ class StationKeepingEnv(DirectRLEnv):
         # enter the current-force path at all.
         if self.physics_cfg.enable_current:
             force_w += self._compute_current_forces()
+        if self._sea is not None:
+            # Same world-frame entry point as the current, so a task may carry
+            # both and their water velocities simply add.
+            t = float(self.episode_length_buf[0]) * self.control_step_s
+            wave_f, wave_t = self._sea.forces(
+                self.robot.data.root_com_pos_w[:, :2],
+                self.robot.data.root_com_vel_w[:, :2],
+                t,
+            )
+            force_w += wave_f
+            torque_w += wave_t
 
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_w)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
@@ -432,6 +448,13 @@ class StationKeepingEnv(DirectRLEnv):
         distance_norm = distance / self.cfg.max_spawn_distance
 
         observation = torch.hstack([dot, cross, distance_norm])
+        if getattr(self.cfg, "obs_sea_state", False) and self._sea is not None:
+            # Bow-relative sea direction plus normalised significant height,
+            # encoded the same way the goal direction is, so the policy reads
+            # "where the sea comes from" with the convention it already knows.
+            observation = torch.hstack(
+                (observation, self._sea.observation(forwards_2d))
+            )
         if getattr(self.cfg, "obs_kinematic", False):
             # Shared v11-style block: body-frame surge, sway, yaw rate. A
             # scalar speed cannot tell "driving forward" from "sliding
@@ -553,3 +576,5 @@ class StationKeepingEnv(DirectRLEnv):
         self._success[env_ids] = False
         self._episode_finished[env_ids] = False
         self._previous_xy[env_ids] = root_state[:, :2]
+        if self._sea is not None:
+            self._sea.resample(env_ids)
