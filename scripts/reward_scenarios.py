@@ -55,6 +55,8 @@ class Scenario:
     contact_seconds: float = 0.0       # total time in contact
     mean_speed_mps: float = 1.2
     reverse_fraction: float = 0.0      # fraction of time commanding negative surge
+    threads_gap: bool = False      # completed a clean gap passage
+    thread_offset_u: float = 0.0   # |offset| / passable half-width
     note: str = ""
     terms: dict = field(default_factory=dict)
 
@@ -77,7 +79,8 @@ def discount_sum(steps: int) -> float:
     return (1.0 - GAMMA**steps) / (1.0 - GAMMA)
 
 
-def score(s: Scenario, band_m: float) -> Scenario:
+def score(s: Scenario, band_m: float, threading: float = 0.0,
+          pbrs_timeout_bug: bool = False) -> Scenario:
     steps = int(round(s.duration_s / DT))
     close_steps = int(round(s.close_seconds / DT))
     contact_steps = int(round(s.contact_seconds / DT))
@@ -102,7 +105,19 @@ def score(s: Scenario, band_m: float) -> Scenario:
         1.0 - min(s.mean_speed_mps / SPEED_SCALE_MPS, 1.0)
     )
 
-    total = progress + prox + contact + goal + reverse + idle
+    # One-shot threading arc: paid only on a CLEAN passage, so any scenario
+    # that touched something earns nothing here.
+    arc = 0.0
+    if threading > 0.0 and s.threads_gap and s.contacts == 0:
+        arc = threading * math.cos(math.pi * s.thread_offset_u / 2.0)
+
+    # The defect, for comparison: zeroing the potential at a TIMEOUT pays
+    # +progress_scale * (d/D0) for ending far from the goal.
+    timeout_spike = 0.0
+    if pbrs_timeout_bug and not s.reached_goal:
+        timeout_spike = PROGRESS_SCALE * (1.0 - s.progress_fraction)
+
+    total = progress + prox + contact + goal + reverse + idle + arc + timeout_spike
 
     # Discounted view: progress and costs accrue along the way, the bonus lands
     # at the end. This is what the agent's value function actually optimises.
@@ -111,7 +126,9 @@ def score(s: Scenario, band_m: float) -> Scenario:
     disc_prox = prox * (discount_sum(close_steps) / max(close_steps, 1)) if close_steps else 0.0
     disc_contact = contact * (GAMMA ** (steps // 2))  # contact happens mid-run
     disc_goal = goal * (GAMMA**steps)
-    disc_total = disc_progress + disc_prox + disc_contact + disc_goal + (reverse + idle) * disc_all
+    disc_total = (disc_progress + disc_prox + disc_contact + disc_goal
+                  + (reverse + idle) * disc_all
+                  + (arc + timeout_spike) * (GAMMA ** steps))
 
     s.terms = {
         "progress": progress,
@@ -120,6 +137,8 @@ def score(s: Scenario, band_m: float) -> Scenario:
         "goal_bonus": goal,
         "reverse": reverse,
         "idle": idle,
+        "arc": arc,
+        "timeout_spike": timeout_spike,
         "TOTAL": total,
         "DISCOUNTED": disc_total,
     }
@@ -134,7 +153,7 @@ def build_scenarios() -> list[Scenario]:
             "A 理想:直穿缝心,快,零接触",
             duration_s=20.0, reached_goal=True,
             close_rays=6, close_range_m=1.10, close_seconds=6.0,
-            mean_speed_mps=1.6,
+            mean_speed_mps=1.6, threads_gap=True, thread_offset_u=0.15,
             note="穿两个缝,每个约 3 秒,居中所以射线读数 1.10 m",
         ),
         Scenario(
@@ -148,7 +167,7 @@ def build_scenarios() -> list[Scenario]:
             "C 贴缝:挤最窄的缝,很近但没碰",
             duration_s=26.0, reached_goal=True,
             close_rays=10, close_range_m=0.60, close_seconds=8.0,
-            mean_speed_mps=1.3,
+            mean_speed_mps=1.3, threads_gap=True, thread_offset_u=0.35,
             note="四档缝宽,居中时两侧各 0.90 m -> 射线读 0.60 m",
         ),
         # --- what we FEAR ----------------------------------------------------
@@ -202,10 +221,18 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--band", type=float, default=SAFE_CLEARANCE_M + HALF_BEAM_M,
                         help="proximity band cap in metres (default 1.35)")
+    parser.add_argument("--threading", type=float, default=0.0,
+                        help="amplitude of the one-shot half-sine arc (v6 uses 5)")
+    parser.add_argument("--pbrs-timeout-bug", action="store_true",
+                        help="reproduce the defect that cost 75.8 points: zero "
+                             "the potential at TIMEOUTS as well as at true "
+                             "terminals, paying +20*(d/D0) for running out of "
+                             "time far from the goal")
     args = parser.parse_args()
     band = args.band
 
-    rows = [score(s, band) for s in build_scenarios()]
+    rows = [score(s, band, args.threading, args.pbrs_timeout_bug)
+            for s in build_scenarios()]
 
     print(f"奖励打分台 | 邻近带上限 {band:.2f} m | gamma={GAMMA} | 时限 {HORIZON_S:.0f}s")
     print("=" * 108)
@@ -247,6 +274,18 @@ def main() -> None:
          by["C"]["TOTAL"] > by["B"]["TOTAL"]),
         ("停着不动 G 必须差于所有到达场景",
          by["G"]["TOTAL"] < min(by[k]["TOTAL"] for k in "ABC")),
+        # Added 2026-07-30 after a real 5-GPU-hour loss. The first six checks
+        # all passed while the reward paid +3.5 for hugging the rim until the
+        # clock ran out. The signature of that defect is not "a failure scores
+        # positive" -- scenario I is mildly positive even in a healthy reward,
+        # because the potential legitimately pays for covering 95% of the route.
+        # The signature is an INVERSION: timing out after 35% of the route
+        # outscoring timing out after 95%.
+        ("超时后走得少的必须差于走得多的(抓'离目标越远越划算')",
+         by["F"]["TOTAL"] < by["I"]["TOTAL"]),
+        ("最好的失败必须差于最差的成功",
+         max(by[k]["TOTAL"] for k in "DEFGHI")
+         < min(by[k]["TOTAL"] for k in "ABC")),
     ]
     for label, ok in checks:
         print(f"  [{'通过' if ok else '不通过'}] {label}")
