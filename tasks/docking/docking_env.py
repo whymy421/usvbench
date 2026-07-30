@@ -35,6 +35,17 @@ class DockingEnv(DirectRLEnv):
     def __init__(self, cfg: DockingEnvCfg, render_mode: str | None = None, **kwargs):
         self.vehicle_spec = get_vehicle(cfg.vehicle)
         self.physics_cfg = cfg.underwater_physics_cfg
+        # Evaluation reproducibility. hazard_nav has always drawn its layouts
+        # from a generator seeded by cfg.seed, which is why two --eval-seed
+        # values give two genuinely different exam papers there. Docking drew
+        # from the GLOBAL torch RNG (seeded by the trainer, not by cfg), so
+        # cert_dock_wall_e42 and _e123 came out identical episode for episode --
+        # two "independent" seeds that were in fact one paper.
+        self._spawn_gen = None
+        _seed = getattr(cfg, "seed", None)
+        if _seed is not None:
+            self._spawn_gen = torch.Generator(device="cpu")
+            self._spawn_gen.manual_seed(int(_seed))
         self.curriculum = DockingCurriculum(
             start_distance=cfg.curriculum_start_distance_m,
             distance_increment=cfg.curriculum_distance_increment_m,
@@ -121,6 +132,12 @@ class DockingEnv(DirectRLEnv):
             self._ray_angles = torch.arange(
                 self.cfg.ray_count, device=self.device, dtype=torch.float32
             ) * (2.0 * torch.pi / self.cfg.ray_count)
+
+    def _rand(self, n: int) -> torch.Tensor:
+        """Uniform draw from the eval-reproducible generator when seeded."""
+        if self._spawn_gen is None:
+            return torch.rand(n, device=self.device)
+        return torch.rand(n, generator=self._spawn_gen).to(self.device)
 
     @property
     def current_spawn_distance(self) -> float:
@@ -493,13 +510,13 @@ class DockingEnv(DirectRLEnv):
 
     def _resample_current(self, env_ids: torch.Tensor) -> None:
         """Sample one constant world-frame current vector per reset environment."""
-        speeds = self.physics_cfg.current_speed_min + torch.rand(
-            len(env_ids), device=self.device
+        speeds = self.physics_cfg.current_speed_min + self._rand(
+            len(env_ids)
         ) * (
             self.physics_cfg.current_speed_max
             - self.physics_cfg.current_speed_min
         )
-        directions = torch.rand(len(env_ids), device=self.device) * 2.0 * torch.pi
+        directions = self._rand(len(env_ids)) * 2.0 * torch.pi
         self.current_vec[env_ids, 0] = speeds * torch.cos(directions)
         self.current_vec[env_ids, 1] = speeds * torch.sin(directions)
 
@@ -840,7 +857,7 @@ class DockingEnv(DirectRLEnv):
 
         bearing_limit = math.radians(self.cfg.spawn_bearing_limit_deg)
         bearing_offsets = (
-            2.0 * torch.rand(num_resets, device=self.device) - 1.0
+            2.0 * self._rand(num_resets) - 1.0
         ) * bearing_limit
         bearing_cos = torch.cos(bearing_offsets)
         bearing_sin = torch.sin(bearing_offsets)
@@ -856,7 +873,7 @@ class DockingEnv(DirectRLEnv):
 
         heading_limit = math.radians(self.cfg.spawn_heading_offset_limit_deg)
         heading_offsets = (
-            2.0 * torch.rand(num_resets, device=self.device) - 1.0
+            2.0 * self._rand(num_resets) - 1.0
         ) * heading_limit
         forward_headings = torch.atan2(dock_headings[:, 1], dock_headings[:, 0])
         forward_headings += heading_offsets
