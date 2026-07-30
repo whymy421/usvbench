@@ -84,6 +84,32 @@ def main() -> None:
     print(f"  真终止处置零的残余风险: 远处撞 {crash_far:+.1f} vs 近处撞 "
           f"{crash_near:+.1f} (单步看仍偏向远处撞,总和才恒定)")
 
+    # --- 5. the drift test: standing still must never pay ----------------
+    # BOTH discounted variants collapsed (1.6% and 4.7% vs an 84.4% baseline)
+    # for the same reason, and it was not the terminal rule: with a
+    # non-positive potential the (1-gamma) drift term is POSITIVE, so a boat
+    # that simply sits still far from the goal collects 20*(1-gamma)*|Phi| per
+    # step -- 144 units over a 7200-step episode, against a progress budget of
+    # 20. Shifting the potential to be non-negative turns that drift into a
+    # cost. Any future potential must pass this.
+    STEPS = 7200
+
+    def idle_total(phi_value):
+        phi = F([phi_value])
+        per_step = float(shaping(phi, phi, correct=True, zero_at_terminal=False,
+                                 terminated=no, timed_out=no))
+        return per_step * STEPS
+
+    neg_far = idle_total(-1.0)     # Phi = -d/D0, sitting at the start
+    neg_near = idle_total(0.0)
+    pos_far = idle_total(0.0)      # Phi = 1 - d/D0, sitting at the start
+    pos_near = idle_total(1.0)
+    assert neg_far > 100.0, neg_far          # the defect, quantified
+    assert pos_far <= 0.0 and pos_near <= 0.0, (pos_far, pos_near)
+    print(f"  静止 7200 步的累计收益: Phi=-d/D0 时最远处 {neg_far:+.0f} "
+          f"(进展预算只有 20) | Phi=1-d/D0 时最远处 {pos_far:+.0f} 目标处 "
+          f"{pos_near:+.0f}")
+
     print(f"  旧实现(超时也置零): 远处超时 {buggy_far:+.1f} vs 近处超时 "
           f"{buggy_near:+.1f}  <-- 这就是 75.8% -> 0% 的原因")
     print(f"  修正后: 远处超时 {fixed_far:+.2f} vs 近处超时 {fixed_near:+.2f}")
