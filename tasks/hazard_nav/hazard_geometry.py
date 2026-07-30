@@ -375,6 +375,9 @@ RING_RADIUS_M = 10.5  # >= ENDPOINT_CLEAR (5.0) + 2 * max inflated radius
 RING_OBSTACLE_RADIUS_MIN_M = 1.5
 RING_OBSTACLE_RADIUS_MAX_M = 2.0
 RING_NEIGHBOR_OVERLAP_M = 0.30  # inflated neighbors overlap: sealed by construction
+# Overlap needed for the physical surface gap to fall below the hull beam:
+# 2*OBSTACLE_INFLATION_M - HULL_BEAM_M = 1.30 - 0.899 = 0.401. Use a margin.
+RING_SEALED_OVERLAP_M = 0.55
 RING_GAP_SLACK_M = 0.50  # accepted gap width band: [bottleneck, bottleneck + slack]
 RING_GOAL_DISTANCE_RANGE_M = (24.0, 40.0)  # 24 keeps the goal disk clear of the ring
 
@@ -398,6 +401,7 @@ def sample_ring_layout(
     rng: np.random.Generator | None = None,
     *,
     max_attempts: int = 40,
+    neighbor_overlap_m: float | None = None,
 ) -> HazardLayout:
     """Rejection-sample a sealed ring around the spawn with one tier-width gap.
 
@@ -417,8 +421,22 @@ def sample_ring_layout(
     def chord_angle(chord: float) -> float:
         return 2.0 * math.asin(min(1.0, chord / (2.0 * RING_RADIUS_M)))
 
-    overlap_max = RING_NEIGHBOR_OVERLAP_M  # tightest packing (most sealed)
-    overlap_min = 0.05  # loosest packing that still overlaps after inflation
+    # Neighbours are placed so their INFLATED disks overlap by this much, so
+    # the gap between the PHYSICAL surfaces is 2*OBSTACLE_INFLATION_M minus the
+    # overlap. At the shipped 0.30 that leaves 1.00 m -- wider than the 0.899 m
+    # hull, so the "sealed" ring could be escaped anywhere. The seal check did
+    # not catch it because its BFS inflates by 0.65 while the simulator's
+    # contact test uses the true half-beam 0.45: two different hulls.
+    # `neighbor_overlap_m` is the MINIMUM overlap, not the maximum: the closure
+    # bisection returns some value inside [overlap_min, overlap_max], so
+    # raising only the ceiling still admits loose rings. Sealing is a floor
+    # condition -- surface gap = 2*OBSTACLE_INFLATION_M - overlap < hull beam.
+    if neighbor_overlap_m is None:
+        overlap_min = 0.05   # loosest packing that still overlaps after inflation
+        overlap_max = RING_NEIGHBOR_OVERLAP_M
+    else:
+        overlap_min = float(neighbor_overlap_m)
+        overlap_max = overlap_min + 0.20
 
     for attempt in range(1, max_attempts + 1):
         distance = float(rng.uniform(*RING_GOAL_DISTANCE_RANGE_M))
