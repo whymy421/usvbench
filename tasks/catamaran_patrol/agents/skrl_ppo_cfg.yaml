@@ -1,4 +1,4 @@
-seed: 456
+seed: 42
 
 models:
   separate: False
@@ -54,7 +54,7 @@ agent:
   time_limit_bootstrap: False
   experiment:
     directory: "usvbench"
-    experiment_name: "cat_DONE_s456"
+    experiment_name: "cat_DONE_s42"
     write_interval: auto
     checkpoint_interval: auto
     wandb: true
