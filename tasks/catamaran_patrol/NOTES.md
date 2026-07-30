@@ -35,7 +35,7 @@ Same counter as boat/ROV tasks (via `self.reached_count`).
 Seed 42 is below the P1 bar. Seeds 123/456 still to run.
 
 ## Physics notes
-- Catamaran USD: `C:\usvbench\assets\catamaran.usd`
+- Catamaran USD: `tasks/catamaran_patrol/assets/catamaran.usd (committed to branch)`
 - Ground plane placed at z=-50m to prevent hull clipping
 - Buoyancy: volume=0.3 m³, density=1000 kg/m³ → net upward force at surface
 - Linear/angular damping applied manually via external force each physics substep
