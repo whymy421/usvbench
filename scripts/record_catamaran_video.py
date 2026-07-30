@@ -47,6 +47,7 @@ import os
 
 import gymnasium as gym
 import imageio
+import omni.usd
 import torch
 from skrl.utils.runner.torch import Runner
 
@@ -160,6 +161,17 @@ def main(env_cfg, experiment_cfg):
     # Lighting and a visual water sheet are added from here, so that a task without
     # its own dome light still renders and the vessel has a horizon to move against.
     try:
+        # A task may or may not create its own light. Mute it and always light the
+        # scene from here, so clips recorded from different branches are comparable.
+        stage = omni.usd.get_context().get_stage()
+        for path in ("/World/Light", "/World/DomeLight"):
+            prim = stage.GetPrimAtPath(path)
+            if prim.IsValid():
+                intensity = prim.GetAttribute("inputs:intensity")
+                if intensity:
+                    intensity.Set(0.0)
+                    print(f"[INFO] Muted the task's own light at {path} for a comparable exposure")
+
         light_cfg = sim_utils.DomeLightCfg(intensity=1200.0, color=(0.55, 0.70, 0.88))
         light_cfg.func("/World/RecordLight", light_cfg)
         water_cfg = sim_utils.CuboidCfg(
@@ -218,6 +230,11 @@ def main(env_cfg, experiment_cfg):
 
     for step in range(args_cli.video_length):
         with torch.inference_mode():
+            # the index is read before stepping: the env advances wp_idx in the same
+            # step in which the waypoint is scored, so measuring afterwards against the
+            # *new* target would never observe an approach inside the goal radius
+            wp_before = int(base.wp_idx[0].item())
+
             outputs = runner.agent.act(observations, timestep=0, timesteps=0)
             actions = outputs[0]
             info = outputs[-1] if isinstance(outputs[-1], dict) else {}
@@ -239,7 +256,7 @@ def main(env_cfg, experiment_cfg):
             )
 
             pos = base.robot.data.root_pos_w[0, :2]
-            target = base.waypoint_pos[0, int(base.wp_idx[0].item()), :2]
+            target = base.waypoint_pos[0, wp_before, :2]
             min_dist = min(min_dist, float(torch.norm(pos - target).item()))
 
         writer.append_data(_grab_frame())

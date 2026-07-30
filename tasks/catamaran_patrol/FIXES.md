@@ -84,6 +84,26 @@ inside the current lap and stays in [0, 1).
 - NOTES.md said the waypoint radius jitter is +/-40%; the code samples
   `0.8..1.2 x patrol_radius`, i.e. +/-20%.
 
+## Result after the fixes
+
+Retrained on this branch with **Arif's own PPO configuration unchanged**
+(`skrl_ppo_cfg.yaml`, seed 42, 64 envs) — only the environment was fixed.
+4000 iterations = 256k vector steps, about 1 h on an RTX 5080. Episode return
+rose from 1520 to 6065 and was still climbing at the end.
+
+Same standardized evaluation, 64 envs x 6000 steps, evaluation seed 2026:
+
+| metric | before (`3f2d799`) | after |
+|---|---|---|
+| targets_per_episode | 0.000 | **21.469** |
+| total targets | 0 | 1145 |
+| mean speed | 4.400 m/s | 3.600 m/s |
+| out-of-bounds per episode | 0.000 | 0.000 |
+
+The P1 bar is 2.0 targets/episode averaged over three seeds and a mean speed
+above 1 m/s; seed 42 alone clears both by a wide margin. Seeds 123 and 456
+still need to be run before P1 can be signed off.
+
 ## Still open, for Arif
 
 - Where does `1.35 tgt/ep` come from? It is not the deterministic

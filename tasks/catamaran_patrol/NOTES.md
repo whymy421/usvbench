@@ -29,13 +29,14 @@ The circuit loops, so values above N_WAYPOINTS=4 are possible.
 Same counter as boat/ROV tasks (via `self.reached_count`).
 
 ## Seed results (P1 bar: ≥2.0 tgt/ep averaged across 3 seeds)
-| Seed | Checkpoint | tgt/ep |
-|------|-----------|--------|
-| 42 | agent_1500000.pt (1.5M steps) | 1.35 |
-| 123 | not yet trained | — |
-| 456 | not yet trained | — |
+| Seed | Checkpoint | tgt/ep | source |
+|------|-----------|--------|--------|
+| 42 | agent_1500000.pt (1.5M steps), pre-fix | 1.35 reported / **0.000 measured** | reported number's origin unconfirmed; measured with `eval_benchmark.py`, 64×6000, eval seed 2026 |
+| 42 | agent_256000.pt (256k steps), post-fix | **21.469** | `eval_benchmark.py`, 64×6000, eval seed 2026 |
+| 123 | not yet trained | — | |
+| 456 | not yet trained | — | |
 
-Seed 42 is below the P1 bar. Seeds 123/456 still to run.
+Seeds 123/456 still to run before P1 can be signed off.
 
 ## Physics notes
 - Catamaran USD: `tasks/catamaran_patrol/assets/catamaran.usd (committed to branch). Set USVBENCH_ASSETS=<repo_root>/tasks/catamaran_patrol/assets before running.`
