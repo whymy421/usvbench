@@ -719,11 +719,16 @@ class HazardNavEnv(DirectRLEnv):
         # 2 m -- demos showed the policy orbiting at the rim with no incentive
         # for a decisive entry. Pulling to center stays memoryless and keeps
         # the <=1 total positive-progress ledger cap (denominator unchanged).
-        return -torch.clamp(
+        fraction = torch.clamp(
             distance / self.d0_per_env.clamp_min(1.0e-6),
             min=0.0,
             max=1.0,
         )
+        if getattr(self.cfg, "pbrs_shift_potential", False):
+            # Route fraction COVERED, in [0, 1]. The discounted shaping drift
+            # (gamma-1)*Phi is then always a cost, never a standing bonus.
+            return 1.0 - fraction
+        return -fraction
 
     def _get_rewards(self) -> torch.Tensor:
         distance = self._horizontal_distance()

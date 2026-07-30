@@ -241,6 +241,14 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # there injects a reward of 20*(d/D0) for "time ran out far from the goal".
     # Measured cost of getting this wrong: certified SR 75.8% -> 0.0%.
     pbrs_zero_at_terminal: bool = False
+    # Shift the potential to be NON-NEGATIVE (route fraction covered) instead
+    # of non-positive (distance remaining). With Phi <= 0 the discounted form
+    # pays 20*(1-gamma)*|Phi| every step for merely existing far from the goal
+    # -- 144 reward units per 7200-step episode against a progress budget of
+    # 20, which is why both discounted variants collapsed (1.6% and 4.7%
+    # against an 84.4% baseline). With Phi >= 0 the same drift term is a cost,
+    # so standing still can never be profitable.
+    pbrs_shift_potential: bool = False
 
     # --- Feasibility pooling (observation layer) -----------------------------
     # Raw ranges encode a passable gap as two nearby threats and leave the
@@ -426,3 +434,11 @@ class HazardNavV3PbrsTermEnvCfg(HazardNavV3EnvCfg):
 
     pbrs_correct: bool = True
     pbrs_zero_at_terminal: bool = True
+
+
+@configclass
+class HazardNavV3PbrsShiftEnvCfg(HazardNavV3EnvCfg):
+    """Discounted potential difference over a NON-NEGATIVE potential."""
+
+    pbrs_correct: bool = True
+    pbrs_shift_potential: bool = True
