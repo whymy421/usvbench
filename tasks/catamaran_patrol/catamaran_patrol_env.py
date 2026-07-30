@@ -1,0 +1,331 @@
+# Copyright (c) 2022-2025, USVBench Contributors.
+# SPDX-License-Identifier: BSD-3-Clause
+"""Catamaran Patrol Task — Week 3 USVBench.
+
+The agent controls a catamaran that must visit N waypoints arranged as a
+circuit, repeating the loop until the episode times out.
+
+Observations (OBS_DIM=12 default):
+  [0-1]  unit vector to current waypoint in body frame (xy)
+  [2]    distance to current waypoint (normalised)
+  [3-4]  body-frame xy velocity (normalised)
+  [5]    yaw rate (normalised)
+  [6-7]  unit vector to NEXT waypoint in body frame (look-ahead for turns)
+  [8]    patrol progress = wps_done / N_WAYPOINTS (normalised)
+  [9]    distance to next waypoint (normalised)
+  [10-11] padding zeros (or extended obs if OBS_DIM > 12)
+
+Actions [N, 2]:
+  [0]  forward thrust   ∈ [-1, 1]  → ±MAX_THRUST N along body +X
+  [1]  yaw torque       ∈ [-1, 1]  → ±MAX_TORQUE N·m around body +Z
+"""
+
+from __future__ import annotations
+import math, os
+import torch
+try:
+    import wandb as _wandb
+    _WANDB = True
+except ImportError:
+    _WANDB = False
+from isaaclab.envs import DirectRLEnv
+from isaaclab.utils.math import quat_rotate, quat_rotate_inverse
+from .catamaran_patrol_env_cfg import CatamaranPatrolEnvCfg
+
+# ── tunable via environment variables ────────────────────────────────────────
+PROGRESS_COEF = float(os.environ.get("PROGRESS_COEF", "3.0"))   # 3× stronger navigation signal
+REACH_BONUS   = float(os.environ.get("REACH_BONUS",   "150.0")) # 3× bigger waypoint bonus
+SPEED_COUPLE  = int(  os.environ.get("SPEED_COUPLE",  "1"))
+OBS_DIM       = int(  os.environ.get("OBS_DIM",       "12"))
+N_WAYPOINTS   = int(  os.environ.get("N_WAYPOINTS",   "4"))
+
+MAX_THRUST = 200.0   # N  (catamaran is heavier than boat)
+MAX_TORQUE = 100.0   # N·m
+FWD_X      = 1       # body +X = bow
+
+
+class CatamaranPatrolEnv(DirectRLEnv):
+    cfg: CatamaranPatrolEnvCfg
+
+    def __init__(self, cfg: CatamaranPatrolEnvCfg, render_mode=None, **kwargs):
+        super().__init__(cfg, render_mode, **kwargs)
+        N = self.num_envs
+        D = self.device
+
+        # Patrol state
+        self.waypoint_pos  = torch.zeros(N, N_WAYPOINTS, 3, device=D)
+        self.wp_idx        = torch.zeros(N, dtype=torch.long, device=D)
+        self.wps_done      = torch.zeros(N, device=D)
+        self.prev_dist     = torch.zeros(N, device=D)
+
+        # For eval script compatibility (same attr as boat/ROV tasks)
+        self.reached_count = 0
+
+        # Water force accumulators
+        self._water_F = torch.zeros(N, 3, device=D)
+        self._water_T = torch.zeros(N, 3, device=D)
+
+        # Env origins — scene.env_origins is None without a terrain system,
+        # so compute a grid manually from env_spacing.
+        if self.scene.env_origins is not None:
+            self._env_origins = self.scene.env_origins.clone()
+        else:
+            spacing = self.cfg.scene.env_spacing
+            num_cols = max(1, int(N ** 0.5))
+            origins = torch.zeros(N, 3, device=D)
+            for i in range(N):
+                origins[i, 0] = (i % num_cols) * spacing
+                origins[i, 1] = (i // num_cols) * spacing
+            self._env_origins = origins
+
+        print(f"[CatamaranPatrolEnv] envs={N}  N_WAYPOINTS={N_WAYPOINTS}  OBS_DIM={OBS_DIM}")
+        print(f"[CatamaranPatrolEnv] PROGRESS_COEF={PROGRESS_COEF}  REACH_BONUS={REACH_BONUS}  SPEED_COUPLE={SPEED_COUPLE}")
+
+    # ── Scene ─────────────────────────────────────────────────────────────────
+    def _setup_scene(self):
+        import isaaclab.sim as sim_utils
+
+        self.robot = self.cfg.robot_cfg.class_type(self.cfg.robot_cfg)
+
+        # Ground plane placed 50 m below water surface so it never collides
+        # with the vessel (which floats at z ≈ -0.4 m due to buoyancy).
+        # If placed at z=0 the hull clips in, friction pins the vessel, speed→0.
+        ground_cfg = sim_utils.GroundPlaneCfg()
+        ground_cfg.func("/World/GroundPlane", ground_cfg, translation=(0.0, 0.0, -50.0))
+
+        # Register with scene so it gets cloned across envs
+        self.scene.rigid_objects["robot"] = self.robot
+
+    # ── Waypoint helpers ──────────────────────────────────────────────────────
+    def _cur_wp(self) -> torch.Tensor:
+        """[N, 3] current target waypoint positions."""
+        idx = self.wp_idx.view(-1, 1, 1).expand(-1, 1, 3)
+        return self.waypoint_pos.gather(1, idx).squeeze(1)
+
+    def _nxt_wp(self) -> torch.Tensor:
+        """[N, 3] next waypoint (circular look-ahead)."""
+        nxt = (self.wp_idx + 1) % N_WAYPOINTS
+        idx = nxt.view(-1, 1, 1).expand(-1, 1, 3)
+        return self.waypoint_pos.gather(1, idx).squeeze(1)
+
+    # ── Water physics ─────────────────────────────────────────────────────────
+    def _compute_water_forces(self):
+        phys    = self.cfg.underwater_physics_cfg
+        pos     = self.robot.data.root_pos_w
+        vel_w   = self.robot.data.root_lin_vel_w
+        ang_w   = self.robot.data.root_ang_vel_w
+
+        # Buoyancy (vertical, proportional to submersion)
+        z       = pos[:, 2]
+        sub     = torch.clamp(-z / max(phys.rov_height, 1e-3), 0.0, 1.0)
+        F_buo_z = sub * phys.water_density * phys.gravity * phys.rov_volume
+
+        # Damping (switch between water/air)
+        in_water   = (z < phys.water_surface_z).float()
+        d_lin      = in_water * phys.max_linear_damping  + (1.0 - in_water) * phys.air_linear_damping
+        d_ang      = in_water * phys.max_angular_damping + (1.0 - in_water) * phys.air_angular_damping
+
+        F = -d_lin.unsqueeze(-1) * vel_w
+        F[:, 2] += F_buo_z
+        T = -d_ang.unsqueeze(-1) * ang_w
+
+        self._water_F = F
+        self._water_T = T
+
+    # ── Isaac Lab callbacks ───────────────────────────────────────────────────
+    def _pre_physics_step(self, actions: torch.Tensor):
+        self.actions = actions.clone().clamp(-1.0, 1.0)
+
+    def _apply_action(self):
+        """Called once per physics sub-step (decimation times per policy step)."""
+        self._compute_water_forces()
+
+        rot = self.robot.data.root_quat_w
+
+        # Thruster forces in body frame
+        F_body = torch.zeros_like(self._water_F)
+        T_body = torch.zeros_like(self._water_T)
+        F_body[:, 0] = FWD_X * self.actions[:, 0] * MAX_THRUST
+        T_body[:, 2] =         self.actions[:, 1] * MAX_TORQUE
+
+        # Rotate to world frame and add water forces
+        F_world = quat_rotate(rot, F_body) + self._water_F   # [N, 3]
+        T_world = quat_rotate(rot, T_body) + self._water_T   # [N, 3]
+
+        # API expects [num_envs, num_bodies, 3] — unsqueeze body dim
+        self.robot.set_external_force_and_torque(
+            F_world.unsqueeze(1), T_world.unsqueeze(1)
+        )
+
+    def _get_observations(self) -> dict:
+        pos   = self.robot.data.root_pos_w
+        rot   = self.robot.data.root_quat_w
+        vel_w = self.robot.data.root_lin_vel_w
+        ang_w = self.robot.data.root_ang_vel_w
+
+        cur_wp  = self._cur_wp()
+        nxt_wp  = self._nxt_wp()
+
+        # World-frame offsets
+        to_cur_w  = cur_wp  - pos
+        to_nxt_w  = nxt_wp  - pos
+
+        # Body-frame
+        to_cur_b  = quat_rotate_inverse(rot, to_cur_w)
+        to_nxt_b  = quat_rotate_inverse(rot, to_nxt_w)
+        vel_b     = quat_rotate_inverse(rot, vel_w)
+
+        dist_cur  = torch.norm(to_cur_b[:, :2], dim=-1, keepdim=True)
+        dist_nxt  = torch.norm(to_nxt_b[:, :2], dim=-1, keepdim=True)
+
+        dir_cur   = to_cur_b[:, :2] / (dist_cur  + 1e-6)
+        dir_nxt   = to_nxt_b[:, :2] / (dist_nxt  + 1e-6)
+
+        max_dist  = max(self.cfg.patrol_radius * 2.0, 1.0)
+        max_speed = 8.0
+        max_yaw   = 3.0
+
+        # Core 10-element obs
+        obs_core = torch.cat([
+            dir_cur,                                          # 2
+            dist_cur / max_dist,                             # 1
+            vel_b[:, :2] / max_speed,                       # 2
+            ang_w[:, 2:3] / max_yaw,                        # 1
+            dir_nxt,                                         # 2
+            self.wps_done.unsqueeze(-1) / max(N_WAYPOINTS, 1),  # 1
+            dist_nxt / max_dist,                             # 1
+        ], dim=-1)  # shape [N, 10]
+
+        # Pad or trim to OBS_DIM
+        if OBS_DIM > 10:
+            pad = torch.zeros(self.num_envs, OBS_DIM - 10, device=self.device)
+            obs = torch.cat([obs_core, pad], dim=-1)
+        else:
+            obs = obs_core[:, :OBS_DIM]
+
+        return {"policy": obs}
+
+    def _get_rewards(self) -> torch.Tensor:
+        pos   = self.robot.data.root_pos_w
+        rot   = self.robot.data.root_quat_w
+        vel_w = self.robot.data.root_lin_vel_w
+
+        cur_wp = self._cur_wp()
+        dist   = torch.norm(pos[:, :2] - cur_wp[:, :2], dim=-1)
+
+        # ── Progress reward ───────────────────────────────────────────────
+        progress = (self.prev_dist - dist) * PROGRESS_COEF
+        self.prev_dist = dist.clone()
+
+        # ── Waypoint reach bonus ──────────────────────────────────────────
+        reached = dist < self.cfg.goal_radius
+        bonus   = reached.float() * REACH_BONUS
+
+        # Advance waypoint index for envs that reached
+        if reached.any():
+            env_ids = reached.nonzero(as_tuple=False).squeeze(-1)
+            self.wp_idx[env_ids]    = (self.wp_idx[env_ids] + 1) % N_WAYPOINTS
+            self.wps_done[env_ids] += 1.0
+            self.reached_count     += int(reached.sum().item())
+            # Reset distance estimate to new waypoint
+            new_wp = self._cur_wp()
+            new_dist = torch.norm(pos[:, :2] - new_wp[:, :2], dim=-1)
+            self.prev_dist[env_ids] = new_dist[env_ids]
+
+        # ── Heading alignment reward ──────────────────────────────────────
+        # Teaches the agent to FACE the waypoint before moving.
+        # cos(angle between body +X and vector to waypoint) — max 0.5 when aligned.
+        to_wp_w  = cur_wp - pos
+        to_wp_b  = quat_rotate_inverse(rot, to_wp_w)
+        dist_xy  = torch.norm(to_wp_b[:, :2], dim=-1)
+        heading_cos = to_wp_b[:, 0] / (dist_xy + 1e-6)     # [-1, 1]
+        heading_rew = torch.clamp(heading_cos, 0.0, 1.0) * 0.5  # 0 when sideways/backwards, 0.5 when aligned
+
+        # ── Speed coupling (forward speed bonus) ─────────────────────────
+        speed_rew = torch.zeros(self.num_envs, device=self.device)
+        if SPEED_COUPLE:
+            vel_b     = quat_rotate_inverse(rot, vel_w)
+            fwd_speed = vel_b[:, 0] * FWD_X
+            speed_rew = torch.clamp(fwd_speed, 0.0, 8.0) * 0.03  # weak tie-breaker
+
+        return progress + bonus + heading_rew + speed_rew
+
+    def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+        terminated = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        truncated  = self.episode_length_buf >= self.max_episode_length
+
+        # ── Log metrics directly to wandb (same pattern as boat_calm_nav) ──────
+        if _WANDB and _wandb.run is not None:
+            pos    = self.robot.data.root_pos_w
+            vel_w  = self.robot.data.root_lin_vel_w
+            rot    = self.robot.data.root_quat_w
+            cur_wp = self._cur_wp()
+            dist   = torch.norm(pos[:, :2] - cur_wp[:, :2], dim=-1)
+            vel_b  = quat_rotate_inverse(rot, vel_w)
+            fwd_speed = vel_b[:, 0] * FWD_X
+
+            # Step-level nav metrics (every step)
+            try:
+                _wandb.log({
+                    "Nav/speed":              fwd_speed.mean().item(),
+                    "Nav/distance_to_target": dist.mean().item(),
+                    "Nav/waypoint_index":     self.wp_idx.float().mean().item(),
+                })
+            except Exception:
+                pass
+
+            # Episode-level metrics (when envs finish)
+            done = terminated | truncated
+            if done.any():
+                try:
+                    _wandb.log({
+                        "Metrics/targets_per_episode": self.wps_done[done].float().mean().item(),
+                    })
+                except Exception:
+                    pass
+
+        return terminated, truncated
+
+    def _reset_idx(self, env_ids: torch.Tensor):
+        super()._reset_idx(env_ids)
+        n = len(env_ids)
+        D = self.device
+        cfg = self.cfg
+
+        # Random heading
+        yaw = torch.rand(n, device=D) * 2.0 * math.pi
+        qw  = torch.cos(yaw * 0.5)
+        qz  = torch.sin(yaw * 0.5)
+        rot = torch.stack([qw, torch.zeros(n, device=D), torch.zeros(n, device=D), qz], dim=-1)
+
+        # Random spawn near first waypoint (placed after waypoints are generated)
+        spawn_r   = torch.rand(n, device=D) * (cfg.max_spawn_distance - cfg.min_spawn_distance) + cfg.min_spawn_distance
+        spawn_ang = torch.rand(n, device=D) * 2.0 * math.pi
+        origin    = self._env_origins[env_ids]
+        pos       = origin.clone()
+        pos[:, 0] += spawn_r * torch.cos(spawn_ang)
+        pos[:, 1] += spawn_r * torch.sin(spawn_ang)
+        pos[:, 2]  = 0.0     # water surface
+
+        self.robot.write_root_pose_to_sim(torch.cat([pos, rot], dim=-1), env_ids=env_ids)
+        self.robot.write_root_velocity_to_sim(torch.zeros(n, 6, device=D), env_ids=env_ids)
+
+        # ── Generate patrol circuit ───────────────────────────────────────
+        # N_WAYPOINTS equally spaced around a circle, rotated randomly per env
+        base_angles   = torch.arange(N_WAYPOINTS, device=D).float() / N_WAYPOINTS * 2.0 * math.pi
+        circuit_rot   = torch.rand(n, device=D) * 2.0 * math.pi                  # [n]
+        angles        = base_angles.unsqueeze(0) + circuit_rot.unsqueeze(1)       # [n, WP]
+        # Vary radius slightly so circuit isn't a perfect circle
+        r             = cfg.patrol_radius * (0.8 + 0.4 * torch.rand(n, N_WAYPOINTS, device=D))
+        wp_x          = r * torch.cos(angles) + origin[:, 0:1]
+        wp_y          = r * torch.sin(angles) + origin[:, 1:2]
+        wp_z          = torch.zeros(n, N_WAYPOINTS, device=D)
+        self.waypoint_pos[env_ids] = torch.stack([wp_x, wp_y, wp_z], dim=-1)
+
+        # Reset patrol counters
+        self.wp_idx[env_ids]   = 0
+        self.wps_done[env_ids] = 0.0
+
+        # Initial distance to first waypoint
+        wp0 = self.waypoint_pos[env_ids, 0, :]
+        self.prev_dist[env_ids] = torch.norm(pos[:, :2] - wp0[:, :2], dim=-1)
