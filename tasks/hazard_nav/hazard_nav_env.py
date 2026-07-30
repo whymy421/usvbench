@@ -1001,6 +1001,9 @@ class HazardNavEnv(DirectRLEnv):
                     level,
                     rng=self._layout_rng,
                     max_attempts=max(40, self.cfg.layout_max_attempts),
+                    neighbor_overlap_m=getattr(
+                        self.cfg, "ring_neighbor_overlap_m", None
+                    ),
                 )
             else:
                 layout = sample_layout(

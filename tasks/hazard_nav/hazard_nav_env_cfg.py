@@ -250,6 +250,11 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # so standing still can never be profitable.
     pbrs_shift_potential: bool = False
 
+    # Ring packing floor. None keeps the shipped value, whose 1.00 m surface
+    # gaps the 0.899 m hull can slip through; RING_SEALED_OVERLAP_M closes
+    # them to 0.67 m so the designed gap is the only way out.
+    ring_neighbor_overlap_m: float | None = None
+
     # --- Feasibility pooling (observation layer) -----------------------------
     # Raw ranges encode a passable gap as two nearby threats and leave the
     # policy to infer whether its own beam fits. Pooling replaces them with
@@ -442,3 +447,16 @@ class HazardNavV3PbrsShiftEnvCfg(HazardNavV3EnvCfg):
 
     pbrs_correct: bool = True
     pbrs_shift_potential: bool = True
+
+
+@configclass
+class HazardRingSealedEnvCfg(HazardRingEnvCfg):
+    """Ring whose non-gap openings are narrower than the hull.
+
+    The shipped ring builds neighbours to overlap by 0.30 m measured on the
+    INFLATED disks, leaving 2*0.65 - 0.30 = 1.00 m between physical surfaces --
+    wider than the 0.899 m beam, so the boat could leave anywhere. Verified in
+    test_ring_sealed.py: 12/30 shipped layouts leak, 0/30 sealed ones do.
+    """
+
+    ring_neighbor_overlap_m: float = 0.55

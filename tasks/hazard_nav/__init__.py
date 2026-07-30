@@ -108,3 +108,15 @@ gym.register(
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },
 )
+
+gym.register(
+    id="Isaac-USV-HazardRingSealed-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardRingSealedEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
