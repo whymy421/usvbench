@@ -1,5 +1,8 @@
 # Catamaran P1 — Branch Notes
 
+> Reviewed against commit `3f2d799`; see `FIXES.md` for what was changed and why.
+> The results table below is Arif's original one and has not reproduced yet.
+
 ## Task
 `Isaac-Catamaran-Patrol-Direct-v1`
 
@@ -7,7 +10,7 @@
 | Parameter | Value | Note |
 |-----------|-------|------|
 | N_WAYPOINTS | 4 | env var default; not overridden |
-| patrol_radius | 12.0 m | ±40% jitter per reset |
+| patrol_radius | 12.0 m | ±20% jitter per reset (code samples 0.8–1.2×) |
 | goal_radius | 3.0 m | same as BlueBoat |
 | episode_length_s | 120.0 s | |
 | OBS_DIM | 12 | default |

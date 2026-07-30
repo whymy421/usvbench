@@ -9,9 +9,9 @@ Observations (OBS_DIM=12 default):
   [0-1]  unit vector to current waypoint in body frame (xy)
   [2]    distance to current waypoint (normalised)
   [3-4]  body-frame xy velocity (normalised)
-  [5]    yaw rate (normalised)
+  [5]    body-frame yaw rate (normalised)
   [6-7]  unit vector to NEXT waypoint in body frame (look-ahead for turns)
-  [8]    patrol progress = wps_done / N_WAYPOINTS (normalised)
+  [8]    position in the circuit = wp_idx / N_WAYPOINTS, bounded to [0, 1)
   [9]    distance to next waypoint (normalised)
   [10-11] padding zeros (or extended obs if OBS_DIM > 12)
 
@@ -35,9 +35,12 @@ from .catamaran_patrol_env_cfg import CatamaranPatrolEnvCfg
 # ── tunable via environment variables ────────────────────────────────────────
 PROGRESS_COEF = float(os.environ.get("PROGRESS_COEF", "3.0"))   # 3× stronger navigation signal
 REACH_BONUS   = float(os.environ.get("REACH_BONUS",   "150.0")) # 3× bigger waypoint bonus
+HEADING_W     = float(os.environ.get("HEADING_W",     "0.5"))   # max heading reward per step
 SPEED_COUPLE  = int(  os.environ.get("SPEED_COUPLE",  "1"))
+SPEED_REF     = float(os.environ.get("SPEED_REF",     "5.0"))   # m/s, ~terminal speed at full thrust
 OBS_DIM       = int(  os.environ.get("OBS_DIM",       "12"))
 N_WAYPOINTS   = int(  os.environ.get("N_WAYPOINTS",   "4"))
+WANDB_EVERY   = int(  os.environ.get("WANDB_EVERY",   "60"))    # log every N steps, not every step
 
 MAX_THRUST = 200.0   # N  (catamaran is heavier than boat)
 MAX_TORQUE = 100.0   # N·m
@@ -60,6 +63,7 @@ class CatamaranPatrolEnv(DirectRLEnv):
 
         # For eval script compatibility (same attr as boat/ROV tasks)
         self.reached_count = 0
+        self._last_reached_mask = torch.zeros(N, dtype=torch.bool, device=D)
 
         # Water force accumulators
         self._water_F = torch.zeros(N, 3, device=D)
@@ -95,6 +99,11 @@ class CatamaranPatrolEnv(DirectRLEnv):
 
         # Register with scene so it gets cloned across envs
         self.scene.rigid_objects["robot"] = self.robot
+
+        # Without a light the scene renders black, so --video and the GUI viewport
+        # produce unusable frames. Same dome light as the boat reference task.
+        light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
+        light_cfg.func("/World/Light", light_cfg)
 
     # ── Waypoint helpers ──────────────────────────────────────────────────────
     def _cur_wp(self) -> torch.Tensor:
@@ -148,13 +157,18 @@ class CatamaranPatrolEnv(DirectRLEnv):
         F_body[:, 0] = FWD_X * self.actions[:, 0] * MAX_THRUST
         T_body[:, 2] =         self.actions[:, 1] * MAX_TORQUE
 
-        # Rotate to world frame and add water forces
+        # Rotate to world frame and add water forces (buoyancy/damping are world-frame)
         F_world = quat_rotate(rot, F_body) + self._water_F   # [N, 3]
         T_world = quat_rotate(rot, T_body) + self._water_T   # [N, 3]
 
+        # BUGFIX: set_external_force_and_torque() defaults to is_global=False, i.e. it
+        # treats the wrench as body-local and rotates it by the hull attitude again.
+        # With a world-frame wrench that applied the rotation twice: thrust pointed at
+        # 2*yaw instead of yaw, and the drag/buoyancy terms were rotated out of world
+        # frame as well. The vessel could never track a heading.
         # API expects [num_envs, num_bodies, 3] — unsqueeze body dim
         self.robot.set_external_force_and_torque(
-            F_world.unsqueeze(1), T_world.unsqueeze(1)
+            F_world.unsqueeze(1), T_world.unsqueeze(1), is_global=True
         )
 
     def _get_observations(self) -> dict:
@@ -174,6 +188,7 @@ class CatamaranPatrolEnv(DirectRLEnv):
         to_cur_b  = quat_rotate_inverse(rot, to_cur_w)
         to_nxt_b  = quat_rotate_inverse(rot, to_nxt_w)
         vel_b     = quat_rotate_inverse(rot, vel_w)
+        ang_b     = quat_rotate_inverse(rot, ang_w)
 
         dist_cur  = torch.norm(to_cur_b[:, :2], dim=-1, keepdim=True)
         dist_nxt  = torch.norm(to_nxt_b[:, :2], dim=-1, keepdim=True)
@@ -185,14 +200,20 @@ class CatamaranPatrolEnv(DirectRLEnv):
         max_speed = 8.0
         max_yaw   = 3.0
 
+        # BUGFIX: the circuit repeats, so wps_done / N_WAYPOINTS grew past 1 and kept
+        # growing for the whole episode — an unbounded, drifting observation. What the
+        # policy actually needs is where it is *inside* the current lap, which is
+        # wp_idx / N_WAYPOINTS and stays in [0, 1).
+        lap_progress = self.wp_idx.float().unsqueeze(-1) / max(N_WAYPOINTS, 1)
+
         # Core 10-element obs
         obs_core = torch.cat([
             dir_cur,                                          # 2
             dist_cur / max_dist,                             # 1
             vel_b[:, :2] / max_speed,                       # 2
-            ang_w[:, 2:3] / max_yaw,                        # 1
+            ang_b[:, 2:3] / max_yaw,                        # 1
             dir_nxt,                                         # 2
-            self.wps_done.unsqueeze(-1) / max(N_WAYPOINTS, 1),  # 1
+            lap_progress,                                    # 1
             dist_nxt / max_dist,                             # 1
         ], dim=-1)  # shape [N, 10]
 
@@ -220,6 +241,7 @@ class CatamaranPatrolEnv(DirectRLEnv):
         # ── Waypoint reach bonus ──────────────────────────────────────────
         reached = dist < self.cfg.goal_radius
         bonus   = reached.float() * REACH_BONUS
+        self._last_reached_mask = reached
 
         # Advance waypoint index for envs that reached
         if reached.any():
@@ -232,23 +254,31 @@ class CatamaranPatrolEnv(DirectRLEnv):
             new_dist = torch.norm(pos[:, :2] - new_wp[:, :2], dim=-1)
             self.prev_dist[env_ids] = new_dist[env_ids]
 
-        # ── Heading alignment reward ──────────────────────────────────────
-        # Teaches the agent to FACE the waypoint before moving.
-        # cos(angle between body +X and vector to waypoint) — max 0.5 when aligned.
+        # ── Heading alignment reward, coupled to forward speed ─────────────
+        # cos(angle between body +X and vector to waypoint), clamped to [0, 1].
         to_wp_w  = cur_wp - pos
         to_wp_b  = quat_rotate_inverse(rot, to_wp_w)
         dist_xy  = torch.norm(to_wp_b[:, :2], dim=-1)
         heading_cos = to_wp_b[:, 0] / (dist_xy + 1e-6)     # [-1, 1]
-        heading_rew = torch.clamp(heading_cos, 0.0, 1.0) * 0.5  # 0 when sideways/backwards, 0.5 when aligned
+        align       = torch.clamp(heading_cos, 0.0, 1.0)
 
-        # ── Speed coupling (forward speed bonus) ─────────────────────────
-        speed_rew = torch.zeros(self.num_envs, device=self.device)
+        vel_b     = quat_rotate_inverse(rot, vel_w)
+        fwd_speed = vel_b[:, 0] * FWD_X
+
+        # BUGFIX: previously this term paid up to 0.5 every step for merely pointing at
+        # the waypoint, and SPEED_COUPLE only *added* a separate speed bonus instead of
+        # coupling the two. Over a 7200-step episode that is up to 3600 reward for
+        # sitting still and aiming — far more than any waypoint bonus, so the optimal
+        # policy was to stop outside the goal radius and stare at it. Multiplying by
+        # normalised forward speed pays the alignment only while actually closing in,
+        # which is the same recipe as the boat reference task (V23).
+        speed_frac = torch.clamp(fwd_speed / SPEED_REF, 0.0, 1.0)
         if SPEED_COUPLE:
-            vel_b     = quat_rotate_inverse(rot, vel_w)
-            fwd_speed = vel_b[:, 0] * FWD_X
-            speed_rew = torch.clamp(fwd_speed, 0.0, 8.0) * 0.03  # weak tie-breaker
+            heading_rew = align * speed_frac * HEADING_W
+        else:
+            heading_rew = align * HEADING_W
 
-        return progress + bonus + heading_rew + speed_rew
+        return progress + bonus + heading_rew
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         terminated = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
@@ -256,23 +286,26 @@ class CatamaranPatrolEnv(DirectRLEnv):
 
         # ── Log metrics directly to wandb (same pattern as boat_calm_nav) ──────
         if _WANDB and _wandb.run is not None:
-            pos    = self.robot.data.root_pos_w
-            vel_w  = self.robot.data.root_lin_vel_w
-            rot    = self.robot.data.root_quat_w
-            cur_wp = self._cur_wp()
-            dist   = torch.norm(pos[:, :2] - cur_wp[:, :2], dim=-1)
-            vel_b  = quat_rotate_inverse(rot, vel_w)
-            fwd_speed = vel_b[:, 0] * FWD_X
+            # Nav metrics were logged on every one of the 60 control steps per second,
+            # which dominated the step time and flooded the run. Once per second of
+            # simulated time is enough to read the curves.
+            if self.common_step_counter % max(WANDB_EVERY, 1) == 0:
+                pos    = self.robot.data.root_pos_w
+                vel_w  = self.robot.data.root_lin_vel_w
+                rot    = self.robot.data.root_quat_w
+                cur_wp = self._cur_wp()
+                dist   = torch.norm(pos[:, :2] - cur_wp[:, :2], dim=-1)
+                vel_b  = quat_rotate_inverse(rot, vel_w)
+                fwd_speed = vel_b[:, 0] * FWD_X
 
-            # Step-level nav metrics (every step)
-            try:
-                _wandb.log({
-                    "Nav/speed":              fwd_speed.mean().item(),
-                    "Nav/distance_to_target": dist.mean().item(),
-                    "Nav/waypoint_index":     self.wp_idx.float().mean().item(),
-                })
-            except Exception:
-                pass
+                try:
+                    _wandb.log({
+                        "Nav/speed":              fwd_speed.mean().item(),
+                        "Nav/distance_to_target": dist.mean().item(),
+                        "Nav/waypoint_index":     self.wp_idx.float().mean().item(),
+                    })
+                except Exception:
+                    pass
 
             # Episode-level metrics (when envs finish)
             done = terminated | truncated
@@ -315,7 +348,7 @@ class CatamaranPatrolEnv(DirectRLEnv):
         base_angles   = torch.arange(N_WAYPOINTS, device=D).float() / N_WAYPOINTS * 2.0 * math.pi
         circuit_rot   = torch.rand(n, device=D) * 2.0 * math.pi                  # [n]
         angles        = base_angles.unsqueeze(0) + circuit_rot.unsqueeze(1)       # [n, WP]
-        # Vary radius slightly so circuit isn't a perfect circle
+        # Vary radius slightly so circuit isn't a perfect circle (+/-20% jitter)
         r             = cfg.patrol_radius * (0.8 + 0.4 * torch.rand(n, N_WAYPOINTS, device=D))
         wp_x          = r * torch.cos(angles) + origin[:, 0:1]
         wp_y          = r * torch.sin(angles) + origin[:, 1:2]

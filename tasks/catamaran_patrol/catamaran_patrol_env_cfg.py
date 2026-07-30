@@ -20,8 +20,13 @@ CATAMARAN_CFG = RigidObjectCfg(
         usd_path=_os.path.join(_ASSET_DIR, "catamaran.usd"),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
-            max_linear_velocity=8.0,
-            max_angular_velocity=5.0,
+            max_linear_velocity=8.0,   # m/s
+            # BUGFIX: this field is in DEGREES per second, not rad/s. At 5.0 the hull was
+            # capped at 0.087 rad/s, i.e. a 49 m turning circle at cruise speed, while the
+            # patrol circuit has a 12 m radius and a 3 m goal — the task was not physically
+            # solvable. MAX_TORQUE=100 N.m against angular damping 40 implies a design turn
+            # rate of ~2.5 rad/s, so the cap simply must not be the binding constraint.
+            max_angular_velocity=90.0,  # deg/s (~1.57 rad/s)
             max_depenetration_velocity=1.0,
             disable_gravity=False,
             linear_damping=0.0,   # applied manually in env
@@ -70,7 +75,7 @@ class CatamaranPatrolEnvCfg(DirectRLEnvCfg):
     decimation: int = 2
     episode_length_s: float = 120.0          # 2 min — shorter episodes → more resets → faster learning
     action_space: int = 2
-    observation_space: int = int(__import__('os').environ.get('OBS_DIM', '12'))
+    observation_space: int = int(_os.environ.get("OBS_DIM", "12"))
     state_space: int = 0
 
     # Patrol geometry — smaller circuit for faster early learning
