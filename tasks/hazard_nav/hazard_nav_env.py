@@ -22,6 +22,7 @@ from isaaclab.envs import DirectRLEnv
 from .._shared.obs_superset import SPEED_SCALE_MPS
 from .._shared.restoring import restoring_torque_body
 from .._shared.vehicles import get_vehicle
+from .._shared.waves import make_wave_field
 from ..docking.curriculum import DockingCurriculum
 from .hazard_geometry import analytic_min_clearance, ray_circle_ranges, sample_layout
 from .hazard_nav_env_cfg import HazardNavEnvCfg
@@ -55,6 +56,11 @@ class HazardNavEnv(DirectRLEnv):
         super().__init__(cfg, render_mode, **kwargs)
 
         self.control_step_s = self.cfg.sim.dt * self.cfg.decimation
+        self.wave_field = make_wave_field(
+            self.cfg.wave, self.num_envs, self.device
+        )
+        self._wave_active = str(self.cfg.wave.mode).lower() != "calm"
+        self.wave_elevation = torch.zeros(self.num_envs, device=self.device)
         self.goal_radius = float(self.cfg.goal_radius)
         self.target_pos = self.scene.env_origins[:, :2].clone()
         self.d0_per_env = torch.ones(self.num_envs, device=self.device)
@@ -404,11 +410,46 @@ class HazardNavEnv(DirectRLEnv):
     def _root_quat(self) -> torch.Tensor:
         return self.robot.data.root_link_quat_w
 
+    def _sim_time_s(self) -> float:
+        """Absolute sim time. Waves are a world field, not a per-env clock."""
+        current_time = getattr(self.sim, "current_time", None)
+        if current_time is not None:
+            return float(current_time)
+        return float(self.common_step_counter) * self.control_step_s
+
+    def _update_wave_state(self) -> torch.Tensor | None:
+        """Refresh cached elevation; return the surface normal, or None if calm.
+
+        Called once per ``_apply_action`` so buoyancy and restoring see the
+        same surface within a substep.
+        """
+        if not self._wave_active:
+            return None
+        t = self._sim_time_s()
+        positions = self.robot.data.root_pos_w
+        x = positions[:, 0]
+        y = positions[:, 1]
+        self.wave_elevation = self.wave_field.elevation(t, x, y)
+
+        scale = float(self.cfg.wave.slope_torque_scale)
+        if scale <= 0.0:
+            return None
+        max_slope = float(self.cfg.wave.max_slope)
+        slope = torch.clamp(
+            self.wave_field.slope(t, x, y) * scale, min=-max_slope, max=max_slope
+        )
+        normal = torch.cat(
+            (-slope, torch.ones_like(slope[:, :1])), dim=-1
+        )
+        return normal / torch.norm(normal, dim=-1, keepdim=True).clamp(min=1e-6)
+
     def _compute_buoyancy_forces(self) -> tuple[torch.Tensor, torch.Tensor]:
         positions = self.robot.data.root_pos_w
         orientations = self._root_quat()
         center_of_h = self.physics_cfg.rov_height / 2.0
-        depth = self.physics_cfg.water_surface_z - positions[:, 2]
+        depth = (
+            self.physics_cfg.water_surface_z + self.wave_elevation
+        ) - positions[:, 2]
         submerged_ratio = torch.clamp(
             (depth + center_of_h) / self.physics_cfg.rov_height,
             min=0.0,
@@ -436,6 +477,7 @@ class HazardNavEnv(DirectRLEnv):
         num_bodies = self.robot.num_bodies
         forces = torch.zeros((self.num_envs, num_bodies, 3), device=self.device)
         torques = torch.zeros((self.num_envs, num_bodies, 3), device=self.device)
+        wave_up = self._update_wave_state()
 
         thrust_action = self.actions[:, 0]
         thrust = torch.where(
@@ -503,9 +545,14 @@ class HazardNavEnv(DirectRLEnv):
             up_body_world = math_utils.quat_apply(
                 quat, self.up_dir.expand(self.num_envs, 3)
             )
-            tilt_axis = torch.stack(
-                (up_body_world[:, 1], -up_body_world[:, 0]), dim=-1
-            )
+            if wave_up is None:
+                tilt_axis = torch.stack(
+                    (up_body_world[:, 1], -up_body_world[:, 0]), dim=-1
+                )
+            else:
+                # Same restoring couple u x n, with the wave normal replacing
+                # global up; reduces to the expression above when n = e_z.
+                tilt_axis = torch.cross(up_body_world, wave_up, dim=-1)[:, :2]
             torque_world[:, :2] += (
                 self.physics_cfg.restoring_stiffness_roll * tilt_axis
             )
@@ -514,6 +561,7 @@ class HazardNavEnv(DirectRLEnv):
                 quat,
                 self.physics_cfg.restoring_stiffness_roll,
                 self.physics_cfg.restoring_stiffness_pitch,
+                up_world=wave_up,
             )
 
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_world)
@@ -850,6 +898,12 @@ class HazardNavEnv(DirectRLEnv):
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         env_ids = torch.as_tensor(env_ids, device=self.device, dtype=torch.long)
+
+        # A fresh episode gets a fresh sea state, so a seed's difficulty is not
+        # decided once at startup and then frozen for the whole run.
+        if self._wave_active:
+            self.wave_field.randomize(env_ids)
+            self.wave_elevation[env_ids] = 0.0
 
         completed_ids = env_ids[self._episode_finished[env_ids]]
         if len(completed_ids) > 0:

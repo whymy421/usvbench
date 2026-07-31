@@ -22,7 +22,10 @@ def _quat_apply_inverse(quat: torch.Tensor, vector: torch.Tensor) -> torch.Tenso
 
 
 def restoring_torque_body(
-    quat: torch.Tensor, k_roll: float, k_pitch: float
+    quat: torch.Tensor,
+    k_roll: float,
+    k_pitch: float,
+    up_world: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Return anisotropic roll/pitch restoring torque in the body frame.
 
@@ -30,9 +33,17 @@ def restoring_torque_body(
     If ``b`` is world-up expressed in body coordinates, the restoring direction
     is ``e3_body x b = (-b_y, b_x, 0)``. This is the restoring-sign negative of
     ``b x e3_body`` and exactly matches V9c when both stiffnesses are equal.
+
+    ``up_world`` overrides the direction the hull is restored toward with a
+    per-env unit vector, which is how a wave field tilts the equilibrium to the
+    local surface normal. Omitting it restores toward global up, the calm-water
+    behaviour every pre-wave checkpoint was trained under.
     """
-    world_up = torch.zeros_like(quat[..., 1:])
-    world_up[..., 2] = 1.0
+    if up_world is None:
+        world_up = torch.zeros_like(quat[..., 1:])
+        world_up[..., 2] = 1.0
+    else:
+        world_up = up_world
     up_world_in_body = _quat_apply_inverse(quat, world_up)
 
     torque = torch.zeros_like(up_world_in_body)
