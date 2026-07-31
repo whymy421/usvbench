@@ -49,6 +49,7 @@ import gymnasium as gym
 import imageio
 import omni.usd
 import torch
+from pxr import Gf
 from skrl.utils.runner.torch import Runner
 
 import isaaclab.sim as sim_utils
@@ -59,6 +60,9 @@ import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
 agent_cfg_entry_point = "skrl_cfg_entry_point"
+
+RECORD_LIGHT_INTENSITY = 1200.0
+RECORD_LIGHT_COLOR = (0.55, 0.70, 0.88)
 
 
 def _load_checkpoint_compat(agent, checkpoint_path):
@@ -161,19 +165,28 @@ def main(env_cfg, experiment_cfg):
     # Lighting and a visual water sheet are added from here, so that a task without
     # its own dome light still renders and the vessel has a horizon to move against.
     try:
-        # A task may or may not create its own light. Mute it and always light the
-        # scene from here, so clips recorded from different branches are comparable.
+        # A task may or may not create its own dome light, and the renderer only honours
+        # one of them, so adding a second is not enough to control the exposure. Retune
+        # the existing light if there is one, otherwise add ours — either way both
+        # branches are recorded under the same lighting.
         stage = omni.usd.get_context().get_stage()
-        for path in ("/World/Light", "/World/DomeLight"):
-            prim = stage.GetPrimAtPath(path)
-            if prim.IsValid():
-                intensity = prim.GetAttribute("inputs:intensity")
-                if intensity:
-                    intensity.Set(0.0)
-                    print(f"[INFO] Muted the task's own light at {path} for a comparable exposure")
-
-        light_cfg = sim_utils.DomeLightCfg(intensity=1200.0, color=(0.55, 0.70, 0.88))
-        light_cfg.func("/World/RecordLight", light_cfg)
+        existing = next(
+            (
+                stage.GetPrimAtPath(path)
+                for path in ("/World/Light", "/World/DomeLight")
+                if stage.GetPrimAtPath(path).IsValid()
+            ),
+            None,
+        )
+        if existing is not None:
+            existing.GetAttribute("inputs:intensity").Set(RECORD_LIGHT_INTENSITY)
+            color = existing.GetAttribute("inputs:color")
+            if color:
+                color.Set(Gf.Vec3f(*RECORD_LIGHT_COLOR))
+            print(f"[INFO] Retuned the task's own light at {existing.GetPath()} to the recording exposure")
+        else:
+            light_cfg = sim_utils.DomeLightCfg(intensity=RECORD_LIGHT_INTENSITY, color=RECORD_LIGHT_COLOR)
+            light_cfg.func("/World/RecordLight", light_cfg)
         water_cfg = sim_utils.CuboidCfg(
             size=(600.0, 600.0, 0.10),
             visual_material=sim_utils.PreviewSurfaceCfg(
