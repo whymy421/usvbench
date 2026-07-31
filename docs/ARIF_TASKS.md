@@ -108,11 +108,18 @@ single-target with a waypoint sequence → reward fast transit + waypoint reach 
 
 **Success criteria**:
 - Physics stable (floats, doesn't sink/fly/NaN)
-- Mean speed > 1.0 m/s
-- `targets_per_episode` ≥ 2.0 averaged over the 3 seeds, on the deterministic eval
-  (same metric and command as the reference tasks — cumulative waypoints reached per
-  120 s episode, so a repeating circuit can score above the number of waypoints in a lap)
 - Public wandb runs + PR with baseline numbers
+- Mean speed: **TBD** — see below
+- `targets_per_episode` averaged over the 3 seeds: **TBD** — see below
+
+> ⚠️ **The two numeric bars are deliberately not filled in.** The old ones (2.0 tgt/ep,
+> mean speed > 1.0 m/s) were calibrated against reference baselines that were roughly 5x
+> higher than they are now, before the realistic-dynamics merge. Any number written here
+> today would be guesswork, and a fabricated bar is worse than no bar — it gets optimised
+> against. They will be set from measurement once the catamaran is ported onto the same
+> damping and actuator model as the reference tasks, using the same proportion to the
+> reference score that the P0 bars use (~80%). Ping me when the port is done and send the
+> deterministic eval number; I will fix the bars then.
 
 ---
 
@@ -138,6 +145,21 @@ lateral deviation from the channel + bonus on entering the circle → longer epi
 ---
 
 ## Physics cheat sheet
+
+> ⚠️ **Obsolete as of the 2026-07-31 realistic-dynamics merge — do not copy these
+> numbers.** Every value below is expressed in the old physics framework: a single
+> isotropic `linear_damping` / `angular_damping` pair, PhysX-native damping, and hardcoded
+> thrust constants. That framework no longer exists on `main`. The reference tasks now use
+> per-DOF linear+quadratic damping with actuator limits in the cfg, and terminal speeds
+> that emerge from the force balance rather than from engine caps.
+>
+> Use `tasks/boat_calm_nav/my_first_task_env_cfg.py` as the template instead: it is a
+> surface vessel with the same structure, and its coefficients are Froude-scaled from the
+> VRX WAM-V with the derivation written down in the docstring. Scale from there for your
+> hull, state the scaling you used in your NOTES.md, and check the terminal surge and yaw
+> rates that come out are the ones you intend.
+>
+> The block below is kept only to show the rough size of each quantity.
 
 Starting points — tune if the vessel sinks, flies, or won't accelerate.
 

@@ -46,10 +46,15 @@ python scripts/eval_benchmark.py --task <task-id> --checkpoint <shipped .pt> \
 
 The shipped boat reference is the **V26 speed-coupled** reward
 (`tasks/boat_calm_nav/STARTER_TASK.md`). An experimental potential-based
-**distance-progress** reward (`PROGRESS_COEF`, default off) was tried — it lifted a
-from-scratch run 1.05 → 3.24 but scored *below* the V26 reference on the old physics, so
-it stays an opt-in experiment, not the baseline. Worth re-checking now that the physics
-has changed.
+**distance-progress** reward (`PROGRESS_COEF`, default off) scored below the V26
+reference on the pre-merge physics, so it stays an opt-in experiment, not the baseline.
+No figures are quoted for it here because it has not been re-measured since the merge.
+
+> **Rule for this repo: don't write down a number you cannot point at a measurement for.**
+> Several documents used to carry reward-variant scores, P0/P1 bars and vessel-tuning
+> constants inherited from the pre-merge physics. Where those could not be re-measured
+> today they have been removed or marked TBD rather than carried forward, because a stale
+> figure that looks precise is worse than an absent one — people optimise against it.
 
 > The reward recipes (ROV E7, boat V26) and the 3000-iteration budget were both tuned
 > against the old physics. Both runs above plateau by the end — the boat's episode return
