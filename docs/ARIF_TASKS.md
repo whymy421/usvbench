@@ -1,7 +1,7 @@
 # USVBench — Arif's Task Plan (week-by-week)
 
 > **From**: Yutong (PhD, UCL Mech Eng) · **To**: Arif
-> **Updated**: 2026-06-11 · **Duration**: ~13 weeks + 1 buffer
+> **Updated**: 2026-07-31 · **Duration**: ~13 weeks + 1 buffer
 > **Authorship**: complete P0+P1+P2 with merged PRs and 3-seed baselines → **second author on the USVBench paper** (target NeurIPS Datasets & Benchmarks 2026).
 
 ---
@@ -30,12 +30,12 @@ with what I'm building. The examples are a default, not a requirement.
 |--------|------|-------|--------|
 | ROV | calm nav | Yutong | ✅ done (Task A, **4.48** tgt/ep) |
 | 5 m monohull | calm nav | Yutong | ✅ done (Task B, **3.75** tgt/ep) |
+| **Arif's task 1** | *e.g.* catamaran high-speed patrol | **Arif (P1)** | ⬜ TODO (your call) |
+| **Arif's task 2** | *e.g.* ~100 m ship harbor approach | **Arif (P2)** | ⬜ TODO (your call) |
 
 > Baselines are maintained in one place only: [`TASKS.md`](../TASKS.md#current-baselines).
 > Both are the deterministic `eval_benchmark.py` score of the checkpoint shipped in this
 > repo, on the realistic-dynamics physics merged 2026-07-31.
-| **Arif's task 1** | *e.g.* catamaran high-speed patrol | **Arif (P1)** | ⬜ TODO (your call) |
-| **Arif's task 2** | *e.g.* ~100 m ship harbor approach | **Arif (P2)** | ⬜ TODO (your call) |
 
 ---
 
@@ -49,7 +49,7 @@ with what I'm building. The examples are a default, not a requirement.
 | **4** | P1 | Fork `boat_calm_nav` → `catamaran_patrol`, make it **float + move** (no RL yet) | stable physics demo |
 | **5** | P1 | Single-target navigation learns on the catamaran | wandb run reaching targets |
 | **6** | P1 | Switch to **waypoint sequence** (3–5 ordered waypoints) | env + reward implemented |
-| **7** | P1 | Reward tuning for high cruise speed between waypoints | speed > 1 m/s, waypoints hit |
+| **7** | P1 | Reward tuning for high cruise speed between waypoints | waypoints hit at a steady cruise (numeric bar: see P1) |
 | **8** | P1 | **3-seed baselines + STARTER + PR** for catamaran | PR opened (catamaran done) |
 | **9** | P2 | Get a **cruise-ship USD**, physics stable at mass ≈ 10 t (no NaN) | float demo, no blow-up |
 | **10** | P2 | Fork → `cruise_docking`, ship **moves + turns** under scaled thrust | stable moving demo |
@@ -196,15 +196,42 @@ episode_length_s = 240.0
 
 ## Important physics note (read before P1)
 
-The current physics is **not marine-grade** — it's a numerical hack so vessels float and
-move (mass/volume tuned for force balance, isotropic damping, no metacentric stability or
-added mass). **Don't try to fix this** — I'm doing the proper physics refactor in parallel.
-For now: just get each vessel to float, move, and learn using the hack.
+**This section changed on 2026-07-31.** It used to say the physics was a numerical hack
+and that you should not try to fix it, because a refactor was in progress. That refactor
+has landed. The reference tasks now use per-DOF linear+quadratic hydrodynamic damping
+(Froude-scaled from the VRX WAM-V coefficients), actuator limits declared in the cfg with
+actions clipped to [-1,1], and an attitude spring plus roll/pitch rate damping. Terminal
+speeds **emerge from the force balance** — the engine velocity caps are set deliberately
+non-binding and must never be what decides how your vessel moves.
 
-**Axis trap I hit**: exported hulls often don't match Isaac's axis convention. Our
-`boat_calm_nav` has `body-X = stern, body-Y = starboard, body-Z = up` (non-standard).
-**Always test forward-axis with a debug thrust before training a new vessel** and note it
-in the cfg.
+So the instruction is now the opposite: **build your vessel on the same model.** Use
+`tasks/boat_calm_nav/my_first_task_env_cfg.py` as the template and scale from it.
+
+### Three traps, all of which have already cost time on this project
+
+1. **Wrench frame.** `set_external_force_and_torque()` defaults to `is_global=False`, so
+   whatever you hand it is treated as body-local and rotated by the hull attitude. If you
+   compute buoyancy or drag in world coordinates and pass them straight in, they get
+   rotated twice. The error is **exactly zero at yaw = 0**, which is where every episode
+   starts, so it hides from every quick test — and grows with heading. Run
+   `scripts/check_wrench_frame.py`: it turns the hull, then thrusts, and reports whether
+   the drift depends on heading. No policy needed, about two minutes.
+
+2. **`max_angular_velocity` is in DEGREES per second**, not rad/s. Writing `5.0` meaning
+   5 rad/s gives you 0.087 rad/s, which on a 3 m/s vessel is a ~35 m turning circle. Both
+   reference tasks shipped with this for months and it was invisible because nothing
+   crashes — the vessel just quietly cannot turn. `max_linear_velocity` **is** in m/s.
+
+3. **Axis trap.** Exported hulls often don't match Isaac's axis convention, and the
+   convention is per-asset. `boat_calm_nav` has `body-X = stern, body-Y = starboard,
+   body-Z = up` (non-standard). Separately, check the *mesh* orientation as well as the
+   body axes: a hull authored Y-up and converted without compensation renders lying on its
+   side and carries the wrong inertia about the vertical. **Always test the forward axis
+   with a debug thrust before training a new vessel** and note it in the cfg.
+
+The common thread: none of these three raise an error. They produce a vessel that trains
+to a plateau and looks merely mediocre. Before you spend an hour on a training run, spend
+two minutes confirming the vehicle can physically do the task.
 
 ---
 
