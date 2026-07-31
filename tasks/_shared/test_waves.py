@@ -146,6 +146,68 @@ def test_randomize_only_touches_requested_envs() -> None:
     print("randomize: untouched envs keep their sea state")
 
 
+def test_roll_torque_follows_the_hull_not_the_world() -> None:
+    """Beam seas must roll the boat whatever heading it is on.
+
+    Guards the bug this coupling was rewritten to avoid: driving roll from a
+    mean-direction magnitude about a fixed world axis makes the same sea roll
+    the hull on one heading and pitch it on another.
+    """
+    num_envs = 64
+    field = JONSWAPWaveField(num_envs=num_envs, device=DEVICE, direction_deg=0.0)
+    x = torch.zeros(num_envs)
+    y = torch.zeros(num_envs)
+
+    # Beam-on: bow along +y, so a wave travelling along +x hits the beam.
+    beam = torch.zeros(num_envs, 2)
+    beam[:, 1] = 1.0
+    # Head-on: bow along +x, straight into the same wave.
+    head = torch.zeros(num_envs, 2)
+    head[:, 0] = 1.0
+
+    gains = dict(heave_gain=100.0, roll_gain=200.0, drag_gain=15.0)
+    beam_roll = torch.cat(
+        [field.compute_forces(t * 0.05, x, y, beam, **gains)["roll_torque"]
+         for t in range(200)]
+    )
+    head_roll = torch.cat(
+        [field.compute_forces(t * 0.05, x, y, head, **gains)["roll_torque"]
+         for t in range(200)]
+    )
+    assert beam_roll.std() > 5.0 * head_roll.std(), (
+        beam_roll.std().item(), head_roll.std().item()
+    )
+    print(f"roll: beam-on RMS {beam_roll.std():.2f} N m vs head-on "
+          f"{head_roll.std():.2f} N m")
+
+
+def test_drag_only_opposes_a_head_sea() -> None:
+    num_envs = 32
+    field = AiryWaveField(
+        num_envs=num_envs, device=DEVICE, height_m=0.5, direction_deg=0.0
+    )
+    x = torch.zeros(num_envs)
+    y = torch.zeros(num_envs)
+    gains = dict(heave_gain=100.0, roll_gain=200.0, drag_gain=15.0)
+
+    into = torch.zeros(num_envs, 2)
+    into[:, 0] = -1.0  # bow towards -x, wave travels +x: head sea
+    following = torch.zeros(num_envs, 2)
+    following[:, 0] = 1.0  # bow with the wave
+
+    into_drag = torch.cat(
+        [field.compute_forces(t * 0.05, x, y, into, **gains)["wave_drag"]
+         for t in range(100)]
+    )
+    follow_drag = torch.cat(
+        [field.compute_forces(t * 0.05, x, y, following, **gains)["wave_drag"]
+         for t in range(100)]
+    )
+    assert into_drag.max() > 0.0
+    assert torch.equal(follow_drag, torch.zeros_like(follow_drag))
+    print(f"drag: head sea peaks at {into_drag.max():.2f} N, following sea 0")
+
+
 def test_factory_dispatch() -> None:
     cfg = SimpleNamespace(
         mode="calm",
@@ -185,5 +247,7 @@ if __name__ == "__main__":
     test_slope_matches_numerical_gradient()
     test_pinned_direction_is_shared_by_all_envs()
     test_randomize_only_touches_requested_envs()
+    test_roll_torque_follows_the_hull_not_the_world()
+    test_drag_only_opposes_a_head_sea()
     test_factory_dispatch()
     print("\nAll wave-field checks passed.")
