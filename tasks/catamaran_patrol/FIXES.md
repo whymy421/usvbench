@@ -144,7 +144,8 @@ the odd vessel out:
   the first round of fixes was still clamping the hull: the damping-limited rate is
   2.5 rad/s and 90 deg/s is 1.57.
 - **Attitude restoring spring added.** The task modelled no righting moment at all;
-  measured roll was `std 1.9 deg, max 8.3 deg`, now exactly 0.
+  measured roll was `std 1.9 deg, max 8.3 deg`. See the capsize note below — the first
+  version of this spring was itself wrong.
 - **Frame discipline matched to the boat**: body-frame terms go straight into the force
   tensor, world-frame terms accumulate separately and are rotated in once at the end,
   with the API default `is_global=False`.
@@ -169,6 +170,36 @@ but its hull is 3.0 m against the boat's 5 m — heavier and shorter — so mass
 scaling overstates its length scale. No catamaran hull-form correction is applied at all.
 This is a documented first approximation, not measured hydrodynamics.
 
+### Capsize-by-turning: the attitude spring was not yaw-invariant
+
+The first version of the attitude spring above extracted roll and pitch from the
+quaternion and applied the restoring torque about the fixed **world** X and Y axes.
+Those angles are body quantities and the axes are world axes; the two coincide only at
+yaw = 0. Once the hull turns, the roll correction is applied about what is by then partly
+the pitch axis, roll and pitch pump each other, and the vessel tumbles.
+
+Measured under the trained policy, 16 envs, 30 s:
+
+| | broken spring | fixed |
+|---|---|---|
+| cumulative roll about body X | 2.16 turns (worst env 5.04) | **0.00** |
+| roll angle range | -180.00 .. 179.99 deg | -0.06 .. 0.06 deg |
+| pitch angle range | -89.71 .. 89.78 deg | -0.00 .. 0.02 deg |
+| peak roll rate | 7.59 rad/s | 0.01 rad/s |
+
+Fix: the yaw-invariant form both reference tasks already use,
+`k * (hull_up x world_up)`, i.e. `torque_w[:, 0] += k*up_w[:, 1]`,
+`torque_w[:, 1] += -k*up_w[:, 0]`. `boat_calm_nav` carries a comment describing exactly
+this failure; the Euler-angle form is the one it had already abandoned.
+
+This bug and the double-rotated wrench (item 1) share a signature worth naming: **both are
+exactly correct at yaw = 0**, which is where every episode starts and where a zero-action
+test sits. An attitude measurement taken with zero actions showed `roll 0.000 deg` while
+the hull was tumbling under the policy. `check_catamaran_physics.py` therefore gained a
+phase 3 that drives thrust and yaw torque together, sweeping the hull through every
+heading, and fails if the tilt off vertical exceeds 5 deg. All three phases pass:
+worst tilt 0.02 deg.
+
 ## Result after the fixes
 
 Retrained on this branch with **Arif's own PPO configuration unchanged**
@@ -178,20 +209,65 @@ rose from 1520 to 6065 and was still climbing at the end.
 
 Same standardized evaluation, 64 envs x 6000 steps, evaluation seed 2026:
 
-| metric | before (`3f2d799`) | after |
-|---|---|---|
-| targets_per_episode | 0.000 | **19.406** |
-| total targets | 0 | 1035 |
-| mean speed | 4.400 m/s | 3.663 m/s |
-| out-of-bounds per episode | 0.000 | 0.000 |
+| metric | before (`3f2d799`) | after the bug fixes | after the physics port |
+|---|---|---|---|
+| targets_per_episode | 0.000 | 19.406 | **17.850** |
+| total targets | 0 | 1035 | 952 |
+| mean speed | 4.400 m/s | 3.663 m/s | 2.556 m/s |
+| out-of-bounds per episode | 0.000 | 0.000 | 0.000 |
 
-(An earlier run with items 1-4 fixed but before the hull rotation and the heave
-damping scored 21.469; the corrected hull inertia and the damped heave cost a
-little throughput and are the physically right configuration.)
+Only the last column is comparable to the rest of the benchmark; the middle column is on
+the old physics. The port lowers the score because it lowers the speed — the vessel now
+runs at the 2.5 m/s its damping model is designed for instead of 3.7 m/s, so it covers the
+circuit less often. That is the same trade the reference tasks made when they were
+re-baselined.
 
-The P1 bar is 2.0 targets/episode averaged over three seeds and a mean speed
-above 1 m/s; seed 42 alone clears both by a wide margin. Seeds 123 and 456
-still need to be run before P1 can be signed off.
+Two intermediate numbers, recorded so they are not mistaken for results: 21.469 with items
+1-4 fixed but before the hull rotation and heave damping, and 15.600 after the port but
+with the broken attitude spring, i.e. with the hull tumbling. Both are void.
+
+`mean_speed` sits slightly above the 2.500 m/s terminal surge because `eval_benchmark.py`
+measures `root_com_vel_w` while the open-loop check measures `root_lin_vel_w`. On a hull
+turning continuously at 1 rad/s those differ by the omega x r term. Different reference
+points, not inconsistent physics.
+
+The P1 bar in `docs/ARIF_TASKS.md` is still TBD — the old 2.0 was calibrated against
+reference baselines roughly 5x higher than they are now. Seeds 123 and 456 still need to
+be run before P1 can be signed off either way.
+
+### Open issue I introduced: turning radius against goal radius
+
+The mean hides a bimodal distribution. Measured over 64 envs for 30 s on the final
+checkpoint, per-env waypoint counts are:
+
+```
+count:  0   1   2   3   4   5   6
+envs:  10   0   0   0   1  24  28      (+1 above 6)
+```
+
+10 of 64 envs never score. They are **not** the original pathology — the check for "parked
+near the goal and barely moving" returns 0. All ten are running at full speed (2.61-2.64
+m/s) with a closest approach of 3.06-4.33 m against the 3.0 m goal: they are missing, not
+loitering.
+
+The mechanism most consistent with the measurement is a sizing conflict I introduced.
+Minimum turning radius at cruise is `v / yaw_rate = 2.556 / 1.0 = 2.56 m`, against a goal
+radius of 3.0 m. A loop at that radius has a 5.1 m diameter, wider than the goal, so a
+vessel that arrives at a bad angle can settle into a stable orbit just outside the success
+region. The speed-coupled heading reward pays for speed, so the policy holds full throttle
+and never slows down to tighten the turn (radius scales with v).
+
+I sized `yaw_torque_max` to match the boat reference's 2.5 m turning radius without
+checking it against *this* task's 3.0 m goal radius. Three ways out, none of them
+obviously right, and all of them change task difficulty:
+
+- raise `yaw_torque_max` so the turn tightens (but the hull is already at
+  torque-to-weight well above the boat);
+- lower `thrust_max_fwd` so cruise speed drops and the radius with it (but the task is
+  meant to be a fast patrol);
+- raise `goal_radius` above the turning diameter (but that changes the benchmark).
+
+Leaving this for Yutong to decide rather than picking one, since all three move the bar.
 
 ## Still open, for Arif
 

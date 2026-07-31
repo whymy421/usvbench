@@ -316,7 +316,7 @@ def main(env_cfg, experiment_cfg):
     print(f"  steps recorded    : {args_cli.video_length} (~{args_cli.video_length / fps:.0f} s at {fps} fps)")
     print(f"  waypoints reached : {int(base.reached_count) - reached_start}")
     print(f"  closest approach  : {min_dist:.3f} m  (success radius {goal_radius:.1f} m)")
-    print(f"  max range from the circuit centre : {max_from_centre:.1f} m  (patrol radius {circuit_r:.1f} m)")
+    print(f"  max range from the circuit centre : {max_from_centre:.1f} m  (circuit outer bound {circuit_r:.1f} m)")
     print(f"  blank-frame retries: {blank_retries}")
     print(f"  output            : {video_path}")
     print("=" * 64 + "\n")
