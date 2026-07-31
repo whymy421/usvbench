@@ -211,9 +211,9 @@ Same standardized evaluation, 64 envs x 6000 steps, evaluation seed 2026:
 
 | metric | before (`3f2d799`) | after the bug fixes | after the physics port |
 |---|---|---|---|
-| targets_per_episode | 0.000 | 19.406 | **17.850** |
-| total targets | 0 | 1035 | 952 |
-| mean speed | 4.400 m/s | 3.663 m/s | 2.556 m/s |
+| targets_per_episode | 0.000 | 19.406 | **19.669** |
+| total targets | 0 | 1035 | 1049 |
+| mean speed | 4.400 m/s | 3.663 m/s | 2.469 m/s |
 | out-of-bounds per episode | 0.000 | 0.000 | 0.000 |
 
 Only the last column is comparable to the rest of the benchmark; the middle column is on
@@ -222,20 +222,69 @@ runs at the 2.5 m/s its damping model is designed for instead of 3.7 m/s, so it 
 circuit less often. That is the same trade the reference tasks made when they were
 re-baselined.
 
-Two intermediate numbers, recorded so they are not mistaken for results: 21.469 with items
-1-4 fixed but before the hull rotation and heave damping, and 15.600 after the port but
-with the broken attitude spring, i.e. with the hull tumbling. Both are void.
+Three intermediate numbers, recorded so they are not mistaken for results: 21.469 with
+items 1-4 fixed but before the hull rotation and heave damping; 15.600 after the port but
+with the broken attitude spring, i.e. with the hull tumbling; and 17.850 after the spring
+was fixed but with the hull still skating sideways through its turns. All three are void.
 
-`mean_speed` sits slightly above the 2.500 m/s terminal surge because `eval_benchmark.py`
-measures `root_com_vel_w` while the open-loop check measures `root_lin_vel_w`. On a hull
-turning continuously at 1 rad/s those differ by the omega x r term. Different reference
-points, not inconsistent physics.
+The final figure exceeds the 19.406 measured on the old physics despite a 1.2 m/s lower
+cruise speed, because the hull now carves its turns instead of sliding through them.
+
+`mean_speed` is measured by `eval_benchmark.py` as `root_com_vel_w` while the open-loop
+check measures `root_lin_vel_w`; on a turning hull those differ by the omega x r term, so
+the two are not expected to agree exactly.
 
 The P1 bar in `docs/ARIF_TASKS.md` is still TBD — the old 2.0 was calibrated against
 reference baselines roughly 5x higher than they are now. Seeds 123 and 456 still need to
 be run before P1 can be signed off either way.
 
-### Open issue I introduced: turning radius against goal radius
+### Sway damping was the wrong way round (found by watching the vessel)
+
+Reported symptom: the hull fishtails around the waypoint, gets half its length inside the
+goal without the reach test firing, and circles three or four times. Measured on the
+then-current checkpoint, 64 envs, 30 s:
+
+| | measured | a displacement hull in a steady turn |
+|---|---|---|
+| drift angle, velocity vs bow | mean 17.4 deg, p95 35.0 | 5-10 deg |
+| sway speed | mean 0.76, peak 1.53 m/s | far lower |
+| surge speed | 2.37 m/s | |
+| time spent turning >0.5 rad/s | 75% | |
+
+The hull was skating, not carving. Cause: `sway_quad_damping` was 70 against
+`surge_quad_damping` 110, i.e. the model resisted sideways motion *less* than forward
+motion. That is unphysical for any hull — the lateral underwater area is several times
+the frontal area and meets the flow bluff-on. It came straight from the Froude-scaled VRX
+coefficients (`yVV=100` vs `xUU=150`), and the port had recorded "no catamaran hull-form
+correction is applied" as an accepted approximation. It was not a benign one.
+
+Fix: the standard crossflow-drag estimate for the sway quadratic term,
+`0.5 * rho * Cd * A_lateral` with `Cd = 1.0` and `A_lateral = L * T = 3.0 m x 0.400 m`
+(the measured equilibrium draft) `= 1.20 m^2`, giving **600**. Sway/surge quadratic is
+then 5.5, inside the 3-10 band real hulls sit in.
+
+What makes this specific to sway rather than a problem with the scaling as a whole is the
+same method applied to the other two axes:
+
+| axis | crossflow estimate | value in use | ratio |
+|---|---|---|---|
+| surge | 48 | 110 | 0.4x — same order, and *lower*, so the method is not inflating everything |
+| yaw | 506 | 355 | 1.4x — inside the model's uncertainty |
+| **sway** | **600** | **70** | **8.6x** — the outlier |
+
+Yaw is deliberately left alone: at 1.4x it is not clearly wrong, and raising it would move
+the terminal yaw rate and hence the turning radius, which is a separate open decision.
+
+After the fix and a retrain, drift angle mean 17.4 -> **7.2 deg** (p95 35.0 -> 15.0), sway
+peak 1.53 -> **0.64 m/s**, time turning hard 75% -> 36%. The straight-line and pure-turn
+design points are unchanged, since sway does not enter either balance: phases 1-3 of the
+physics check still give 2.500 m/s, 1.000 rad/s, 0.02 deg tilt.
+
+A tail remains: max drift angle is 89.3 deg against a p95 of 15. Those are transients at
+low speed, where a small sway velocity gives a large angle; the p95 is the number that
+describes the steady behaviour.
+
+### Resolved by the sway fix: turning radius against goal radius
 
 The mean hides a bimodal distribution. Measured over 64 envs for 30 s on the final
 checkpoint, per-env waypoint counts are:
@@ -249,6 +298,13 @@ envs:  10   0   0   0   1  24  28      (+1 above 6)
 near the goal and barely moving" returns 0. All ten are running at full speed (2.61-2.64
 m/s) with a closest approach of 3.06-4.33 m against the 3.0 m goal: they are missing, not
 loitering.
+
+**This resolved itself when the sway damping was fixed above.** Once the hull carves its
+turns instead of skating through them, the effective turn radius drops to the kinematic
+value and every env scores. Re-measured after the fix: 64/64 envs score, minimum 3
+waypoints per env in 30 s, distribution `0 0 0 0 1 20 40 3`. The three ways out listed
+below are therefore no longer needed — recorded because the reasoning about turning radius
+versus goal radius still applies if the actuator sizing is ever changed.
 
 The mechanism most consistent with the measurement is a sizing conflict I introduced.
 Minimum turning radius at cruise is `v / yaw_rate = 2.556 / 1.0 = 2.56 m`, against a goal

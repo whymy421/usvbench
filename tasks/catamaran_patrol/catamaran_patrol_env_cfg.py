@@ -75,7 +75,25 @@ class UnderwaterPhysicsCfg:
     surge_lin_damping: float = 65.0    # N·s/m    (body-X, along the hulls)
     surge_quad_damping: float = 110.0  # N·s²/m²
     sway_lin_damping: float = 65.0     # N·s/m    (body-Y)
-    sway_quad_damping: float = 70.0    # N·s²/m²
+    # NOT the Froude-scaled value (70). The VRX coefficients give this hull less
+    # resistance sideways than forwards, which is unphysical for any displacement hull:
+    # the lateral underwater area is several times the frontal area and it meets the flow
+    # bluff-on. Left at 70 the vessel skated through its turns — measured drift angle
+    # between velocity and bow averaged 17.4 deg with a p95 of 35 deg, and sway speed
+    # reached 1.53 m/s against a 2.37 m/s surge. A hull in a steady turn sits near 5-10.
+    #
+    # Replaced with the standard crossflow-drag estimate, 0.5*rho*Cd*A_lateral with
+    # Cd = 1.0 and A_lateral = L*T = 3.0 m x 0.400 m draft (the measured equilibrium
+    # draft) = 1.20 m^2, giving 600. That puts sway/surge quadratic at 5.5, inside the
+    # 3-10 band real hulls sit in.
+    #
+    # The same method applied to the other two axes is what says the problem is specific
+    # to sway rather than the scaling as a whole: it gives 48 for surge against the 110
+    # in use (same order, and lower, so the method is not simply inflating everything)
+    # and 506 for yaw against 355 (a factor of 1.4, inside the model's uncertainty).
+    # Yaw is therefore left alone — raising it would move the terminal yaw rate and hence
+    # the turning radius, which is the open sizing decision documented in FIXES.md.
+    sway_quad_damping: float = 600.0   # N·s²/m²  crossflow, not Froude-scaled
     heave_damping: float = 330.0       # N·s/m    (zeta = 0.28 against the buoyancy spring)
     yaw_lin_damping: float = 385.0     # N·m·s/rad
     yaw_quad_damping: float = 355.0    # N·m·s²/rad²
