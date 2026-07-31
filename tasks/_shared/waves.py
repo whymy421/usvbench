@@ -45,6 +45,93 @@ class WaveField:
         """Surface gradient ``(deta/dx, deta/dy)``, shape ``(num_envs, 2)``."""
         raise NotImplementedError
 
+    def lateral_slope(
+        self, t: float, x: torch.Tensor, y: torch.Tensor, sideways: torch.Tensor
+    ) -> torch.Tensor:
+        """Surface slope along the hull's beam direction, shape ``(num_envs,)``.
+
+        This is what tilts a hull into roll, and it is deliberately not the
+        along-propagation slope: each spectral component's own direction is
+        projected onto ``sideways`` before summing, so components arriving from
+        different bearings contribute with the right sign.
+        """
+        raise NotImplementedError
+
+    def vertical_velocity(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        """Surface vertical velocity ``deta/dt``, shape ``(num_envs,)``."""
+        raise NotImplementedError
+
+    @property
+    def mean_direction(self) -> torch.Tensor:
+        """Per-env mean propagation direction as a unit ``(num_envs, 2)``."""
+        raise NotImplementedError
+
+    def elevation_field(
+        self, t: float, xs: torch.Tensor, ys: torch.Tensor, env_index: int = 0
+    ) -> torch.Tensor:
+        """Elevation over an arbitrary point cloud for one env's sea state.
+
+        ``elevation`` evaluates one point per env, which is what the physics
+        needs. Rendering needs the opposite: many points sharing a single env's
+        phases and directions, so the water surface drawn on screen is the same
+        surface the boat is feeling.
+        """
+        raise NotImplementedError
+
+    def compute_forces(
+        self,
+        t: float,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        forward_2d: torch.Tensor,
+        heave_gain: float,
+        roll_gain: float,
+        drag_gain: float,
+    ) -> dict[str, torch.Tensor]:
+        """Wave loads, matching the E7/E11 plant (``my_first_task_e11``).
+
+            heave_force = eta * heave_gain                       (world +z)
+            roll_torque = lateral_slope * roll_gain              (body roll axis)
+            wave_drag   = max(-frontal_exposure, 0) * |eta| * drag_gain
+
+        Deliberately follows E11 rather than ``boat_calm_nav``: roll is driven
+        by the signed beam-direction slope and applied about the hull's own
+        axis, where boat_calm_nav uses the along-propagation slope scaled by a
+        magnitude-only exposure and applies it about a fixed world axis. The
+        E11 form is the correct one and keeps these tasks comparable with the
+        E7 results.
+
+        ``lateral_exposure`` stays a magnitude, since its role is the geometric
+        "how beam-on is the sea" signal rather than a torque.
+        """
+        eta = self.elevation(t, x, y)
+
+        forward = forward_2d / torch.norm(
+            forward_2d, dim=-1, keepdim=True
+        ).clamp(min=1e-6)
+        sideways = torch.stack((-forward[:, 1], forward[:, 0]), dim=-1)
+
+        direction = self.mean_direction
+        lateral_signed = (
+            direction[:, 0] * sideways[:, 0] + direction[:, 1] * sideways[:, 1]
+        )
+        frontal_exposure = (
+            direction[:, 0] * forward[:, 0] + direction[:, 1] * forward[:, 1]
+        )
+
+        return {
+            "eta": eta,
+            "vertical_velocity": self.vertical_velocity(t, x, y),
+            "heave_force": eta * heave_gain,
+            "roll_torque": self.lateral_slope(t, x, y, sideways) * roll_gain,
+            "wave_drag": torch.clamp(-frontal_exposure, min=0.0)
+            * torch.abs(eta)
+            * drag_gain,
+            "lateral_exposure": torch.abs(lateral_signed),
+        }
+
     @property
     def significant_height(self) -> torch.Tensor:
         """Per-env Hs in metres, for logging and wave-robustness metrics."""
@@ -66,6 +153,25 @@ class CalmWater(WaveField):
 
     def slope(self, t: float, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return self._zeros2
+
+    def lateral_slope(
+        self, t: float, x: torch.Tensor, y: torch.Tensor, sideways: torch.Tensor
+    ) -> torch.Tensor:
+        return self._zeros
+
+    def vertical_velocity(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        return self._zeros
+
+    @property
+    def mean_direction(self) -> torch.Tensor:
+        return self._zeros2
+
+    def elevation_field(
+        self, t: float, xs: torch.Tensor, ys: torch.Tensor, env_index: int = 0
+    ) -> torch.Tensor:
+        return torch.zeros_like(xs)
 
     @property
     def significant_height(self) -> torch.Tensor:
@@ -139,6 +245,39 @@ class AiryWaveField(WaveField):
         return torch.stack(
             (common * self.direction[:, 0], common * self.direction[:, 1]), dim=-1
         )
+
+    def lateral_slope(
+        self, t: float, x: torch.Tensor, y: torch.Tensor, sideways: torch.Tensor
+    ) -> torch.Tensor:
+        along = -self.amplitude * self.wave_number * torch.sin(
+            self._total_phase(t, x, y)
+        )
+        # Single component, so its direction is the wave direction itself.
+        projection = (
+            self.direction[:, 0] * sideways[:, 0]
+            + self.direction[:, 1] * sideways[:, 1]
+        )
+        return along * projection
+
+    def vertical_velocity(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        return self.amplitude * self.omega * torch.sin(self._total_phase(t, x, y))
+
+    @property
+    def mean_direction(self) -> torch.Tensor:
+        return self.direction
+
+    def elevation_field(
+        self, t: float, xs: torch.Tensor, ys: torch.Tensor, env_index: int = 0
+    ) -> torch.Tensor:
+        projected = (
+            self.direction[env_index, 0] * xs + self.direction[env_index, 1] * ys
+        )
+        phase = (
+            self.wave_number * projected - self.omega * t + self.phase[env_index]
+        )
+        return self.amplitude[env_index] * torch.cos(phase)
 
     @property
     def significant_height(self) -> torch.Tensor:
@@ -296,6 +435,50 @@ class JONSWAPWaveField(WaveField):
              (common * self.comp_dir_y).sum(dim=1)),
             dim=-1,
         )
+
+    def lateral_slope(
+        self, t: float, x: torch.Tensor, y: torch.Tensor, sideways: torch.Tensor
+    ) -> torch.Tensor:
+        # Each component is projected onto the beam direction before summing --
+        # with directional spreading the components arrive from different
+        # bearings, so a single mean-direction projection would lose their signs.
+        component_lateral = (
+            self.comp_dir_x * sideways[:, 0:1] + self.comp_dir_y * sideways[:, 1:2]
+        )
+        return -(
+            self.amplitudes
+            * self.wave_numbers.unsqueeze(0)
+            * torch.sin(self._total_phase(t, x, y))
+            * component_lateral
+        ).sum(dim=1)
+
+    def vertical_velocity(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        return (
+            self.amplitudes
+            * self.omegas.unsqueeze(0)
+            * torch.sin(self._total_phase(t, x, y))
+        ).sum(dim=1)
+
+    @property
+    def mean_direction(self) -> torch.Tensor:
+        return self.direction
+
+    def elevation_field(
+        self, t: float, xs: torch.Tensor, ys: torch.Tensor, env_index: int = 0
+    ) -> torch.Tensor:
+        # (points, components) -- one env's spectrum evaluated everywhere.
+        projected = (
+            self.comp_dir_x[env_index].unsqueeze(0) * xs.unsqueeze(1)
+            + self.comp_dir_y[env_index].unsqueeze(0) * ys.unsqueeze(1)
+        )
+        phase = (
+            projected * self.wave_numbers.unsqueeze(0)
+            - self.omegas.unsqueeze(0) * t
+            + self.phases[env_index].unsqueeze(0)
+        )
+        return (self.amplitudes[env_index].unsqueeze(0) * torch.cos(phase)).sum(dim=1)
 
     @property
     def significant_height(self) -> torch.Tensor:

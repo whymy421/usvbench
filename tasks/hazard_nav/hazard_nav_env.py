@@ -61,8 +61,12 @@ class HazardNavEnv(DirectRLEnv):
         )
         self._wave_active = str(self.cfg.wave.mode).lower() != "calm"
         self.wave_elevation = torch.zeros(self.num_envs, device=self.device)
+        self.wave_heave_force = torch.zeros(self.num_envs, device=self.device)
+        self.wave_roll_torque = torch.zeros(self.num_envs, device=self.device)
+        self.wave_drag = torch.zeros(self.num_envs, device=self.device)
+        self.lateral_exposure = torch.zeros(self.num_envs, device=self.device)
         if self._wave_active:
-            self._warn_if_buoyancy_saturates()
+            self._report_sea_state()
         self.goal_radius = float(self.cfg.goal_radius)
         self.target_pos = self.scene.env_origins[:, :2].clone()
         self.d0_per_env = torch.ones(self.num_envs, device=self.device)
@@ -176,11 +180,24 @@ class HazardNavEnv(DirectRLEnv):
         self._obstacle_translate_ops = []
         self._obstacle_radius_attrs = []
         self._obstacle_prims = []
+        self._wave_mesh = None
         if self.cfg.visual.enable_water:
             try:
-                self._create_static_water_mesh()
+                # A flat plane under a moving sea would hide the very thing the
+                # wave tasks exist to show, so waves get a deforming surface.
+                # Rebuilding it costs thousands of vertices per frame, which is
+                # wasted during 64-env training where nobody is watching, so it
+                # is reserved for the handful-of-envs playback runs.
+                animate = (
+                    str(self.cfg.wave.mode).lower() != "calm"
+                    and int(self.cfg.scene.num_envs) <= 4
+                )
+                if animate:
+                    self._create_wave_mesh()
+                else:
+                    self._create_static_water_mesh()
             except Exception as exc:
-                print(f"[WARN] Static water visualization could not be created: {exc}")
+                print(f"[WARN] Water visualization could not be created: {exc}")
         if self.cfg.visual.enable_goal_ring or self.cfg.visual.enable_obstacles:
             try:
                 self._create_render_only_hazard_markers()
@@ -284,6 +301,116 @@ class HazardNavEnv(DirectRLEnv):
         mesh.GetDisplayColorAttr().Set(Vt.Vec3fArray([color] * len(points)))
         mesh.GetDisplayColorPrimvar().SetInterpolation("vertex")
         mesh.GetDoubleSidedAttr().Set(True)
+
+    def _create_wave_mesh(self) -> None:
+        """Deforming, height-coloured water surface. Render-only.
+
+        Follows my_first_task_e11's mesh: a grid that rides with env 0's boat,
+        vertices displaced by the same wave field the physics reads, tinted by
+        height so the sea state is legible in a still frame.
+        """
+        import omni.usd
+        from pxr import Gf, UsdGeom, Vt
+
+        stage = omni.usd.get_context().get_stage()
+        water_path = "/World/DynamicWater"
+        if stage.GetPrimAtPath(water_path).IsValid():
+            stage.RemovePrim(water_path)
+
+        mesh = UsdGeom.Mesh.Define(stage, water_path)
+        self._wave_mesh_size = float(self.cfg.visual.wave_mesh_size_m)
+        res = int(self.cfg.visual.wave_mesh_res)
+        self._wave_mesh_res = res
+
+        axis = torch.linspace(
+            -self._wave_mesh_size / 2.0,
+            self._wave_mesh_size / 2.0,
+            res,
+            device=self.device,
+        )
+        grid_y, grid_x = torch.meshgrid(axis, axis, indexing="ij")
+        self._wave_grid_x = grid_x.reshape(-1)
+        self._wave_grid_y = grid_y.reshape(-1)
+
+        points = [
+            Gf.Vec3f(float(px), float(py), 0.0)
+            for px, py in zip(
+                self._wave_grid_x.cpu().tolist(), self._wave_grid_y.cpu().tolist()
+            )
+        ]
+        mesh.GetPointsAttr().Set(Vt.Vec3fArray(points))
+
+        face_counts = []
+        face_indices = []
+        for j in range(res - 1):
+            for i in range(res - 1):
+                v0 = j * res + i
+                face_counts.append(4)
+                face_indices.extend([v0, v0 + 1, (j + 1) * res + i + 1, (j + 1) * res + i])
+        mesh.GetFaceVertexCountsAttr().Set(Vt.IntArray(face_counts))
+        mesh.GetFaceVertexIndicesAttr().Set(Vt.IntArray(face_indices))
+
+        base = Gf.Vec3f(*self.cfg.visual.water_color)
+        mesh.GetDisplayColorAttr().Set(Vt.Vec3fArray([base] * (res * res)))
+        mesh.GetDisplayColorPrimvar().SetInterpolation("vertex")
+        mesh.GetDoubleSidedAttr().Set(True)
+
+        # Same turbo ramp the E7 line uses, baked into a lookup table because
+        # calling the colormap per vertex per frame is far too slow at 96x96.
+        self._wave_lut = None
+        try:
+            import matplotlib
+
+            try:
+                cmap = matplotlib.colormaps[self.cfg.visual.wave_colormap]
+            except AttributeError:  # matplotlib < 3.5
+                import matplotlib.cm as cm
+
+                cmap = cm.get_cmap(self.cfg.visual.wave_colormap)
+            self._wave_lut = [
+                Gf.Vec3f(*[float(c) for c in cmap(i / 255.0)[:3]])
+                for i in range(256)
+            ]
+        except Exception as exc:
+            print(f"[WAVE][WARN] colormap unavailable, using flat colour: {exc}")
+
+        self._wave_mesh = mesh
+        print(
+            f"[WAVE] dynamic water mesh {self._wave_mesh_size:.0f} m x "
+            f"{self._wave_mesh_size:.0f} m at {res}x{res}"
+        )
+
+    def _update_wave_mesh(self) -> None:
+        """Displace and recolour the water surface for the current instant."""
+        if self._wave_mesh is None or not self._wave_active:
+            return
+        from pxr import Gf, Vt
+
+        boat = self.robot.data.root_pos_w[0]
+        xs = self._wave_grid_x + boat[0]
+        ys = self._wave_grid_y + boat[1]
+        z = self.wave_field.elevation_field(self._sim_time_s(), xs, ys, env_index=0)
+
+        px = xs.cpu().tolist()
+        py = ys.cpu().tolist()
+        pz = z.cpu().tolist()
+        self._wave_mesh.GetPointsAttr().Set(
+            Vt.Vec3fArray([
+                Gf.Vec3f(float(a), float(b), float(c))
+                for a, b, c in zip(px, py, pz)
+            ])
+        )
+
+        if self._wave_lut is None:
+            return
+        # Per-frame normalisation keeps troughs and crests readable in a small
+        # sea; the 0.2 m floor is E11's, and stops flat water washing out.
+        span = max(float(z.max() - z.min()), 0.2)
+        index = (((z - z.min()) / span) * 255.0).clamp(0.0, 255.0).long()
+        lut = self._wave_lut
+        self._wave_mesh.GetDisplayColorAttr().Set(
+            Vt.Vec3fArray([lut[i] for i in index.cpu().tolist()])
+        )
 
     def _create_render_only_hazard_markers(self) -> None:
         """Author goal annuli and cylinders without any collision schemas."""
@@ -412,35 +539,29 @@ class HazardNavEnv(DirectRLEnv):
     def _root_quat(self) -> torch.Tensor:
         return self.robot.data.root_link_quat_w
 
-    def _warn_if_buoyancy_saturates(self) -> None:
-        """Warn when the sea state is too big for the hull to respond to it.
+    def _report_sea_state(self) -> None:
+        """Print the realised sea state against the hull it has to move.
 
-        The submerged fraction clamps at 0 and 1, so once ``|eta|`` exceeds
-        half the hull height the boat is either fully airborne or fully under
-        and the wave shape stops mattering -- different wave models then score
-        the same, which reads as a result rather than as a broken setup.
+        Waves are only meaningful in the band where the hull can respond: the
+        heave force scales with eta, so a sea much taller than the hull throws
+        the boat rather than making it seaworthy, and one far below it does
+        nothing measurable.
         """
-        half_hull = self.physics_cfg.rov_height / 2.0
+        hull = self.physics_cfg.rov_height
         x = torch.zeros(self.num_envs, device=self.device)
         y = torch.zeros(self.num_envs, device=self.device)
         samples = torch.cat(
             [self.wave_field.elevation(t * 0.05, x, y) for t in range(200)]
         )
-        saturated = (samples.abs() >= half_hull).float().mean().item()
+        peak = samples.abs().max().item()
         print(
             f"\n[WAVE] mode={self.cfg.wave.mode} "
-            f"eta_std={samples.std().item():.3f} m "
-            f"peak={samples.abs().max().item():.3f} m "
-            f"hull_half={half_hull:.3f} m "
-            f"saturated={saturated * 100:.1f}%"
+            f"eta_std={samples.std().item():.3f} m peak={peak:.3f} m "
+            f"hull={hull:.3f} m peak/hull={peak / hull:.2f} "
+            f"| gains heave={self.cfg.wave.heave_force_gain} "
+            f"roll={self.cfg.wave.roll_torque_gain} "
+            f"drag={self.cfg.wave.wave_drag_gain}"
         )
-        if saturated > 0.05:
-            print(
-                f"[WAVE][WARN] buoyancy saturates {saturated * 100:.1f}% of the "
-                "time (>5%): the hull spends that fraction fully out of or "
-                "fully under the water, so this measures free-fall, not wave "
-                "response. Reduce the sea state for this vehicle."
-            )
 
     def _sim_time_s(self) -> float:
         """Absolute sim time. Waves are a world field, not a per-env clock."""
@@ -461,7 +582,21 @@ class HazardNavEnv(DirectRLEnv):
         positions = self.robot.data.root_pos_w
         x = positions[:, 0]
         y = positions[:, 1]
-        self.wave_elevation = self.wave_field.elevation(t, x, y)
+
+        loads = self.wave_field.compute_forces(
+            t,
+            x,
+            y,
+            self._forward_2d(),
+            heave_gain=float(self.cfg.wave.heave_force_gain),
+            roll_gain=float(self.cfg.wave.roll_torque_gain),
+            drag_gain=float(self.cfg.wave.wave_drag_gain),
+        )
+        self.wave_elevation = loads["eta"]
+        self.wave_heave_force = loads["heave_force"]
+        self.wave_roll_torque = loads["roll_torque"]
+        self.wave_drag = loads["wave_drag"]
+        self.lateral_exposure = loads["lateral_exposure"]
 
         scale = float(self.cfg.wave.slope_torque_scale)
         if scale <= 0.0:
@@ -479,9 +614,10 @@ class HazardNavEnv(DirectRLEnv):
         positions = self.robot.data.root_pos_w
         orientations = self._root_quat()
         center_of_h = self.physics_cfg.rov_height / 2.0
-        depth = (
-            self.physics_cfg.water_surface_z + self.wave_elevation
-        ) - positions[:, 2]
+        # Still water. Wave lift arrives as an explicit heave force, exactly as
+        # in the calm reference tasks; folding eta in here as well would count
+        # the same effect twice.
+        depth = self.physics_cfg.water_surface_z - positions[:, 2]
         submerged_ratio = torch.clamp(
             (depth + center_of_h) / self.physics_cfg.rov_height,
             min=0.0,
@@ -526,6 +662,19 @@ class HazardNavEnv(DirectRLEnv):
         buoyancy_force, buoyancy_torque = self._compute_buoyancy_forces()
         force_world += buoyancy_force
         torque_world += buoyancy_torque
+
+        if self._wave_active:
+            # Channels follow my_first_task_e11 (the E7 plant): lift and drag in
+            # the world frame, roll about the hull's own longitudinal axis. The
+            # roll torque goes into `torques`, which is already body-frame, so
+            # it stays a roll whatever heading the boat is on -- applying it to
+            # a fixed world axis, as boat_calm_nav does, turns it into pitch
+            # whenever the bow is not aligned with that axis.
+            force_world[:, 2] += self.wave_heave_force
+            torques[:, 0, self._surge_axis_idx] += self.wave_roll_torque
+            force_world[:, :2] += (
+                -self.wave_drag.unsqueeze(-1) * self._forward_2d()
+            )
 
         velocity_world = self.robot.data.root_com_vel_w
         if velocity_world.shape[-1] == 6:
@@ -690,6 +839,7 @@ class HazardNavEnv(DirectRLEnv):
         )
 
     def _get_observations(self) -> dict:
+        self._update_wave_mesh()
         position_to_goal = self.target_pos - self._com_xy()
         distance = torch.norm(position_to_goal, dim=-1, keepdim=True)
         direction_to_goal = position_to_goal / distance.clamp_min(1.0e-6)
