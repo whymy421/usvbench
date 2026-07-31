@@ -135,7 +135,11 @@ class CatamaranPatrolEnv(DirectRLEnv):
         d_ang      = in_water * phys.max_angular_damping + (1.0 - in_water) * phys.air_angular_damping
 
         F = -d_lin.unsqueeze(-1) * vel_w
-        F[:, 2] += F_buo_z
+        # Vertical motion gets its own damping coefficient: buoyancy is a stiff linear
+        # spring here, and reusing the surge coefficient left it at zeta = 0.03, so the
+        # hull oscillated in heave for ~30 s after every reset.
+        d_heave = in_water * phys.heave_damping + (1.0 - in_water) * phys.air_linear_damping
+        F[:, 2] = -d_heave * vel_w[:, 2] + F_buo_z
         T = -d_ang.unsqueeze(-1) * ang_w
 
         self._water_F = F

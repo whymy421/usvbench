@@ -54,6 +54,12 @@ class UnderwaterPhysicsCfg:
     water_surface_z: float = 0.0
     max_linear_damping: float = 40.0   # catamaran is wider → more drag
     max_angular_damping: float = 40.0
+    # Heave damping has to be its own coefficient. Buoyancy here is a linear spring of
+    # stiffness rho*g*V/height = 2940 N/m; against 120 kg that is a 1.27 s natural
+    # period, and the surge coefficient of 40 gives a damping ratio of only 0.034, so
+    # the hull bobbed for half a minute after every reset. 700 gives zeta = 0.59, which
+    # is also the right order for a real hull: heave is far more damped than surge.
+    heave_damping: float = 700.0
     air_linear_damping: float = 0.5
     air_angular_damping: float = 0.05
     enable_current: bool = False
