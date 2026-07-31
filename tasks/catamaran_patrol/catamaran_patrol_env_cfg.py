@@ -20,13 +20,14 @@ CATAMARAN_CFG = RigidObjectCfg(
         usd_path=_os.path.join(_ASSET_DIR, "catamaran.usd"),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
-            max_linear_velocity=8.0,   # m/s
-            # BUGFIX: this field is in DEGREES per second, not rad/s. At 5.0 the hull was
-            # capped at 0.087 rad/s, i.e. a 49 m turning circle at cruise speed, while the
-            # patrol circuit has a 12 m radius and a 3 m goal — the task was not physically
-            # solvable. MAX_TORQUE=100 N.m against angular damping 40 implies a design turn
-            # rate of ~2.5 rad/s, so the cap simply must not be the binding constraint.
-            max_angular_velocity=90.0,  # deg/s (~1.57 rad/s)
+            # Non-binding safety bounds only: >=2x the terminal values that come out of
+            # the thrust/drag balance below (2.5 m/s surge, 1.0 rad/s yaw).
+            # NOTE Isaac Lab units: max_linear_velocity is m/s, max_angular_velocity is
+            # DEG/s. This task originally shipped 5.0 here meaning rad/s, which is an
+            # effective 5 deg/s yaw cap — a 49 m turning circle against a 12 m patrol
+            # circuit, so the task was not solvable at all.
+            max_linear_velocity=8.0,    # m/s
+            max_angular_velocity=573.0,  # = 10 rad/s, never reached in practice
             max_depenetration_velocity=1.0,
             disable_gravity=False,
             linear_damping=0.0,   # applied manually in env
@@ -52,14 +53,37 @@ class UnderwaterPhysicsCfg:
     rov_volume: float = 0.3        # 120 kg / 1000 = 0.12 m³ minimum; 0.3 gives positive buoyancy
     rov_height: float = 1.0        # effective height for submersion calc
     water_surface_z: float = 0.0
-    max_linear_damping: float = 40.0   # catamaran is wider → more drag
-    max_angular_damping: float = 40.0
-    # Heave damping has to be its own coefficient. Buoyancy here is a linear spring of
-    # stiffness rho*g*V/height = 2940 N/m; against 120 kg that is a 1.27 s natural
-    # period, and the surge coefficient of 40 gives a damping ratio of only 0.034, so
-    # the hull bobbed for half a minute after every reset. 700 gives zeta = 0.59, which
-    # is also the right order for a real hull: heave is far more damped than surge.
-    heave_damping: float = 700.0
+
+    # Hydrodynamic damping: per-DOF linear+quadratic, derived exactly the way
+    # boat_calm_nav derives its own — Froude-scaled from the VRX WAM-V shipped
+    # coefficients (xU=100, xUU=150, yV=100, yVV=100, zW=500, nR=800, nRR=800), with
+    # linear x lambda^2.5, quadratic x lambda^2, yaw linear x lambda^4.5, yaw quadratic
+    # x lambda^5. The boat uses lambda=0.8 for its 100 kg hull, which implies a 195 kg
+    # WAM-V reference; this 120 kg hull therefore gives lambda=(120/195)^(1/3)=0.850.
+    #   surge terminal: (65 + 110v)v  = 850 N   -> 2.50 m/s
+    #   yaw terminal:   (385 + 355r)r = 740 N.m -> 1.00 rad/s
+    # Hull drag is applied in BODY frame (surge and sway are separate).
+    #
+    # CAVEAT, deliberately written down rather than hidden: this scaling is anchored on
+    # mass, following the boat. By mass the catamaran is the *larger* vessel
+    # (lambda 0.850 vs 0.800), but its hull is 3.0 m against the boat's 5 m — it is
+    # heavier and shorter. Mass-anchored Froude scaling therefore overstates its length
+    # scale, and no catamaran hull-form correction is applied at all: twin slender demi-
+    # hulls have lower wave-making but more wetted area, and their beam separation should
+    # raise sway and yaw damping well above a monohull's. Treat these as a documented
+    # first approximation, not as measured hydrodynamics.
+    surge_lin_damping: float = 65.0    # N·s/m    (body-X, along the hulls)
+    surge_quad_damping: float = 110.0  # N·s²/m²
+    sway_lin_damping: float = 65.0     # N·s/m    (body-Y)
+    sway_quad_damping: float = 70.0    # N·s²/m²
+    heave_damping: float = 330.0       # N·s/m    (zeta = 0.28 against the buoyancy spring)
+    yaw_lin_damping: float = 385.0     # N·m·s/rad
+    yaw_quad_damping: float = 355.0    # N·m·s²/rad²
+    # Roll/pitch are not task DOFs: stiff spring + overdamping, same treatment and same
+    # values as both reference tasks.
+    attitude_spring: float = 5000.0         # N·m/rad
+    rollpitch_rate_damping: float = 2000.0  # N·m·s/rad
+
     air_linear_damping: float = 0.5
     air_angular_damping: float = 0.05
     enable_current: bool = False
@@ -89,6 +113,19 @@ class CatamaranPatrolEnvCfg(DirectRLEnvCfg):
     patrol_radius: float = 12.0              # tightened from 25m; easier early waypoint reaching
     max_spawn_distance: float = 15.0         # spawn close to circuit
     min_spawn_distance: float = 3.0
+
+    # Actuator limits. Actions are hard-clipped to [-1,1] in _pre_physics_step; these
+    # constants are the single source of truth (they used to be module-level MAX_THRUST /
+    # MAX_TORQUE in the env file). Sized against the damping above:
+    #   850 N  -> 2.50 m/s terminal surge. Thrust-to-weight 0.72, deliberately above the
+    #            boat reference's 0.51, because this task is a *fast* patrol.
+    #   740 N.m -> 1.00 rad/s terminal yaw, i.e. a 2.5 m turning radius at cruise — the
+    #            same turning radius the boat reference achieves, and comfortably inside
+    #            the 12 m patrol circuit.
+    # Reverse thrust keeps the boat's 0.4 forward/reverse ratio (VRX classic thruster).
+    thrust_max_fwd: float = 850.0   # N,   at action[0] = +1 (bow-first)
+    thrust_max_rev: float = 340.0   # N,   at action[0] = -1 (astern)
+    yaw_torque_max: float = 740.0   # N·m, at action[1] = ±1
 
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 120,
