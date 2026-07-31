@@ -28,10 +28,20 @@ ROV_CONFIG = ArticulationCfg(
         usd_path=_os.path.join(_ASSET_DIR, "ROV_rigged.usd"),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
-            max_linear_velocity=5.0,
-            max_angular_velocity=5.0,
+            # Velocity limits are NON-BINDING safety bounds only (>=2x the terminal
+            # values that emerge from thrust/drag balance: ~1.54 m/s, ~1.0 rad/s).
+            # NOTE Isaac Lab units: max_linear_velocity is m/s, max_angular_velocity
+            # is DEG/s (schemas_cfg.py) — the old value 5.0 was an effective 5 deg/s
+            # cap that dominated yaw dynamics.
+            max_linear_velocity=10.0,
+            max_angular_velocity=573.0,  # = 10 rad/s, never reached in practice
             max_depenetration_velocity=1.0,
             disable_gravity=False,
+            # Explicitly zero PhysX body damping (ROV_rigged.usd authors 4.0/4.0,
+            # which silently dominated all hydrodynamic drag). All fluid damping now
+            # lives in UnderwaterPhysicsCfg below — single source of truth.
+            linear_damping=0.0,
+            angular_damping=0.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=False,
@@ -61,7 +71,17 @@ ROV_CONFIG = ArticulationCfg(
 # ============================================
 @configclass
 class UnderwaterPhysicsCfg:
-    """ROV水下物理参数配置"""
+    """ROV水下物理参数配置
+
+    Damping structure (per-DOF linear + quadratic) follows the experimentally
+    validated BlueROV2 model of von Benzon et al. 2022 (JMSE 10(12):1898).
+    Magnitudes are re-derived for this 100 kg / Iz~141 kg·m² craft (by inertia it
+    is a ~4 m surface vehicle, so ROV coefficients are NOT copied directly):
+      surge:  F_d = -(30 + 150·|v|)·v   →  terminal 1.54 m/s at 400 N thrust
+      yaw:    T_d = -(20 + 180·|r|)·r   →  terminal 1.00 rad/s at 200 N·m
+    Quadratic surge term from Cd≈1.2, frontal area≈0.25 m² (0.5·ρ·Cd·A≈150).
+    Terminal speeds EMERGE from force balance; engine velocity caps never bind.
+    """
     water_density: float = 1000.0
     gravity: float = 9.8
     rov_volume: float = 0.5  # m^3 (增大排水体积，确保波浪下不沉)
@@ -69,10 +89,20 @@ class UnderwaterPhysicsCfg:
     water_surface_z: float = 0.0
     buoyancy_center_offset: float = -0.1
 
-    max_linear_damping: float = 50.0
-    max_angular_damping: float = 50.0
-    air_linear_damping: float = 0.5
-    air_angular_damping: float = 0.05
+    surge_lin_damping: float = 30.0     # N·s/m   (skin friction, ~10% at v_max)
+    surge_quad_damping: float = 150.0   # N·s²/m² (form drag)
+    heave_damping: float = 400.0        # N·s/m   (settles bobbing, ζ≈0.22)
+    yaw_lin_damping: float = 20.0       # N·m·s/rad
+    yaw_quad_damping: float = 180.0     # N·m·s²/rad²
+    # Roll/pitch passive stability. These DOFs are not task-relevant; they are
+    # made strongly overdamped (ζ≈1.2) so the asymmetric-rotor whirl instability
+    # (transverse inertia 140 vs 65 + world-frame spring; growth ~2.6/s at
+    # sustained 1 rad/s yaw, ~10 s incubation from float noise) can never build.
+    # With the hull inertia balanced (products zeroed in ROV_rigged.usd), steady
+    # roll/pitch rates are zero, so this damping does no work in normal sailing
+    # and does NOT bleed yaw energy.
+    attitude_spring: float = 5000.0         # N·m/rad
+    rollpitch_rate_damping: float = 2000.0  # N·m·s/rad (overdamped on purpose)
 
     enable_current: bool = False   # CALM: 关掉洋流
     current_speed_min: float = 0.2
@@ -108,6 +138,13 @@ class MyFirstTaskEnvCfg(DirectRLEnvCfg):
     max_spawn_distance: float = 30.0
     min_spawn_distance: float = 10.0
     use_learned_reward: bool = False
+
+    # Actuator limits. Actions are HARD-CLIPPED to [-1,1] in _pre_physics_step
+    # (previously unbounded: trained policies emitted |action|~170, i.e. ~17 kN).
+    # 400 N ≈ 8x BlueRobotics T200 @16V (8×51.5 N, datasheet); thrust-to-weight
+    # 0.41. Body-axis forward is +Y. 200 N·m ≈ two 200 N thrusters at ±0.5 m.
+    thrust_max: float = 400.0      # N,   surge force at action[0] = ±1
+    yaw_torque_max: float = 200.0  # N·m, yaw torque at action[1] = ±1
 
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 120,
