@@ -121,6 +121,50 @@ def _build_underwater_physics_cfg(spec: VehicleSpec) -> UnderwaterPhysicsCfg:
 
 
 @configclass
+class WaveCfg:
+    """Sea state. ``mode="calm"`` is the frozen calm-water baseline.
+
+    Waves enter the physics through one channel only: the water surface stops
+    being the plane ``water_surface_z`` and becomes ``water_surface_z + eta``,
+    so buoyancy and heave follow from the existing hydrostatics. ``slope_*``
+    additionally tilts the restoring equilibrium toward the wave normal, which
+    is what produces roll; setting ``slope_torque_scale = 0`` leaves heave as
+    the only wave effect.
+    """
+
+    mode: str = "calm"  # calm | airy | jonswap
+
+    # Shared. None randomizes per env; a number pins every env to that heading
+    # (degrees, 0 = +x), which is what a controlled beam/following-sea sweep
+    # needs.
+    direction_deg: float | None = None
+
+    # Airy regular wave.
+    airy_height_m: float = 0.5
+    airy_period_s: float = 5.0
+
+    # JONSWAP irregular sea.
+    hs_min_m: float = 0.3
+    hs_max_m: float = 1.0
+    tp_min_s: float = 4.0
+    tp_max_s: float = 7.0
+    gamma_min: float = 1.0
+    gamma_max: float = 5.0
+    n_components: int = 30
+    f_min_hz: float = 0.04
+    f_max_hz: float = 0.5
+    spread_deg: float = 30.0
+
+    # Fraction of the hydrostatic restoring stiffness redirected from world-up
+    # to the wave normal. 1.0 means the hull fully follows the surface; the
+    # small-slope regime these tasks live in makes that a reasonable default.
+    slope_torque_scale: float = 1.0
+    # Guard against the linear-wave model being pushed past its validity: a
+    # steepness this high is already outside deep-water linear theory.
+    max_slope: float = 0.30
+
+
+@configclass
 class VisualCfg:
     """Render-only layer; no field is read by task physics or scoring."""
 
@@ -246,6 +290,7 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
         replicate_physics=True,
     )
     visual: VisualCfg = VisualCfg()
+    wave: WaveCfg = WaveCfg()
     dof_names = []
 
     def __post_init__(self) -> None:
@@ -329,3 +374,22 @@ class HazardNavV4EnvCfg(HazardNavV3EnvCfg):
 
     reward_reverse_action_scale: float = 0.75
     reward_reverse_velocity_scale: float = 0.75
+
+
+@configclass
+class HazardNavV3AiryEnvCfg(HazardNavV3EnvCfg):
+    """v3 under a regular wave. Observation and action layouts are unchanged.
+
+    The policy contract stays byte-identical to v3, which is the point: a v3
+    checkpoint runs here with no adaptation, so the score difference measures
+    what waves cost a calm-trained policy and nothing else.
+    """
+
+    wave: WaveCfg = WaveCfg(mode="airy")
+
+
+@configclass
+class HazardNavV3JonswapEnvCfg(HazardNavV3EnvCfg):
+    """v3 under an irregular JONSWAP sea. Layouts unchanged, as for Airy."""
+
+    wave: WaveCfg = WaveCfg(mode="jonswap")
