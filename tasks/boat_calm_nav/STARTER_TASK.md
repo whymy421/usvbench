@@ -19,7 +19,7 @@ so the simple ROV reward does **not** work here. This task ships with the tuned
 ## ⚠️ Read this first — why the reward is different from Task A
 
 The ROV trains fine with `forward_speed × exp(alignment)`. On the boat that recipe
-**fails** (the boat learns to point ~150° away from the target, ~0.1 tgt/ep) because:
+**fails** (the boat learns to point ~150° away from the target and barely scores) because:
 
 - `exp(alignment)` is always positive → moving *backwards* still earns reward.
 - The boat's body axes are non-standard (`body-X = stern`, `body-Y = starboard`).
@@ -30,11 +30,13 @@ off while actually moving forward), plus a large reach bonus (+50) to beat the c
 travelling to a freshly-spawned target. See `my_first_task_env.py` `_get_rewards()`,
 the `V23` + `speed_coupling` branch.
 
-> There's a higher-scoring variant, **V40** (5.64 tgt/ep), that adds `SIDE_APPROACH=1`
-> to drop the bow-alignment requirement. It scores ~18% higher but the boat learns to
-> *reverse* into targets, which looks unnatural. We use **V26** as the reference because
-> bow-forward navigation is the cleaner baseline. If you want to reproduce V40, add
-> `SIDE_APPROACH=1` to the env vars below.
+> There is a variant, **V40**, that adds `SIDE_APPROACH=1` to drop the bow-alignment
+> requirement. On the pre-2026-07-31 physics it scored ~18% higher than V26, but the boat
+> learned to *reverse* into targets, which looks unnatural, so V26 stays the reference.
+> **That comparison has not been re-run on the current physics** — the old figures (V40
+> 5.64, V26 4.76) came from a model with a different damping and actuator system, so no
+> number is quoted here until someone re-measures. If you want to try V40, add
+> `SIDE_APPROACH=1` to the env vars below and report what you get.
 
 ---
 
@@ -76,11 +78,12 @@ python <IsaacLab>/scripts/reinforcement_learning/skrl/train_with_eval.py \
   --num_envs=64 --headless --max_iterations=3000 --seed=42 \
   --video --video_interval 50000 --video_length 200
 ```
-**Do NOT set `FORWARD_TRANSIT=1`** — that was experiment V41 and it made the boat
-flee the target (0.04 tgt/ep). (Adding `SIDE_APPROACH=1` gives V40, ~5.6 tgt/ep, but
-the boat reverses into targets — see the note above.)
+**Do NOT set `FORWARD_TRANSIT=1`** — that was experiment V41 and it made the boat flee
+the target almost completely. (`SIDE_APPROACH=1` gives V40, which scores higher but
+reverses into targets — see the note above. Neither variant has been re-measured on the
+current physics.)
 
-Takes ~1.5 h on an RTX 5080.
+Takes ~30 min on an RTX 5080 (measured 2026-07-31, 3000 iterations, 64 envs).
 
 ---
 
@@ -124,7 +127,7 @@ Reference: V26 (`boat_calm_V26_speedcouple_s42`, wandb `si1f8sq1`).
 Reproduce within ~20%. With V26 the boat navigates **bow-first** toward targets
 (unlike the V40 variant, which reverses in).
 
-**If `targets_per_episode` < 2 or the boat points consistently away → message Yutong.**
+**If you land more than ~20% below the reference in [`TASKS.md`](../../TASKS.md#current-baselines), or the boat points consistently away → message Yutong.**
 
 ---
 
@@ -137,7 +140,7 @@ Reproduce within ~20%. With V26 the boat navigates **bow-first** toward targets
 | `REWARD_VARIANT` | `V23` | speed-coupled nav reward |
 | `SPEED_COUPLE` | `1` | reward only when moving |
 | `REACH_BONUS` | `50` | per-target reward (must be large for the slow boat) |
-| `SIDE_APPROACH` | unset | set to `1` for the V40 variant (reverses in, ~5.6 tgt/ep) |
+| `SIDE_APPROACH` | unset | set to `1` for the V40 variant (reverses into targets; not re-measured on the current physics) |
 | `FORWARD_TRANSIT` | unset | ⚠️ leave unset (V41 regression) |
 
 ---

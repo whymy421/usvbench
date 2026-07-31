@@ -108,7 +108,7 @@ Reference run (Yutong, seed 42, 3000 iter): **`rov_calm_benchmark_s42`** on the
 You should reproduce within ~20%. Watch the auto-uploaded wandb videos to confirm
 the ROV drives smoothly to targets (not spinning in place).
 
-**If `targets_per_episode` < 2 or `speed` ≈ 0 after 3000 iter → message Yutong before continuing.**
+**If you land more than ~20% below the reference in [`TASKS.md`](../../TASKS.md#current-baselines), or `speed` ≈ 0 after 3000 iter → message Yutong before continuing.**
 
 ---
 
