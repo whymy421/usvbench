@@ -133,6 +133,9 @@ class HazardNavEnv(DirectRLEnv):
         self._ep_contact_entries = torch.zeros(self.num_envs, device=self.device)
         self._ep_goal_bonus = torch.zeros(self.num_envs, device=self.device)
         self._ep_reverse_cost = torch.zeros(self.num_envs, device=self.device)
+        self._ep_reverse_velocity_cost = torch.zeros(
+            self.num_envs, device=self.device
+        )
 
     @property
     def current_level(self) -> int:
@@ -769,6 +772,13 @@ class HazardNavEnv(DirectRLEnv):
             * self.control_step_s
             * reverse_action.square()
         )
+        surge_norm, _, _ = self._body_motion_observation()
+        reverse_velocity = torch.relu(-surge_norm.squeeze(-1))
+        reverse_velocity_cost = (
+            self.cfg.reward_reverse_velocity_scale
+            * self.control_step_s
+            * reverse_velocity.square()
+        )
         remaining_fraction = torch.clamp(
             (self.max_episode_length - self.episode_length_buf.float())
             / max(float(self.max_episode_length), 1.0),
@@ -781,6 +791,7 @@ class HazardNavEnv(DirectRLEnv):
         )
         self._ep_goal_bonus += goal_bonus
         self._ep_reverse_cost += reverse_cost
+        self._ep_reverse_velocity_cost += reverse_velocity_cost
 
         return (
             self.cfg.reward_progress_scale * progress
@@ -789,6 +800,7 @@ class HazardNavEnv(DirectRLEnv):
             - prox_cost
             - swift_cost
             - reverse_cost
+            - reverse_velocity_cost
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
             - self.cfg.reward_contact_dwell_penalty * contact_now.float()
         )
@@ -886,6 +898,9 @@ class HazardNavEnv(DirectRLEnv):
             )
             self.extras["log"]["Episode/reward_reverse_cost_sum"] = (
                 self._ep_reverse_cost[completed_ids].mean()
+            )
+            self.extras["log"]["Episode/reward_reverse_velocity_cost_sum"] = (
+                self._ep_reverse_velocity_cost[completed_ids].mean()
             )
 
             if not self.cfg.curriculum_frozen:
@@ -997,6 +1012,7 @@ class HazardNavEnv(DirectRLEnv):
         self._ep_contact_entries[env_ids] = 0.0
         self._ep_goal_bonus[env_ids] = 0.0
         self._ep_reverse_cost[env_ids] = 0.0
+        self._ep_reverse_velocity_cost[env_ids] = 0.0
 
         self._update_render_only_hazard_markers(
             env_ids, local_goals, local_centers, radii, active

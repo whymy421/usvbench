@@ -40,3 +40,14 @@ gym.register(
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },
 )
+
+# v4 keeps v11's 42-D observation and adds sustained reverse-motion shaping.
+gym.register(
+    id="Isaac-USV-HazardNav-Direct-v4",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.hazard_nav_env_cfg:HazardNavV4EnvCfg",
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_v12_cfg.yaml",
+    },
+)
