@@ -51,12 +51,24 @@ def main(env_cfg, _agent_cfg):
     steps = max(1, int(args_cli.seconds / base.step_dt))
     device = base.device
     bow_local = torch.tensor([[1.0, 0.0, 0.0]], device=device).repeat(args_cli.num_envs, 1)
+    up_local  = torch.tensor([[0.0, 0.0, 1.0]], device=device).repeat(args_cli.num_envs, 1)
 
-    def run(action, label):
+    def run(action, label, track_attitude=False):
         actions = torch.tensor(action, device=device).repeat(args_cli.num_envs, 1)
+        worst_tilt = 0.0
         for _ in range(steps):
             with torch.inference_mode():
                 base.step(actions)
+                if track_attitude:
+                    # angle between the hull's up axis and world up, i.e. total tilt
+                    up_w = quat_rotate(base.robot.data.root_quat_w, up_local)
+                    tilt = torch.rad2deg(torch.acos(up_w[:, 2].clamp(-1.0, 1.0)))
+                    worst_tilt = max(worst_tilt, tilt.max().item())
+        if track_attitude:
+            print(f"\n  {label}")
+            print(f"    worst tilt off vertical : {worst_tilt:7.2f} deg")
+            print(f"    final yaw rate          : {base.robot.data.root_ang_vel_w[:, 2].mean().item():7.3f} rad/s")
+            return worst_tilt
         vel_w = base.robot.data.root_lin_vel_w
         ang_w = base.robot.data.root_ang_vel_w
         bow_w = quat_rotate(base.robot.data.root_quat_w, bow_local)
@@ -81,13 +93,30 @@ def main(env_cfg, _agent_cfg):
 
     drift_fwd = run([1.0, 0.0], "phase 1 — full forward thrust, zero torque")
     run([0.0, 1.0], "phase 2 — zero thrust, full yaw torque")
+    # Phase 3 exists because the two worst bugs this task has had — the double-rotated
+    # wrench and the Euler-angle attitude spring — were both exactly correct at yaw = 0
+    # and only wrong once the hull turned. Every episode starts at yaw = 0 and any
+    # zero-action test sits there, so neither showed up until something drove a turn.
+    # Thrust and yaw torque together sweep the hull through every heading.
+    tilt = run([1.0, 1.0], "phase 3 — full thrust AND full yaw torque (sweeps all headings)",
+               track_attitude=True)
 
     print("\n" + "-" * 68)
+    ok = True
     if math.isfinite(drift_fwd) and drift_fwd < 15.0:
         print("  PASS: thrust drives the vessel along its bow axis.")
     else:
+        ok = False
         print("  FAIL: the vessel does not move along its bow — check the wrench frame")
         print("        passed to set_external_force_and_torque (is_global).")
+    if tilt < 5.0:
+        print("  PASS: attitude stays upright through a full sweep of headings.")
+    else:
+        ok = False
+        print("  FAIL: the hull tilts while turning — the attitude spring is not")
+        print("        yaw-invariant. Use k*(hull_up x world_up), never body roll/pitch")
+        print("        angles applied about fixed world axes.")
+    print(f"  -> {'PASS' if ok else 'FAIL'}")
     print("-" * 68 + "\n")
 
     env.close()

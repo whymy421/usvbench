@@ -29,7 +29,7 @@ try:
 except ImportError:
     _WANDB = False
 from isaaclab.envs import DirectRLEnv
-from isaaclab.utils.math import quat_rotate_inverse
+from isaaclab.utils.math import quat_apply, quat_rotate_inverse
 from .catamaran_patrol_env_cfg import CatamaranPatrolEnvCfg
 
 # ── tunable via environment variables ────────────────────────────────────────
@@ -61,6 +61,9 @@ class CatamaranPatrolEnv(DirectRLEnv):
         self.wp_idx        = torch.zeros(N, dtype=torch.long, device=D)
         self.wps_done      = torch.zeros(N, device=D)
         self.prev_dist     = torch.zeros(N, device=D)
+
+        # Body +Z, for the yaw-invariant attitude spring in _apply_action
+        self._up_dir = torch.tensor([[0.0, 0.0, 1.0]], device=D)
 
         # For eval script compatibility (same attr as boat/ROV tasks)
         self.reached_count = 0
@@ -180,13 +183,18 @@ class CatamaranPatrolEnv(DirectRLEnv):
         torque_w -= ((1.0 - in_water) * phys.air_angular_damping).unsqueeze(-1) * ang_w
 
         # ── Attitude restoring spring (world frame) ───────────────────────────
-        # The task previously modelled no righting moment at all, so attitude was damped
-        # but never restored. Same treatment and same stiffness as both reference tasks.
-        w, x, y, zq = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
-        pitch = torch.atan2(2 * (w * x + y * zq), 1 - 2 * (x * x + y * y))
-        roll  = torch.asin(torch.clamp(2 * (w * y - zq * x), -1.0, 1.0))
-        torque_w[:, 0] += -pitch * phys.attitude_spring
-        torque_w[:, 1] += -roll * phys.attitude_spring
+        # The task modelled no righting moment at all, so attitude was damped but never
+        # restored. Yaw-invariant form, k * (hull_up x world_up), same as the boat.
+        #
+        # NOT the Euler-angle form. Extracting roll/pitch from the quaternion and applying
+        # them as torques about the fixed world X/Y axes is restoring only near the spawn
+        # heading: the angles are body quantities, the axes are world axes, and the two
+        # only coincide at yaw = 0. Past ~90 deg of heading it precesses and then drives
+        # the hull over — capsize-by-turning. It measures clean at yaw = 0, which is where
+        # every episode starts and where any zero-action test sits, so it hides well.
+        up_hull_w = quat_apply(quat, self._up_dir.expand(self.num_envs, 3))
+        torque_w[:, 0] += phys.attitude_spring * up_hull_w[:, 1]
+        torque_w[:, 1] += -phys.attitude_spring * up_hull_w[:, 0]
 
         # ── World frame → body frame, then apply once ─────────────────────────
         forces  += quat_rotate_inverse(quat, force_w)
