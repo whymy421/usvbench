@@ -214,6 +214,9 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # Integrated squared negative surge command. A full 120 s reverse episode
     # costs 6 points; a one-second escape manoeuvre costs at most 0.05.
     reward_reverse_action_scale: float = 0.05
+    # Integrated squared negative body-frame surge speed. This catches
+    # stern-first coasting after the policy releases a negative thrust command.
+    reward_reverse_velocity_scale: float = 0.0
     # Swiftness applies only when velocity is observable (v2/v3).
     # Full-idle episode cost = scale * 120 s = 30.0, making a timeout worse
     # than active progress while remaining comparable to one contact penalty.
@@ -285,6 +288,8 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             raise ValueError("goal-entry reward scales must be non-negative")
         if self.reward_reverse_action_scale < 0.0:
             raise ValueError("reward_reverse_action_scale must be non-negative")
+        if self.reward_reverse_velocity_scale < 0.0:
+            raise ValueError("reward_reverse_velocity_scale must be non-negative")
 
 
 @configclass
@@ -316,3 +321,11 @@ class HazardNavV3EnvCfg(HazardNavEnvCfg):
         asset_name="robot",
         resolution=(1280, 720),
     )
+
+
+@configclass
+class HazardNavV4EnvCfg(HazardNavV3EnvCfg):
+    """V12: preserve v11 navigation while making sustained reverse costly."""
+
+    reward_reverse_action_scale: float = 0.75
+    reward_reverse_velocity_scale: float = 0.75
