@@ -164,10 +164,18 @@ class WaveCfg:
     f_max_hz: float = 1.60
     spread_deg: float = 30.0
 
-    # Fraction of the hydrostatic restoring stiffness redirected from world-up
-    # to the wave normal. 1.0 means the hull fully follows the surface; the
-    # small-slope regime these tasks live in makes that a reasonable default.
-    slope_torque_scale: float = 1.0
+    # Wave loads, matching tasks/boat_calm_nav so the ROV/boat baselines and
+    # the E7 line stay comparable. heave lifts the hull, roll is driven by how
+    # beam-on the sea is, and drag acts against the bow so heading into the
+    # waves costs speed -- that last one is what makes waves felt at all.
+    heave_force_gain: float = 100.0
+    roll_torque_gain: float = 200.0
+    wave_drag_gain: float = 15.0
+
+    # Optional second roll channel: redirects the restoring equilibrium toward
+    # the wave normal instead of world-up. Off by default -- the gains above
+    # already carry roll, and stacking both double-counts it.
+    slope_torque_scale: float = 0.0
     # Guard against the linear-wave model being pushed past its validity: a
     # steepness this high is already outside deep-water linear theory.
     max_slope: float = 0.30
@@ -188,6 +196,12 @@ class VisualCfg:
     enable_obstacles: bool = True
     obstacle_color: tuple = (0.35, 0.37, 0.40)
     obstacle_height_m: float = 2.0
+    # Deforming surface used instead of the flat plane when waves are on. It
+    # rides with env 0's boat, so it only has to cover what the camera sees.
+    wave_mesh_size_m: float = 120.0
+    wave_mesh_res: int = 96
+    # Height colouring for the wave surface, matching the E7 line's rendering.
+    wave_colormap: str = "turbo"
 
 
 @configclass
