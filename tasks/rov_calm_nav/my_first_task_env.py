@@ -335,31 +335,6 @@ class MyFirstTaskEnv(DirectRLEnv):
     # 水下物理计算函数
     # ============================================
 
-    def _compute_depth_dependent_damping(self) -> tuple[torch.Tensor, torch.Tensor]:
-        z_positions = self.robot.data.root_pos_w[:, 2]
-        water_surface = self.physics_cfg.water_surface_z
-        relative_z = z_positions - water_surface
-
-        displacement_percentage = torch.clamp(
-            -relative_z / self.physics_cfg.rov_height + 0.5,
-            min=0.0,
-            max=1.0
-        )
-
-        linear_damping = (
-                self.physics_cfg.air_linear_damping +
-                (self.physics_cfg.max_linear_damping - self.physics_cfg.air_linear_damping) *
-                displacement_percentage
-        )
-
-        angular_damping = (
-                self.physics_cfg.air_angular_damping +
-                (self.physics_cfg.max_angular_damping - self.physics_cfg.air_angular_damping) *
-                displacement_percentage
-        )
-
-        return linear_damping, angular_damping
-
     def _compute_buoyancy_forces(self) -> tuple[torch.Tensor, torch.Tensor]:
         positions = self.robot.data.root_pos_w
         orientations = self.robot.data.root_link_quat_w
@@ -698,7 +673,9 @@ class MyFirstTaskEnv(DirectRLEnv):
     # ============================================
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
-        self.actions = actions.clone()
+        # HARD action clip: the declared [-1,1] range is now enforced here
+        # (previously nothing clipped — policies exploited unbounded actions).
+        self.actions = torch.clamp(actions, -1.0, 1.0)
         self._visualize_markers()
 
     def _apply_action(self) -> None:
@@ -707,15 +684,18 @@ class MyFirstTaskEnv(DirectRLEnv):
             print(f"🔍 ROV Configuration:")
             print(f"   Bodies: {self.robot.num_bodies}")
             print(f"   Body names: {self.robot.body_names}")
-            print(f"\n🌊 Underwater Physics Enabled:")
+            print(f"\n🌊 Underwater Physics Enabled (realistic-dynamics rev):")
             print(f"   Volume: {self.physics_cfg.rov_volume} m³")
             print(f"   Mass: {self.cfg.robot_cfg.spawn.mass_props.mass} kg")
             print(f"   Water density: {self.physics_cfg.water_density} kg/m³")
             print(f"   Expected buoyancy (fully submerged): "
                   f"{self.physics_cfg.water_density * self.physics_cfg.rov_volume * self.physics_cfg.gravity:.1f} N")
             print(f"   Weight: {self.cfg.robot_cfg.spawn.mass_props.mass * self.physics_cfg.gravity:.1f} N")
-            print(f"   Max linear damping: {self.physics_cfg.max_linear_damping} N/(m/s)")
-            print(f"   Max angular damping: {self.physics_cfg.max_angular_damping} Nm/(rad/s)")
+            print(f"   Thrust/torque max: {self.cfg.thrust_max} N / {self.cfg.yaw_torque_max} N·m (actions clipped ±1)")
+            print(f"   Surge drag: -({self.physics_cfg.surge_lin_damping} + {self.physics_cfg.surge_quad_damping}|v|)·v"
+                  f"  -> v_term ≈ 1.54 m/s")
+            print(f"   Yaw drag:   -({self.physics_cfg.yaw_lin_damping} + {self.physics_cfg.yaw_quad_damping}|r|)·r"
+                  f"  -> r_term ≈ 1.00 rad/s")
             print(f"{'=' * 60}\n")
             self._printed_body_info = True
 
@@ -773,23 +753,29 @@ class MyFirstTaskEnv(DirectRLEnv):
                 print(f"⚠️ Physics diagnostic failed: {e}")
             self._physics_diagnostic_printed = True
 
-        forces[:, 0, 1] = delayed_actions[:, 0] * 100.0
-        torques[:, 0, 2] = delayed_actions[:, 1] * 120
+        # ========================================
+        # 1. 推进器 (机体系): clipped action × cfg 常数
+        # ========================================
+        forces[:, 0, 1] = delayed_actions[:, 0] * self.cfg.thrust_max
+        torques[:, 0, 2] = delayed_actions[:, 1] * self.cfg.yaw_torque_max
+
+        # ---- 以下水动力均在世界系计算, 最后统一逆旋转成机体系分量再施加 ----
+        # (set_external_force_and_torque 按机体系施加 (is_global=False); 旧实现把
+        #  世界系向量直接当机体系分量, 船有偏航时阻力/浮力方向被错误旋转)
+        force_w = torch.zeros_like(forces[:, 0, :])
+        torque_w = torch.zeros_like(torques[:, 0, :])
 
         # ========================================
-        # 2. 浮力和浮力力矩
+        # 2. 浮力和浮力力矩 (世界系)
         # ========================================
         buoyancy_force, buoyancy_torque = self._compute_buoyancy_forces()
-        forces[:, 0, :] = forces[:, 0, :] + buoyancy_force
-        torques[:, 0, :] = torques[:, 0, :] + buoyancy_torque
+        force_w += buoyancy_force
+        torque_w += buoyancy_torque
 
         # ========================================
-        # 3. 深度相关的阻尼力
+        # 3. 水动力阻尼: 线性+二次 (系数与出处见 UnderwaterPhysicsCfg)
         # ========================================
-        linear_damping, angular_damping = self._compute_depth_dependent_damping()
-
         vel_w = self.robot.data.root_com_vel_w
-
         if vel_w.shape[-1] == 6:
             linear_velocity = vel_w[:, :3]
             angular_velocity = vel_w[:, 3:]
@@ -797,47 +783,49 @@ class MyFirstTaskEnv(DirectRLEnv):
             linear_velocity = vel_w
             angular_velocity = self.robot.data.root_ang_vel_w
 
-        drag_force = -linear_damping.reshape(-1, 1) * linear_velocity
-        forces[:, 0, :] = forces[:, 0, :] + drag_force
+        v_xy = linear_velocity[:, :2]
+        speed_xy = torch.norm(v_xy, dim=-1, keepdim=True)
+        force_w[:, :2] += -(self.physics_cfg.surge_lin_damping
+                            + self.physics_cfg.surge_quad_damping * speed_xy) * v_xy
+        force_w[:, 2] += -self.physics_cfg.heave_damping * linear_velocity[:, 2]
 
-        angular_drag = -angular_damping.reshape(-1, 1) * angular_velocity
-        torques[:, 0, :] = torques[:, 0, :] + angular_drag
+        wz = angular_velocity[:, 2]
+        torque_w[:, 2] += -(self.physics_cfg.yaw_lin_damping
+                            + self.physics_cfg.yaw_quad_damping * torch.abs(wz)) * wz
+        torque_w[:, :2] += -self.physics_cfg.rollpitch_rate_damping * angular_velocity[:, :2]
 
         # ========================================
-        # 4. 姿态稳定
+        # 4. 姿态稳定弹簧 (世界系; 速率阻尼已并入第 3 节)
         # ========================================
         quat = self.robot.data.root_link_quat_w
         w, x, y, z = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
-
         pitch_angle = torch.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y))
         roll_angle = torch.asin(torch.clamp(2 * (w * y - z * x), -1.0, 1.0))
-
-        torques[:, 0, 0] += -pitch_angle * 200.0
-        torques[:, 0, 1] += -roll_angle * 200.0
-        torques[:, 0, 1] += -angular_velocity[:, 1] * 25.0
+        torque_w[:, 0] += -pitch_angle * self.physics_cfg.attitude_spring
+        torque_w[:, 1] += -roll_angle * self.physics_cfg.attitude_spring
 
         # ========================================
-        # 5. 洋流力
+        # 5. 洋流力 (世界系)
         # ========================================
-        current_force = self._compute_current_forces()
-        forces[:, 0, :] = forces[:, 0, :] + current_force
+        force_w += self._compute_current_forces()
 
         # ========================================
-        # 🆕 6. 波浪力
+        # 🆕 6. 波浪力 (世界系)
         # ========================================
         heave_force, roll_torque = self._compute_wave_forces()
-        forces[:, 0, 2] += heave_force
-        torques[:, 0, 1] += roll_torque
+        force_w[:, 2] += heave_force
+        torque_w[:, 1] += roll_torque
 
         # 波浪阻力
         if self.wave_cfg.enable_wave:
             wave_drag_force = -self.wave_drag.unsqueeze(-1) * self.forwards[:, :2]
-            forces[:, 0, 0] += wave_drag_force[:, 0]
-            forces[:, 0, 1] += wave_drag_force[:, 1]
+            force_w[:, :2] += wave_drag_force
 
         # ========================================
-        # 7. 施加所有力和力矩
+        # 7. 世界系 → 机体系, 与推力合并后施加
         # ========================================
+        forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_w)
+        torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
         self.robot.set_external_force_and_torque(forces, torques)
 
         # 轨迹线绘制
