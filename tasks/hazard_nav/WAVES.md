@@ -36,6 +36,22 @@ It feels them. Giving the policy wave observations means appending channels to
 `tasks/_shared/obs_superset.py` (append-only — read the header there first) and
 retraining; that is a separate piece of work.
 
+## Recording video
+
+`play.py` initialises wandb, and if stale `wandb-core` processes are still
+holding the service port it hangs — no error, no output, just a process
+sitting at ~0% CPU until it eventually dies on a 30-second token timeout.
+Disable wandb when recording:
+
+```powershell
+$env:WANDB_MODE = "disabled"
+python scripts\reinforcement_learning\skrl\play.py --task=Isaac-USV-HazardNav-Jonswap-Direct-v3 --num_envs=1 --seed=42 --headless --video --video_length=900 --checkpoint=<path>.pt
+```
+
+`eval_hazard_nav.py` turns wandb off itself, so evaluation is unaffected; this
+only bites on `play.py`. Sample clips of all three sea states are in
+`artifacts/hazard_nav_wave_sweep/videos/`.
+
 ## Sea states are per-vehicle
 
 BlueBoat's hull is 0.376 m tall, so the surface only has to move +-0.188 m for
