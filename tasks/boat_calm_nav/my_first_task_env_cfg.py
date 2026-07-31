@@ -116,7 +116,9 @@ class MyFirstTaskEnvCfg(DirectRLEnvCfg):
     episode_length_s = 120.0
 
     action_space = 2
-    observation_space = int(__import__('os').environ.get('OBS_DIM', '3'))
+    # 🔧 默认值原来是 3,和本任务 STARTER_TASK.md 的 V26 参考配方(OBS_DIM=9 +
+    #    OBS_EXTENDED=1)、以及仓库里 ship 的 checkpoint 都对不上。
+    observation_space = int(_os.environ.get('OBS_DIM', '9'))
     state_space = 0
 
     goal_radius: float = 3.0   # boat 5.5m 长,2m 过紧

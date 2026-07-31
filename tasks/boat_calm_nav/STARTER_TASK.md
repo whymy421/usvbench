@@ -3,7 +3,9 @@
 > **Vessel**: 5 m monohull (`boat_physics.usdc`)
 > **Condition**: calm water (no waves, no current)
 > **Algorithm**: PPO (single agent)
-> **Status**: ✅ validated — V26 = 4.76 targets/episode @ 3000 iter (Yutong, seed 42)
+> **Status**: ✅ validated — V26 = **3.75** targets/episode on the deterministic eval
+> (`boat_calm_v26_s42.pt`, final checkpoint of a 3000-iteration seed-42 run).
+> Baselines are maintained in [`TASKS.md`](../../TASKS.md#current-baselines).
 > **Gym id**: `Isaac-My-First-Task-Calm-Boat-Direct-v1`
 > **wandb**: https://wandb.ai/whymysong321-university-of-southampton/usvbench/runs/si1f8sq1
 
@@ -103,7 +105,8 @@ python scripts/eval_benchmark.py --task=Isaac-My-First-Task-Calm-Boat-Direct-v1 
   --num_envs=64 --eval_steps=6000 --headless \
   --checkpoint=<repo>/tasks/boat_calm_nav/checkpoints/boat_calm_v26_s42.pt
 ```
-Reference: `targets_per_episode` ≈ **5.1** (seed 42). Note: the boat has higher
+Add `--seed 2026` to match [`TASKS.md`](../../TASKS.md#current-baselines).
+Reference: `targets_per_episode` = **3.75** (seed 42). Note: the boat has higher
 seed-variance than the ROV — see *Known limitation* below.
 
 ---
@@ -114,7 +117,7 @@ Reference: V26 (`boat_calm_V26_speedcouple_s42`, wandb `si1f8sq1`).
 
 | Metric | Reference | Meaning |
 |--------|-----------|---------|
-| `Metrics/targets_per_episode` | **~4.8** | boat reaches several targets per episode |
+| `Metrics/targets_per_episode` | training-time metric, stochastic policy | boat reaches several targets per episode |
 | `Nav/speed` | ~5 m/s (cap) | boat is moving at full cruise |
 | `Episode / Total timesteps (mean)` | ~6700 / 7200 | survives most of the episode |
 
@@ -141,7 +144,7 @@ Reproduce within ~20%. With V26 the boat navigates **bow-first** toward targets
 
 ## Known limitation — an open problem (optional to improve)
 
-The boat is the **weak spot** of the benchmark: ~4.8 targets/ep vs the ROV's ~24. It
+The boat is the **weak spot** of the benchmark: 3.75 targets/ep vs the ROV's 4.48. It
 took a lot of reward tuning (V11→V26→V40) just to get here, and neither baseline is
 clean: V26 navigates bow-first but is slow/modest, V40 scores higher but reverses into
 targets. Root causes are the boat's non-marine-grade physics (mass/volume are a float-

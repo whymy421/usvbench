@@ -28,8 +28,12 @@ with what I'm building. The examples are a default, not a requirement.
 
 | Vessel | Task | Owner | Status |
 |--------|------|-------|--------|
-| ROV | calm nav | Yutong | ✅ done (Task A, ~6.9 tgt/ep) |
-| 5 m monohull | calm nav | Yutong | ✅ done (Task B, ~4.8 tgt/ep) |
+| ROV | calm nav | Yutong | ✅ done (Task A, **4.48** tgt/ep) |
+| 5 m monohull | calm nav | Yutong | ✅ done (Task B, **3.75** tgt/ep) |
+
+> Baselines are maintained in one place only: [`TASKS.md`](../TASKS.md#current-baselines).
+> Both are the deterministic `eval_benchmark.py` score of the checkpoint shipped in this
+> repo, on the realistic-dynamics physics merged 2026-07-31.
 | **Arif's task 1** | *e.g.* catamaran high-speed patrol | **Arif (P1)** | ⬜ TODO (your call) |
 | **Arif's task 2** | *e.g.* ~100 m ship harbor approach | **Arif (P2)** | ⬜ TODO (your call) |
 
@@ -39,8 +43,8 @@ with what I'm building. The examples are a default, not a requirement.
 
 | Week | Phase | Goal | Deliverable |
 |------|-------|------|-------------|
-| **1** | P0 | Setup + reproduce **Task A (ROV calm)** | wandb run, `targets_per_episode` ≥ 5.5 |
-| **2** | P0 | Reproduce **Task B (boat calm)**, 3 seeds | 3 wandb runs ≥ 4.0 tgt/ep; Friday: "P0 done" |
+| **1** | P0 | Setup + reproduce **Task A (ROV calm)** | ≥ 3.5 tgt/ep on the deterministic eval |
+| **2** | P0 | Reproduce **Task B (boat calm)**, 3 seeds | 3 runs ≥ 3.0 tgt/ep; Friday: "P0 done" |
 | **3** | P1 | Get a **catamaran USD**, verify forward-axis with a debug thrust | USD in `assets/`, axis noted |
 | **4** | P1 | Fork `boat_calm_nav` → `catamaran_patrol`, make it **float + move** (no RL yet) | stable physics demo |
 | **5** | P1 | Single-target navigation learns on the catamaran | wandb run reaching targets |
@@ -73,15 +77,17 @@ This proves your Isaac Lab + skrl + wandb pipeline works before you build anythi
 2. Get repo access (send me your GitHub username) and clone to `~/usvbench`.
 3. Copy `tasks/rov_calm_nav/` into `<IsaacLab>/source/isaaclab_tasks/isaaclab_tasks/direct/`.
 4. Follow `tasks/rov_calm_nav/STARTER_TASK.md`. Run ~30 min.
-5. **Success**: `targets_per_episode` ≥ 5.5. Send me the wandb link.
-   (Reference: 6.9 / 6.5 tgt/ep on `rov_calm_current_s42.pt`, eval seeds 42 / 2026.
-   The old ≥ 20 figure predates the current-drag physics and no longer applies.)
+5. **Success**: `targets_per_episode` ≥ 3.5 on the deterministic eval. Send me the
+   wandb link. (Reference: the shipped `rov_calm_s42.pt` scores **4.48** — see
+   [`TASKS.md`](../TASKS.md#current-baselines) for the exact command. Earlier drafts of
+   this doc quoted 6.9 from a `rov_calm_current_s42.pt` that was never committed, and
+   before that ≥ 20 from the pre-merge physics; both are obsolete.)
 
 **Week 2 — Task B (boat), 3 seeds:**
 1. Same install steps for `tasks/boat_calm_nav/`.
 2. Read its STARTER carefully — **the reward is different from Task A and the doc explains why**. Use the exact env vars given; do NOT set `FORWARD_TRANSIT=1`.
 3. Run seeds 42, 123, 456.
-4. **Success**: each run ≥ 4.0 `targets_per_episode`. Send 3 wandb links.
+4. **Success**: each run ≥ 3.0 `targets_per_episode`. Send 3 wandb links.
 
 If your numbers are far off, **message me before moving on** — don't power through.
 
@@ -103,7 +109,9 @@ single-target with a waypoint sequence → reward fast transit + waypoint reach 
 **Success criteria**:
 - Physics stable (floats, doesn't sink/fly/NaN)
 - Mean speed > 1.0 m/s
-- All 3 seeds average ≥ 2/5 waypoints per episode
+- `targets_per_episode` ≥ 2.0 averaged over the 3 seeds, on the deterministic eval
+  (same metric and command as the reference tasks — cumulative waypoints reached per
+  120 s episode, so a repeating circuit can score above the number of waypoints in a lap)
 - Public wandb runs + PR with baseline numbers
 
 ---
