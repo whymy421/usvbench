@@ -61,6 +61,8 @@ class HazardNavEnv(DirectRLEnv):
         )
         self._wave_active = str(self.cfg.wave.mode).lower() != "calm"
         self.wave_elevation = torch.zeros(self.num_envs, device=self.device)
+        if self._wave_active:
+            self._warn_if_buoyancy_saturates()
         self.goal_radius = float(self.cfg.goal_radius)
         self.target_pos = self.scene.env_origins[:, :2].clone()
         self.d0_per_env = torch.ones(self.num_envs, device=self.device)
@@ -409,6 +411,36 @@ class HazardNavEnv(DirectRLEnv):
 
     def _root_quat(self) -> torch.Tensor:
         return self.robot.data.root_link_quat_w
+
+    def _warn_if_buoyancy_saturates(self) -> None:
+        """Warn when the sea state is too big for the hull to respond to it.
+
+        The submerged fraction clamps at 0 and 1, so once ``|eta|`` exceeds
+        half the hull height the boat is either fully airborne or fully under
+        and the wave shape stops mattering -- different wave models then score
+        the same, which reads as a result rather than as a broken setup.
+        """
+        half_hull = self.physics_cfg.rov_height / 2.0
+        x = torch.zeros(self.num_envs, device=self.device)
+        y = torch.zeros(self.num_envs, device=self.device)
+        samples = torch.cat(
+            [self.wave_field.elevation(t * 0.05, x, y) for t in range(200)]
+        )
+        saturated = (samples.abs() >= half_hull).float().mean().item()
+        print(
+            f"\n[WAVE] mode={self.cfg.wave.mode} "
+            f"eta_std={samples.std().item():.3f} m "
+            f"peak={samples.abs().max().item():.3f} m "
+            f"hull_half={half_hull:.3f} m "
+            f"saturated={saturated * 100:.1f}%"
+        )
+        if saturated > 0.05:
+            print(
+                f"[WAVE][WARN] buoyancy saturates {saturated * 100:.1f}% of the "
+                "time (>5%): the hull spends that fraction fully out of or "
+                "fully under the water, so this measures free-fall, not wave "
+                "response. Reduce the sea state for this vehicle."
+            )
 
     def _sim_time_s(self) -> float:
         """Absolute sim time. Waves are a world field, not a per-env clock."""
