@@ -16,8 +16,8 @@ Observations (OBS_DIM=12 default):
   [10-11] padding zeros (or extended obs if OBS_DIM > 12)
 
 Actions [N, 2]:
-  [0]  forward thrust   ∈ [-1, 1]  → ±MAX_THRUST N along body +X
-  [1]  yaw torque       ∈ [-1, 1]  → ±MAX_TORQUE N·m around body +Z
+  [0]  forward thrust   ∈ [-1, 1]  → cfg.thrust_max_fwd / thrust_max_rev along body +X
+  [1]  yaw torque       ∈ [-1, 1]  → ±cfg.yaw_torque_max N·m around body +Z
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ try:
 except ImportError:
     _WANDB = False
 from isaaclab.envs import DirectRLEnv
-from isaaclab.utils.math import quat_rotate, quat_rotate_inverse
+from isaaclab.utils.math import quat_rotate_inverse
 from .catamaran_patrol_env_cfg import CatamaranPatrolEnvCfg
 
 # ── tunable via environment variables ────────────────────────────────────────
@@ -37,13 +37,14 @@ PROGRESS_COEF = float(os.environ.get("PROGRESS_COEF", "3.0"))   # 3× stronger n
 REACH_BONUS   = float(os.environ.get("REACH_BONUS",   "150.0")) # 3× bigger waypoint bonus
 HEADING_W     = float(os.environ.get("HEADING_W",     "0.5"))   # max heading reward per step
 SPEED_COUPLE  = int(  os.environ.get("SPEED_COUPLE",  "1"))
-SPEED_REF     = float(os.environ.get("SPEED_REF",     "5.0"))   # m/s, ~terminal speed at full thrust
+# Terminal surge speed that comes out of the thrust/drag balance in the cfg. If you
+# change thrust_max_fwd or the surge damping, recompute this — the speed-coupled heading
+# reward is normalised by it, so a stale value silently rescales the whole reward.
+SPEED_REF     = float(os.environ.get("SPEED_REF",     "2.5"))   # m/s
 OBS_DIM       = int(  os.environ.get("OBS_DIM",       "12"))
 N_WAYPOINTS   = int(  os.environ.get("N_WAYPOINTS",   "4"))
 WANDB_EVERY   = int(  os.environ.get("WANDB_EVERY",   "60"))    # log every N steps, not every step
 
-MAX_THRUST = 200.0   # N  (catamaran is heavier than boat)
-MAX_TORQUE = 100.0   # N·m
 FWD_X      = 1       # body +X = bow
 
 
@@ -64,10 +65,6 @@ class CatamaranPatrolEnv(DirectRLEnv):
         # For eval script compatibility (same attr as boat/ROV tasks)
         self.reached_count = 0
         self._last_reached_mask = torch.zeros(N, dtype=torch.bool, device=D)
-
-        # Water force accumulators
-        self._water_F = torch.zeros(N, 3, device=D)
-        self._water_T = torch.zeros(N, 3, device=D)
 
         # Env origins — scene.env_origins is None without a terrain system,
         # so compute a grid manually from env_spacing.
@@ -117,63 +114,84 @@ class CatamaranPatrolEnv(DirectRLEnv):
         idx = nxt.view(-1, 1, 1).expand(-1, 1, 3)
         return self.waypoint_pos.gather(1, idx).squeeze(1)
 
-    # ── Water physics ─────────────────────────────────────────────────────────
-    def _compute_water_forces(self):
-        phys    = self.cfg.underwater_physics_cfg
-        pos     = self.robot.data.root_pos_w
-        vel_w   = self.robot.data.root_lin_vel_w
-        ang_w   = self.robot.data.root_ang_vel_w
-
-        # Buoyancy (vertical, proportional to submersion)
-        z       = pos[:, 2]
-        sub     = torch.clamp(-z / max(phys.rov_height, 1e-3), 0.0, 1.0)
-        F_buo_z = sub * phys.water_density * phys.gravity * phys.rov_volume
-
-        # Damping (switch between water/air)
-        in_water   = (z < phys.water_surface_z).float()
-        d_lin      = in_water * phys.max_linear_damping  + (1.0 - in_water) * phys.air_linear_damping
-        d_ang      = in_water * phys.max_angular_damping + (1.0 - in_water) * phys.air_angular_damping
-
-        F = -d_lin.unsqueeze(-1) * vel_w
-        # Vertical motion gets its own damping coefficient: buoyancy is a stiff linear
-        # spring here, and reusing the surge coefficient left it at zeta = 0.03, so the
-        # hull oscillated in heave for ~30 s after every reset.
-        d_heave = in_water * phys.heave_damping + (1.0 - in_water) * phys.air_linear_damping
-        F[:, 2] = -d_heave * vel_w[:, 2] + F_buo_z
-        T = -d_ang.unsqueeze(-1) * ang_w
-
-        self._water_F = F
-        self._water_T = T
-
     # ── Isaac Lab callbacks ───────────────────────────────────────────────────
     def _pre_physics_step(self, actions: torch.Tensor):
         self.actions = actions.clone().clamp(-1.0, 1.0)
 
     def _apply_action(self):
-        """Called once per physics sub-step (decimation times per policy step)."""
-        self._compute_water_forces()
+        """Called once per physics sub-step (decimation times per policy step).
 
-        rot = self.robot.data.root_quat_w
+        Frame discipline, matching boat_calm_nav: hull drag is anisotropic and therefore
+        lives in the BODY frame, alongside the thrusters; buoyancy, heave damping and the
+        attitude terms are natural in the WORLD frame. The two are kept in separate
+        accumulators and the world-frame one is rotated into the body frame exactly once,
+        at the point of application.
 
-        # Thruster forces in body frame
-        F_body = torch.zeros_like(self._water_F)
-        T_body = torch.zeros_like(self._water_T)
-        F_body[:, 0] = FWD_X * self.actions[:, 0] * MAX_THRUST
-        T_body[:, 2] =         self.actions[:, 1] * MAX_TORQUE
+        set_external_force_and_torque() defaults to is_global=False, i.e. it treats
+        whatever it is given as body-local and rotates it by the hull attitude. Handing it
+        a world-frame vector applies that rotation a second time. The error is exactly zero
+        at yaw = 0 — which is where every episode starts — and grows with heading, so it
+        survives any quick test. scripts/check_wrench_frame.py is the check that catches it.
+        """
+        phys = self.cfg.underwater_physics_cfg
+        cfg  = self.cfg
+        quat = self.robot.data.root_quat_w
+        pos  = self.robot.data.root_pos_w
+        vel_w = self.robot.data.root_lin_vel_w
+        ang_w = self.robot.data.root_ang_vel_w
 
-        # Rotate to world frame and add water forces (buoyancy/damping are world-frame)
-        F_world = quat_rotate(rot, F_body) + self._water_F   # [N, 3]
-        T_world = quat_rotate(rot, T_body) + self._water_T   # [N, 3]
+        forces  = torch.zeros(self.num_envs, 3, device=self.device)
+        torques = torch.zeros(self.num_envs, 3, device=self.device)
+        force_w  = torch.zeros_like(forces)
+        torque_w = torch.zeros_like(torques)
 
-        # BUGFIX: set_external_force_and_torque() defaults to is_global=False, i.e. it
-        # treats the wrench as body-local and rotates it by the hull attitude again.
-        # With a world-frame wrench that applied the rotation twice: thrust pointed at
-        # 2*yaw instead of yaw, and the drag/buoyancy terms were rotated out of world
-        # frame as well. The vessel could never track a heading.
-        # API expects [num_envs, num_bodies, 3] — unsqueeze body dim
-        self.robot.set_external_force_and_torque(
-            F_world.unsqueeze(1), T_world.unsqueeze(1), is_global=True
-        )
+        # ── Thrusters (body frame), asymmetric forward/reverse ────────────────
+        a0 = self.actions[:, 0]
+        thrust = torch.where(a0 >= 0, a0 * cfg.thrust_max_fwd, a0 * cfg.thrust_max_rev)
+        forces[:, 0]  = FWD_X * thrust
+        torques[:, 2] = self.actions[:, 1] * cfg.yaw_torque_max
+
+        # ── Buoyancy (world frame), proportional to submersion ────────────────
+        z   = pos[:, 2]
+        sub = torch.clamp(-z / max(phys.rov_height, 1e-3), 0.0, 1.0)
+        force_w[:, 2] += sub * phys.water_density * phys.gravity * phys.rov_volume
+
+        in_water = (z < phys.water_surface_z).float()
+
+        # ── Hull drag (body frame), per-DOF linear + quadratic ────────────────
+        vel_b = quat_rotate_inverse(quat, vel_w)
+        forces[:, 0] += -(phys.surge_lin_damping
+                          + phys.surge_quad_damping * vel_b[:, 0].abs()) * vel_b[:, 0] * in_water
+        forces[:, 1] += -(phys.sway_lin_damping
+                          + phys.sway_quad_damping * vel_b[:, 1].abs()) * vel_b[:, 1] * in_water
+
+        # Out of the water the hull only sees air drag, on every axis.
+        air = (1.0 - in_water).unsqueeze(-1) * phys.air_linear_damping
+        forces -= air * vel_b
+
+        # ── Heave damping (world frame) ───────────────────────────────────────
+        force_w[:, 2] += -(in_water * phys.heave_damping) * vel_w[:, 2]
+
+        # ── Yaw damping, linear + quadratic; roll/pitch rate damping ──────────
+        wz = ang_w[:, 2]
+        torque_w[:, 2] += -(phys.yaw_lin_damping
+                            + phys.yaw_quad_damping * wz.abs()) * wz * in_water
+        torque_w[:, :2] += -(in_water * phys.rollpitch_rate_damping).unsqueeze(-1) * ang_w[:, :2]
+        torque_w -= ((1.0 - in_water) * phys.air_angular_damping).unsqueeze(-1) * ang_w
+
+        # ── Attitude restoring spring (world frame) ───────────────────────────
+        # The task previously modelled no righting moment at all, so attitude was damped
+        # but never restored. Same treatment and same stiffness as both reference tasks.
+        w, x, y, zq = quat[:, 0], quat[:, 1], quat[:, 2], quat[:, 3]
+        pitch = torch.atan2(2 * (w * x + y * zq), 1 - 2 * (x * x + y * y))
+        roll  = torch.asin(torch.clamp(2 * (w * y - zq * x), -1.0, 1.0))
+        torque_w[:, 0] += -pitch * phys.attitude_spring
+        torque_w[:, 1] += -roll * phys.attitude_spring
+
+        # ── World frame → body frame, then apply once ─────────────────────────
+        forces  += quat_rotate_inverse(quat, force_w)
+        torques += quat_rotate_inverse(quat, torque_w)
+        self.robot.set_external_force_and_torque(forces.unsqueeze(1), torques.unsqueeze(1))
 
     def _get_observations(self) -> dict:
         pos   = self.robot.data.root_pos_w
@@ -200,9 +218,12 @@ class CatamaranPatrolEnv(DirectRLEnv):
         dir_cur   = to_cur_b[:, :2] / (dist_cur  + 1e-6)
         dir_nxt   = to_nxt_b[:, :2] / (dist_nxt  + 1e-6)
 
+        # Normalisers track the terminal values from the cfg force balance (2.5 m/s,
+        # 1.0 rad/s) with headroom. Leaving these at the old 8.0 / 3.0 would squash the
+        # velocity channels into a fraction of their range.
         max_dist  = max(self.cfg.patrol_radius * 2.0, 1.0)
-        max_speed = 8.0
-        max_yaw   = 3.0
+        max_speed = 4.0
+        max_yaw   = 2.0
 
         # BUGFIX: the circuit repeats, so wps_done / N_WAYPOINTS grew past 1 and kept
         # growing for the whole episode — an unbounded, drifting observation. What the

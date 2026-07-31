@@ -20,6 +20,12 @@ The reported `1.35 tgt/ep` does not reproduce under the standardized protocol.
 
 ## Bugs fixed on this branch
 
+> These are the defects as found, with the fix that was applied at the time. Three of the
+> values below were later superseded by the physics port documented further down —
+> `is_global=True` became body-frame assembly with the API default, the 90 deg/s cap
+> became 573, and `heave_damping` 700 became 330. The diagnosis in each item still stands;
+> read the port section for what the code does today.
+
 ### 1. External wrench applied in the wrong frame (decisive)
 
 `_apply_action` rotated thrust and torque into the world frame and then called
@@ -121,6 +127,47 @@ surge damping. Measured after the change: `std 0.045 m`, range
   imported.
 - NOTES.md said the waypoint radius jitter is +/-40%; the code samples
   `0.8..1.2 x patrol_radius`, i.e. +/-20%.
+
+## Ported onto the reference physics (2026-07-31)
+
+After the fixes below were validated, the task was ported onto the same physics model
+the reference tasks now use on `main`, so its score is comparable to theirs and it is not
+the odd vessel out:
+
+- **Per-DOF linear+quadratic hydrodynamic damping** replaces the single isotropic
+  coefficient. Coefficients are Froude-scaled from the VRX WAM-V exactly the way
+  `boat_calm_nav` derives its own — lambda = (120/195)^(1/3) = 0.850 for this 120 kg hull.
+- **Actuator limits moved into the cfg** (`thrust_max_fwd` 850 N, `thrust_max_rev` 340 N,
+  `yaw_torque_max` 740 N.m), replacing the hardcoded `MAX_THRUST` / `MAX_TORQUE` module
+  constants, with asymmetric forward/reverse thrust.
+- **Velocity caps made non-binding** (`max_angular_velocity` 573 deg/s). The 90 deg/s in
+  the first round of fixes was still clamping the hull: the damping-limited rate is
+  2.5 rad/s and 90 deg/s is 1.57.
+- **Attitude restoring spring added.** The task modelled no righting moment at all;
+  measured roll was `std 1.9 deg, max 8.3 deg`, now exactly 0.
+- **Frame discipline matched to the boat**: body-frame terms go straight into the force
+  tensor, world-frame terms accumulate separately and are rotated in once at the end,
+  with the API default `is_global=False`.
+
+Sizing is documented in the cfg and verified open-loop:
+
+| | design | measured |
+|---|---|---|
+| terminal surge | 2.50 m/s | **2.500** |
+| terminal yaw | 1.00 rad/s | **1.000** |
+| drift vs bow under thrust | 0 deg | **0.0** |
+| turning radius at cruise | 2.5 m (same as the boat reference) | 2.5 m |
+
+Two knock-on constants had to move with the terminal speed, and both would have failed
+silently: `SPEED_REF` in the speed-coupled heading reward (5.0 -> 2.5, otherwise the
+reward is permanently scaled to 40% of its design value) and the observation normalisers
+`max_speed` / `max_yaw` (8.0/3.0 -> 4.0/2.0).
+
+Known limitation, stated rather than hidden: the Froude scaling is anchored on mass,
+following the boat. By mass the catamaran is the larger vessel (lambda 0.850 vs 0.800),
+but its hull is 3.0 m against the boat's 5 m — heavier and shorter — so mass-anchored
+scaling overstates its length scale. No catamaran hull-form correction is applied at all.
+This is a documented first approximation, not measured hydrodynamics.
 
 ## Result after the fixes
 
