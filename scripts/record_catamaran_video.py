@@ -124,18 +124,20 @@ def main(env_cfg, experiment_cfg):
     env_cfg.seed = args_cli.seed
     experiment_cfg["seed"] = args_cli.seed
 
-    # Camera rigs, both tracking the hull: "chase" for how the vessel moves, "top" high
-    # enough that the surrounding waypoints stay in frame next to it.
-    height = args_cli.cam_height if args_cli.cam_height is not None else (14.0 if args_cli.cam == "chase" else 90.0)
-    env_cfg.viewer.origin_type = "asset_root"
-    env_cfg.viewer.asset_name = "robot"
+    # Camera rigs. "chase" tracks the hull. "top" is driven per step below so that the
+    # vessel and the whole patrol circuit are always both in frame — a fixed follow-cam
+    # loses the waypoints entirely as soon as the policy wanders off the circuit.
+    height = args_cli.cam_height if args_cli.cam_height is not None else 14.0
     env_cfg.viewer.env_index = 0
     env_cfg.viewer.resolution = (1280, 720)
     env_cfg.viewer.lookat = (0.0, 0.0, 0.0)
     if args_cli.cam == "chase":
+        env_cfg.viewer.origin_type = "asset_root"
+        env_cfg.viewer.asset_name = "robot"
         env_cfg.viewer.eye = (-22.0, -22.0, height)
     else:
-        env_cfg.viewer.eye = (0.0, -0.01, height)
+        env_cfg.viewer.origin_type = "world"
+        env_cfg.viewer.eye = (0.0, -0.01, 90.0)
 
     checkpoint = os.path.abspath(args_cli.checkpoint)
     if not os.path.isfile(checkpoint):
@@ -223,6 +225,17 @@ def main(env_cfg, experiment_cfg):
     n_wp = base.waypoint_pos.shape[1]
     reached_start = int(getattr(base, "reached_count", 0))
     min_dist = float("inf")
+    max_from_centre = 0.0
+
+    # circuit centre and the radius that has to stay visible around it
+    origins = getattr(base.scene, "env_origins", None)
+    centre = (origins[0] if origins is not None else base._env_origins[0]).clone()
+    circuit_r = float(getattr(base.cfg, "patrol_radius", 12.0)) * 1.2 + goal_radius
+
+    # half-height of the frame at unit camera altitude, for the default Kit perspective
+    FRAME_HALF_PER_METRE = 0.325
+    cam_mid = centre[:2].clone()
+    cam_height = 90.0
 
     # Frames are grabbed here instead of through gym.wrappers.RecordVideo: the RTX
     # viewport hands back an empty buffer on every second render call, which makes
@@ -271,6 +284,23 @@ def main(env_cfg, experiment_cfg):
             pos = base.robot.data.root_pos_w[0, :2]
             target = base.waypoint_pos[0, wp_before, :2]
             min_dist = min(min_dist, float(torch.norm(pos - target).item()))
+            max_from_centre = max(max_from_centre, float(torch.norm(pos - centre[:2]).item()))
+
+            if args_cli.cam == "top":
+                # frame the vessel and the circuit together, smoothed so the clip does
+                # not jitter as the vessel moves
+                mid = 0.5 * (pos + centre[:2])
+                need = max(
+                    float(torch.norm(pos - mid).item()),
+                    float(torch.norm(centre[:2] - mid).item()) + circuit_r,
+                )
+                target_height = min(max((need + 5.0) / FRAME_HALF_PER_METRE, 55.0), 400.0)
+                cam_mid = 0.97 * cam_mid + 0.03 * mid
+                cam_height = 0.97 * cam_height + 0.03 * target_height
+                base.viewport_camera_controller.update_view_location(
+                    eye=[float(cam_mid[0]), float(cam_mid[1]) - 0.01, cam_height],
+                    lookat=[float(cam_mid[0]), float(cam_mid[1]), 0.0],
+                )
 
         writer.append_data(_grab_frame())
 
@@ -286,6 +316,7 @@ def main(env_cfg, experiment_cfg):
     print(f"  steps recorded    : {args_cli.video_length} (~{args_cli.video_length / fps:.0f} s at {fps} fps)")
     print(f"  waypoints reached : {int(base.reached_count) - reached_start}")
     print(f"  closest approach  : {min_dist:.3f} m  (success radius {goal_radius:.1f} m)")
+    print(f"  max range from the circuit centre : {max_from_centre:.1f} m  (patrol radius {circuit_r:.1f} m)")
     print(f"  blank-frame retries: {blank_retries}")
     print(f"  output            : {video_path}")
     print("=" * 64 + "\n")

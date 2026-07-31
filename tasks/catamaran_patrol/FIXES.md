@@ -69,7 +69,45 @@ past 1 and kept growing for the whole episode — a drifting input the policy
 cannot normalise. Replaced with `wp_idx / N_WAYPOINTS`, which is the position
 inside the current lap and stays in [0, 1).
 
-### 5. Smaller items
+### 5. The hull mesh is rolled 90 degrees
+
+The vessel renders lying on its side. A mirror-symmetry test on the mesh settles
+it: a hull has exactly one mirror plane, the port-starboard centreline, and the
+mismatch score is 0.254 about Z against 1.717 about X and 1.861 about Y. So the
+mesh's beam axis is Z and its vertical axis is Y, while Isaac Sim treats +Z as
+world up. The stage metadata says `upAxis = Z`, but the geometry inside was
+authored Y-up and the conversion never compensated.
+
+Fix: a +90 degree rotation about X on the `/catamaran_scaled/geometry` xform.
+Root-frame extent goes from `3.0 x 1.014 x 1.101` (length x height x beam) to
+`3.0 x 1.101 x 1.014` (length x beam x height). No inertia is authored in the
+asset — PhysX derives it from the convex decomposition — so the inertia tensor
+is recomputed correctly by the rotation.
+
+Impact: mostly visual, but not only. The yaw inertia the simulator was using was
+97.06 where it should be 103.77 (7%), `rov_height` was effectively describing
+the beam rather than the height (8%), and any later hydrodynamics that depend on
+hull geometry — added mass, wave loads, wetted area — would have been wrong.
+
+Worth noting: the asset itself sets `physxRigidBody:maxAngularVelocity = 286`
+deg/s, which is 5 rad/s and perfectly reasonable. The turn-rate cap in item 2
+was introduced entirely by the task configuration overriding it with 5.0.
+
+### 6. Heave oscillation: buoyancy had almost no vertical damping
+
+Buoyancy is modelled as a linear spring of stiffness `rho*g*V/height` =
+2940 N/m. Against 120 kg that is a 1.27 s natural period, and the vertical
+damping reused the surge coefficient of 40 N.s/m, giving a damping ratio of
+0.034. The hull bobbed continuously; measured over 16 envs the heave was
+`std 0.126 m`, ranging `-0.761 .. -0.002 m`, still oscillating visibly after
+30 s.
+
+Fix: `heave_damping = 700.0` as its own coefficient (zeta = 0.59). This is also
+the physically right shape — heave damping on a real hull is far larger than
+surge damping. Measured after the change: `std 0.045 m`, range
+`-0.439 .. -0.002 m`, settled at the -0.400 m equilibrium draft within 1.5 s.
+
+### 7. Smaller items
 
 - Yaw-rate observation used the world-frame rate; now body-frame, matching the
   docstring and the rest of the observation vector.
@@ -95,10 +133,14 @@ Same standardized evaluation, 64 envs x 6000 steps, evaluation seed 2026:
 
 | metric | before (`3f2d799`) | after |
 |---|---|---|
-| targets_per_episode | 0.000 | **21.469** |
-| total targets | 0 | 1145 |
-| mean speed | 4.400 m/s | 3.600 m/s |
+| targets_per_episode | 0.000 | **19.406** |
+| total targets | 0 | 1035 |
+| mean speed | 4.400 m/s | 3.663 m/s |
 | out-of-bounds per episode | 0.000 | 0.000 |
+
+(An earlier run with items 1-4 fixed but before the hull rotation and the heave
+damping scored 21.469; the corrected hull inertia and the damped heave cost a
+little throughput and are the physically right configuration.)
 
 The P1 bar is 2.0 targets/episode averaged over three seeds and a mean speed
 above 1 m/s; seed 42 alone clears both by a wide margin. Seeds 123 and 456
@@ -116,6 +158,11 @@ still need to be run before P1 can be signed off.
   exact Isaac Lab and skrl versions used for training.
 - The submitted policy is saturated: mean absolute raw action ~26 before the
   environment clips to [-1, 1], and the policy `log_std` sits at the 2.0 cap.
+- No righting moment is modelled. The boat reference task adds roll and pitch
+  restoring torques; this task has none, so attitude is only damped, never
+  restored. Measured roll after the fixes is `std 1.9 deg, max 8.3 deg`, which
+  is a lot for a catamaran. Left alone here on purpose — it is a task-design
+  decision, not a bug introduced by the branch.
 
 ## How to re-check
 
