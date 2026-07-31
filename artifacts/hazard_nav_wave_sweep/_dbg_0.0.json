@@ -1,0 +1,17 @@
+{
+  "task": "Isaac-USV-HazardNav-Airy-Direct-v3",
+  "checkpoint": "C:\\Users\\Yutong\\usvbench\\tasks\\hazard_nav\\checkpoints\\hazard_nav_v11_best_s42.pt",
+  "checkpoint_name": "hazard_nav_v11_best_s42.pt",
+  "seed": 42,
+  "eval_level": 1,
+  "episodes": 8,
+  "successes": 2,
+  "success_rate": 0.25,
+  "spl": 0.22132265172796511,
+  "mean_time_to_success_s": 14.541667461395264,
+  "median_time_to_success_s": 14.541667461395264,
+  "mean_path_length_m": 21.161300539970398,
+  "mean_min_clearance_m": 0.2109309434890747,
+  "reverse_action_ratio_pre_goal": 0.9330264522821576,
+  "reverse_velocity_ratio_pre_goal": 0.9327022821576764
+}

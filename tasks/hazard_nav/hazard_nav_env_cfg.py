@@ -139,20 +139,29 @@ class WaveCfg:
     # needs.
     direction_deg: float | None = None
 
-    # Airy regular wave.
-    airy_height_m: float = 0.5
-    airy_period_s: float = 5.0
+    # Sea states are scaled to the hull, not copied from the calm reference
+    # tasks. BlueBoat displaces 0.0346 m^3 against the ROV's 20 m^3, and its
+    # hull is 0.376 m tall, so the surface only has to move +-0.188 m for the
+    # boat to leave the water or submerge completely. The rov/boat defaults
+    # (Airy 0.5 m, Hs 0.3-1.0 m) saturate buoyancy 25-46% of the time, which
+    # replaces wave response with free-fall and makes every wave model look
+    # alike. These values keep the peak well inside the hull.
+    airy_height_m: float = 0.12
+    airy_period_s: float = 3.0
 
     # JONSWAP irregular sea.
-    hs_min_m: float = 0.3
-    hs_max_m: float = 1.0
-    tp_min_s: float = 4.0
-    tp_max_s: float = 7.0
+    hs_min_m: float = 0.06
+    hs_max_m: float = 0.18
+    tp_min_s: float = 2.0
+    tp_max_s: float = 4.0
     gamma_min: float = 1.0
     gamma_max: float = 5.0
     n_components: int = 30
-    f_min_hz: float = 0.04
-    f_max_hz: float = 0.5
+    # Band follows Tp: at Tp = 2-4 s the peak sits at 0.25-0.5 Hz, so the
+    # ocean-scale 0.04-0.5 Hz band used by the calm tasks would clip the whole
+    # high-frequency side of the spectrum and under-deliver Hs.
+    f_min_hz: float = 0.10
+    f_max_hz: float = 1.60
     spread_deg: float = 30.0
 
     # Fraction of the hydrostatic restoring stiffness redirected from world-up
