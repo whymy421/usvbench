@@ -131,7 +131,9 @@ class MyFirstTaskEnvCfg(DirectRLEnvCfg):
     episode_length_s = 120.0
 
     action_space = 2
-    observation_space = int(__import__('os').environ.get('OBS_DIM', '7'))
+    # 🔧 默认值原来是 7,和本任务 STARTER_TASK.md 要求的 OBS_DIM=3、以及仓库里 ship 的
+    #    checkpoint 都对不上 —— 不显式设 OBS_DIM 直接跑,加载 checkpoint 会崩。
+    observation_space = int(_os.environ.get('OBS_DIM', '3'))
     state_space = 0
 
     goal_radius: float = 2.0

@@ -10,7 +10,7 @@
 
 1. **复现 ROV calm baseline**（Week 1–2）
    - 跑通 `Isaac-My-First-Task-Calm-Direct-v1`
-   - 复现基线 ~27 targets/episode
+   - 复现基线 **4.48** targets/episode（确定性评估，基线统一维护在 [`TASKS.md`](../TASKS.md#current-baselines)）
    - 确认整个流程（Isaac Lab + skrl + wandb）可用
 
 2. **Gazebo sim-to-sim 验证**（Week 3–4）
@@ -33,7 +33,7 @@
 1. **复现 boat calm V26 baseline**（Week 1–2）
    - 跑通 `Isaac-My-First-Task-Calm-Boat-Direct-v1`
    - 理解为什么 boat 的 reward 要特殊调（speed-coupling、reach bonus）
-   - 复现基线 ~5.1 targets/episode（seed 42）
+   - 复现基线 **3.75** targets/episode（seed 42，确定性评估，见 [`TASKS.md`](../TASKS.md#current-baselines)）
 
 2. **补充 boat 3-seed 基线**（Week 3）
    - 跑 seed 123 / 456 两次

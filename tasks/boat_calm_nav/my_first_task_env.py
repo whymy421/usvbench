@@ -1078,7 +1078,8 @@ class MyFirstTaskEnv(DirectRLEnv):
         # CALM: 波浪关闭时返回 obs(支持 3D 或 9D self-state 模式)
         if not self.wave_cfg.enable_wave:
             # 🆕 V6 style:obs 加 self-state(velocity body, ang_vel, prev_action)防 information bottleneck
-            obs_extended = int(os.environ.get('OBS_EXTENDED', '0'))
+            # 🔧 默认改成 1,和 STARTER_TASK.md 的 V26 参考配方及 ship 的 checkpoint 一致
+            obs_extended = int(os.environ.get('OBS_EXTENDED', '1'))
             if obs_extended == 1:
                 # body-frame velocity
                 vel_w_3d = self.robot.data.root_com_vel_w[:, :3]

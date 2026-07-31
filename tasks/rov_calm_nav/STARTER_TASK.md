@@ -3,7 +3,9 @@
 > **Vessel**: Doc Ricketts ROV (`ROV_rigged.usd`)
 > **Condition**: calm water (no waves, no current)
 > **Algorithm**: PPO (single agent)
-> **Status**: ✅ validated — 24 targets/episode @ 3000 iter (Yutong, seed 42)
+> **Status**: ✅ validated — **4.48** targets/episode on the deterministic eval
+> (`rov_calm_s42.pt`, final checkpoint of a 3000-iteration seed-42 run).
+> Baselines are maintained in [`TASKS.md`](../../TASKS.md#current-baselines).
 > **Gym id**: `Isaac-My-First-Task-Calm-Direct-v1`
 
 This is the **easiest task in USVBench** and the recommended Day-1 warmup. The ROV
@@ -85,7 +87,9 @@ python scripts/eval_benchmark.py --task=Isaac-My-First-Task-Calm-Direct-v1 \
   --num_envs=64 --eval_steps=6000 --headless \
   --checkpoint=<repo>/tasks/rov_calm_nav/checkpoints/rov_calm_s42.pt
 ```
-Reference: `targets_per_episode` ≈ **27.1 ± 2.4** over seeds 42 / 123 / 456.
+Add `--seed 2026` to match [`TASKS.md`](../../TASKS.md#current-baselines).
+Reference: `targets_per_episode` = **4.48** on the shipped `rov_calm_s42.pt`.
+(The old `27.1 ± 2.4` predates the realistic-dynamics merge and is not comparable.)
 
 ---
 
@@ -96,7 +100,7 @@ Reference run (Yutong, seed 42, 3000 iter): **`rov_calm_benchmark_s42`** on the
 
 | Metric | Reference | Meaning |
 |--------|-----------|---------|
-| `Metrics/targets_per_episode` | **~24** | reaches a new target every ~5 s |
+| `Metrics/targets_per_episode` | training-time metric, stochastic policy | reaches targets steadily |
 | `Reward / Instantaneous reward (mean)` | ~15 | policy strongly navigating |
 | `Nav/distance` | < 17 m | consistently closing on targets |
 | `Nav/speed` | > 4 m/s | moving fast, not stuck |
@@ -104,7 +108,7 @@ Reference run (Yutong, seed 42, 3000 iter): **`rov_calm_benchmark_s42`** on the
 You should reproduce within ~20%. Watch the auto-uploaded wandb videos to confirm
 the ROV drives smoothly to targets (not spinning in place).
 
-**If `targets_per_episode` < 5 or `speed` ≈ 0 after 3000 iter → message Yutong before continuing.**
+**If `targets_per_episode` < 2 or `speed` ≈ 0 after 3000 iter → message Yutong before continuing.**
 
 ---
 

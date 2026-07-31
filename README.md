@@ -14,8 +14,12 @@ with reproducible RL baselines for each vessel × task combination.
 
 | Task | Vessel | Condition | Baseline | Folder |
 |------|--------|-----------|----------|--------|
-| **A — ROV calm nav** | Doc Ricketts ROV | calm | ~24 targets/ep | [`tasks/rov_calm_nav/`](tasks/rov_calm_nav/STARTER_TASK.md) |
-| **B — Boat calm nav** | 5 m monohull | calm | ~4.8 targets/ep | [`tasks/boat_calm_nav/`](tasks/boat_calm_nav/STARTER_TASK.md) |
+| **A — ROV calm nav** | Doc Ricketts ROV | calm | **4.48** targets/ep | [`tasks/rov_calm_nav/`](tasks/rov_calm_nav/STARTER_TASK.md) |
+| **B — Boat calm nav** | 5 m monohull | calm | **3.75** targets/ep | [`tasks/boat_calm_nav/`](tasks/boat_calm_nav/STARTER_TASK.md) |
+
+Baselines are the deterministic `eval_benchmark.py` score of the checkpoint shipped in
+this repo. [`TASKS.md`](TASKS.md#current-baselines) is the single source of truth for
+these numbers — update them there, not here.
 
 Both are single-agent PPO point-navigation tasks. **Task A is the recommended Day-1
 warmup** (trains in ~30 min with the simplest reward). Task B is the same task on a real
@@ -65,14 +69,16 @@ python scripts/eval_benchmark.py --task=<gym-id> --num_envs=64 --eval_steps=6000
 (Set the same `OBS_DIM`/`OBS_EXTENDED` you trained with — the observation shape must match
 the network. Reward env-vars don't affect evaluation.)
 
-| Task | targets/ep (primary) | mean speed | notes |
-|------|----------------------|------------|-------|
-| ROV calm | **27.1 ± 2.4** (n=3) | 6.6 m/s | robust across seeds |
-| boat calm | ~5.1 (seed 42 only) | 4.6 m/s | 3-seed baseline pending; higher seed-variance |
+| Task | targets/ep (primary) | mean speed | oob/ep |
+|------|----------------------|------------|--------|
+| ROV calm | **4.48** (seed 42) | 1.48 m/s | 0.02 |
+| boat calm | **3.75** (seed 42) | 1.33 m/s | 0.00 |
 
-> The **Reference tasks** table above quotes *training-time* throughput (~24 / ~4.8);
-> the numbers here are the *standardized deterministic eval* (`eval_benchmark.py`), which
-> runs a little higher (~27 / ~5). Compare new methods against these eval numbers.
+> Single source of truth: [`TASKS.md`](TASKS.md#current-baselines), which also records the
+> measurement date and the checkpoint. These numbers are on the realistic-dynamics physics
+> merged on 2026-07-31 and **are not comparable to the older 27.1 / 5.1 figures** — see
+> that section for why. 3-seed means are still pending for both. Don't confuse the
+> deterministic eval score with the training-time wandb metric of the same name.
 
 **Metrics**: `targets_per_episode` (navigation throughput, **primary**) · `mean_speed` ·
 `oob_per_episode` (out-of-bounds events per episode — a control-quality diagnostic; in
