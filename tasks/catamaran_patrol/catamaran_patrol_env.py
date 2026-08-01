@@ -29,7 +29,8 @@ try:
 except ImportError:
     _WANDB = False
 from isaaclab.envs import DirectRLEnv
-from isaaclab.utils.math import quat_apply, quat_rotate_inverse
+from isaaclab.utils.math import quat_rotate_inverse
+from .._shared.restoring import restoring_torque_body
 from .catamaran_patrol_env_cfg import CatamaranPatrolEnvCfg
 
 # ── tunable via environment variables ────────────────────────────────────────
@@ -61,9 +62,6 @@ class CatamaranPatrolEnv(DirectRLEnv):
         self.wp_idx        = torch.zeros(N, dtype=torch.long, device=D)
         self.wps_done      = torch.zeros(N, device=D)
         self.prev_dist     = torch.zeros(N, device=D)
-
-        # Body +Z, for the yaw-invariant attitude spring in _apply_action
-        self._up_dir = torch.tensor([[0.0, 0.0, 1.0]], device=D)
 
         # For eval script compatibility (same attr as boat/ROV tasks)
         self.reached_count = 0
@@ -182,19 +180,19 @@ class CatamaranPatrolEnv(DirectRLEnv):
         torque_w[:, :2] += -(in_water * phys.rollpitch_rate_damping).unsqueeze(-1) * ang_w[:, :2]
         torque_w -= ((1.0 - in_water) * phys.air_angular_damping).unsqueeze(-1) * ang_w
 
-        # ── Attitude restoring spring (world frame) ───────────────────────────
-        # The task modelled no righting moment at all, so attitude was damped but never
-        # restored. Yaw-invariant form, k * (hull_up x world_up), same as the boat.
+        # ── Hydrostatic restoring moment (body frame) ─────────────────────────
+        # Shared implementation, tasks/_shared/restoring.py — the same one the newer
+        # tasks use, rather than a private copy. It is yaw-invariant by construction and
+        # takes separate roll and pitch stiffnesses, which this hull needs: measured off
+        # the mesh it is an order of magnitude stiffer in pitch than in roll.
         #
-        # NOT the Euler-angle form. Extracting roll/pitch from the quaternion and applying
-        # them as torques about the fixed world X/Y axes is restoring only near the spawn
-        # heading: the angles are body quantities, the axes are world axes, and the two
-        # only coincide at yaw = 0. Past ~90 deg of heading it precesses and then drives
-        # the hull over — capsize-by-turning. It measures clean at yaw = 0, which is where
-        # every episode starts and where any zero-action test sits, so it hides well.
-        up_hull_w = quat_apply(quat, self._up_dir.expand(self.num_envs, 3))
-        torque_w[:, 0] += phys.attitude_spring * up_hull_w[:, 1]
-        torque_w[:, 1] += -phys.attitude_spring * up_hull_w[:, 0]
+        # An earlier private version extracted roll/pitch from the quaternion and applied
+        # them about fixed WORLD axes. Those angles are body quantities; the two frames
+        # coincide only at yaw = 0, so it was restoring near the spawn heading and drove
+        # the hull over once it turned. check_catamaran_physics.py phase 3 guards this.
+        torques += restoring_torque_body(
+            quat, phys.restoring_stiffness_roll, phys.restoring_stiffness_pitch
+        )
 
         # ── World frame → body frame, then apply once ─────────────────────────
         forces  += quat_rotate_inverse(quat, force_w)

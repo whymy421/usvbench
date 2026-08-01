@@ -8,6 +8,8 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 import isaaclab.sim as sim_utils
 
+from .._shared.vehicles import VehicleSpec, get_vehicle
+
 _ASSET_DIR = _os.environ.get(
     "USVBENCH_ASSETS",
     _os.path.join(_os.path.expanduser("~"), "usvbench", "assets"),
@@ -46,68 +48,99 @@ CATAMARAN_CFG = RigidObjectCfg(
 )
 
 # ── Water physics ─────────────────────────────────────────────────────────────
+def _build_robot_cfg(spec: VehicleSpec) -> RigidObjectCfg:
+    """Build the rigid-body cfg from a registry entry."""
+    return RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Robot",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=_os.path.join(_ASSET_DIR, spec.usd_relpath),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                rigid_body_enabled=True,
+                # Non-binding safety bounds only. NOTE Isaac Lab units:
+                # max_linear_velocity is m/s but max_angular_velocity is DEG/s. This task
+                # originally shipped 5.0 here meaning rad/s, an effective 5 deg/s yaw cap
+                # -- a 49 m turning circle against a 12 m patrol circuit.
+                max_linear_velocity=8.0,     # m/s
+                max_angular_velocity=573.0,  # = 10 rad/s, never reached in practice
+                max_depenetration_velocity=1.0,
+                disable_gravity=False,
+                linear_damping=0.0,   # applied manually in env
+                angular_damping=0.0,
+            ),
+            mass_props=(
+                None if spec.mass_kg is None
+                else sim_utils.MassPropertiesCfg(mass=spec.mass_kg)
+            ),
+            activate_contact_sensors=False,
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.0, 0.0, 0.0),
+            rot=(1.0, 0.0, 0.0, 0.0),
+            lin_vel=(0.0, 0.0, 0.0),
+            ang_vel=(0.0, 0.0, 0.0),
+        ),
+        collision_group=0,
+    )
+
+
+def _build_underwater_physics_cfg(spec: VehicleSpec) -> "UnderwaterPhysicsCfg":
+    """Translate registry names to this task's physics interface."""
+    return UnderwaterPhysicsCfg(
+        rov_volume=spec.displaced_volume_m3,
+        rov_height=spec.hull_height_m,
+        buoyancy_center_offset=spec.buoyancy_center_offset_m,
+        surge_lin_damping=spec.surge_lin,
+        surge_quad_damping=spec.surge_quad,
+        sway_lin_damping=spec.sway_lin,
+        sway_quad_damping=spec.sway_quad,
+        heave_damping=spec.heave_damping,
+        yaw_lin_damping=spec.yaw_lin,
+        yaw_quad_damping=spec.yaw_quad,
+        restoring_stiffness_roll=spec.restoring_stiffness_roll,
+        restoring_stiffness_pitch=spec.restoring_stiffness_pitch,
+        rollpitch_rate_damping=spec.rollpitch_rate_damping,
+    )
+
+
 @configclass
 class UnderwaterPhysicsCfg:
+    """Hull physics. Every value is resolved from the vehicle registry in
+    ``CatamaranPatrolEnvCfg.__post_init__`` -- see ``tasks/_shared/vehicles.py`` for the
+    catamaran entry and the provenance of each number. The defaults here are only what a
+    bare instantiation gets."""
+
     water_density: float = 1000.0
     gravity: float = 9.8
-    rov_volume: float = 0.3        # 120 kg / 1000 = 0.12 m³ minimum; 0.3 gives positive buoyancy
-    rov_height: float = 1.0        # effective height for submersion calc
     water_surface_z: float = 0.0
 
-    # Hydrodynamic damping: per-DOF linear+quadratic, derived exactly the way
-    # boat_calm_nav derives its own — Froude-scaled from the VRX WAM-V shipped
-    # coefficients (xU=100, xUU=150, yV=100, yVV=100, zW=500, nR=800, nRR=800), with
-    # linear x lambda^2.5, quadratic x lambda^2, yaw linear x lambda^4.5, yaw quadratic
-    # x lambda^5. The boat uses lambda=0.8 for its 100 kg hull, which implies a 195 kg
-    # WAM-V reference; this 120 kg hull therefore gives lambda=(120/195)^(1/3)=0.850.
-    #   surge terminal: (65 + 110v)v  = 850 N   -> 2.50 m/s
-    #   yaw terminal:   (385 + 355r)r = 740 N.m -> 1.00 rad/s
-    # Hull drag is applied in BODY frame (surge and sway are separate).
-    #
-    # CAVEAT, deliberately written down rather than hidden: this scaling is anchored on
-    # mass, following the boat. By mass the catamaran is the *larger* vessel
-    # (lambda 0.850 vs 0.800), but its hull is 3.0 m against the boat's 5 m — it is
-    # heavier and shorter. Mass-anchored Froude scaling therefore overstates its length
-    # scale, and no catamaran hull-form correction is applied at all: twin slender demi-
-    # hulls have lower wave-making but more wetted area, and their beam separation should
-    # raise sway and yaw damping well above a monohull's. Treat these as a documented
-    # first approximation, not as measured hydrodynamics.
-    surge_lin_damping: float = 65.0    # N·s/m    (body-X, along the hulls)
-    surge_quad_damping: float = 110.0  # N·s²/m²
-    sway_lin_damping: float = 65.0     # N·s/m    (body-Y)
-    # NOT the Froude-scaled value (70). The VRX coefficients give this hull less
-    # resistance sideways than forwards, which is unphysical for any displacement hull:
-    # the lateral underwater area is several times the frontal area and it meets the flow
-    # bluff-on. Left at 70 the vessel skated through its turns — measured drift angle
-    # between velocity and bow averaged 17.4 deg with a p95 of 35 deg, and sway speed
-    # reached 1.53 m/s against a 2.37 m/s surge. A hull in a steady turn sits near 5-10.
-    #
-    # Replaced with the standard crossflow-drag estimate, 0.5*rho*Cd*A_lateral with
-    # Cd = 1.0 and A_lateral = L*T = 3.0 m x 0.400 m draft (the measured equilibrium
-    # draft) = 1.20 m^2, giving 600. That puts sway/surge quadratic at 5.5, inside the
-    # 3-10 band real hulls sit in.
-    #
-    # The same method applied to the other two axes is what says the problem is specific
-    # to sway rather than the scaling as a whole: it gives 48 for surge against the 110
-    # in use (same order, and lower, so the method is not simply inflating everything)
-    # and 506 for yaw against 355 (a factor of 1.4, inside the model's uncertainty).
-    # Yaw is therefore left alone — raising it would move the terminal yaw rate and hence
-    # the turning radius, which is the open sizing decision documented in FIXES.md.
-    sway_quad_damping: float = 600.0   # N·s²/m²  crossflow, not Froude-scaled
-    heave_damping: float = 330.0       # N·s/m    (zeta = 0.28 against the buoyancy spring)
-    yaw_lin_damping: float = 385.0     # N·m·s/rad
-    yaw_quad_damping: float = 355.0    # N·m·s²/rad²
-    # Roll/pitch are not task DOFs: stiff spring + overdamping, same treatment and same
-    # values as both reference tasks.
-    attitude_spring: float = 5000.0         # N·m/rad
-    rollpitch_rate_damping: float = 2000.0  # N·m·s/rad
+    rov_volume: float = 0.3
+    rov_height: float = 1.0
+    buoyancy_center_offset: float = 0.0
+
+    surge_lin_damping: float = 65.0
+    surge_quad_damping: float = 110.0
+    sway_lin_damping: float | None = 195.0
+    sway_quad_damping: float | None = 330.0
+    heave_damping: float = 330.0
+    yaw_lin_damping: float = 385.0
+    yaw_quad_damping: float = 355.0
+
+    # Anisotropic, as the shared restoring module supports: a slender catamaran is far
+    # stiffer in pitch than in roll. The single isotropic attitude_spring this task used
+    # before came from the boat/ROV tasks, where it is a stabilisation device rather than
+    # a hydrostatic quantity.
+    restoring_stiffness_roll: float = 265.0
+    restoring_stiffness_pitch: float = 2934.0
+    rollpitch_rate_damping: float = 460.0
 
     air_linear_damping: float = 0.5
     air_angular_damping: float = 0.05
+
     enable_current: bool = False
     current_speed_min: float = 0.2
     current_speed_max: float = 0.3
     current_drag_coeff: float = 8.0
+
 
 @configclass
 class WavePhysicsCfg:
@@ -132,15 +165,14 @@ class CatamaranPatrolEnvCfg(DirectRLEnvCfg):
     max_spawn_distance: float = 15.0         # spawn close to circuit
     min_spawn_distance: float = 3.0
 
-    # Actuator limits. Actions are hard-clipped to [-1,1] in _pre_physics_step; these
-    # constants are the single source of truth (they used to be module-level MAX_THRUST /
-    # MAX_TORQUE in the env file). Sized against the damping above:
-    #   850 N  -> 2.50 m/s terminal surge. Thrust-to-weight 0.72, deliberately above the
-    #            boat reference's 0.51, because this task is a *fast* patrol.
-    #   740 N.m -> 1.00 rad/s terminal yaw, i.e. a 2.5 m turning radius at cruise — the
-    #            same turning radius the boat reference achieves, and comfortably inside
-    #            the 12 m patrol circuit.
-    # Reverse thrust keeps the boat's 0.4 forward/reverse ratio (VRX classic thruster).
+    # Which registry entry supplies the hull. Everything vehicle-specific -- asset, mass,
+    # actuator limits, damping, restoring stiffness -- is resolved from it in
+    # __post_init__, the same way docking/station_keeping/path_following do it. Swapping
+    # hull is then a one-line subclass, and the sea-state variants those tasks define can
+    # be applied here unchanged.
+    vehicle: str = "catamaran"
+
+    # Filled from the registry; the values here are only what a bare instantiation gets.
     thrust_max_fwd: float = 850.0   # N,   at action[0] = +1 (bow-first)
     thrust_max_rev: float = 340.0   # N,   at action[0] = -1 (astern)
     yaw_torque_max: float = 740.0   # N·m, at action[1] = ±1
@@ -166,3 +198,16 @@ class CatamaranPatrolEnvCfg(DirectRLEnvCfg):
     )
 
     dof_names = []
+
+    def __post_init__(self) -> None:
+        """Resolve all hull-dependent config from the selected registry entry."""
+        base_post_init = getattr(super(), "__post_init__", None)
+        if base_post_init is not None:
+            base_post_init()
+
+        spec = get_vehicle(self.vehicle)
+        self.robot_cfg = _build_robot_cfg(spec)
+        self.underwater_physics_cfg = _build_underwater_physics_cfg(spec)
+        self.thrust_max_fwd = spec.thrust_fwd_n
+        self.thrust_max_rev = spec.thrust_rev_n
+        self.yaw_torque_max = spec.yaw_torque_nm
