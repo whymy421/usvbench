@@ -150,6 +150,13 @@ class UnderwaterPhysicsCfg:
     # correct tightly enough near the goal. 0.06 s keeps the mechanism and returns most
     # of the steering bandwidth; it is at the fast end of a real T200-class unit rather
     # than the slow end.
+    #
+    # NOTE this one is NOT in the vehicle registry, unlike every other hull parameter
+    # below. It is a hull property and by the design used here it belongs in VehicleSpec,
+    # but adding a field to that frozen dataclass forces a value onto rov/wamv/blueboat
+    # and touches four byte-exact parity guards, for data no other task reads today.
+    # Left task-local deliberately; move it into the spec when a second task needs
+    # actuator dynamics.
     thruster_tau: float = 0.06  # s, first-order lag on both action channels
 
     air_linear_damping: float = 0.5

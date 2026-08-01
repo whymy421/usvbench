@@ -15,7 +15,8 @@ Observations (OBS_DIM=12 default):
   [9]    distance to next waypoint (normalised)
   [10-11] padding zeros (or extended obs if OBS_DIM > 12)
 
-Actions [N, 2]:
+Actions [N, 2] — these are thruster *commands*, not the delivered wrench: both channels
+pass through a first-order lag (`thruster_tau`) before being applied.
   [0]  forward thrust   ∈ [-1, 1]  → cfg.thrust_max_fwd / thrust_max_rev along body +X
   [1]  yaw torque       ∈ [-1, 1]  → ±cfg.yaw_torque_max N·m around body +Z
 """
@@ -125,17 +126,18 @@ class CatamaranPatrolEnv(DirectRLEnv):
     def _apply_action(self):
         """Called once per physics sub-step (decimation times per policy step).
 
-        Frame discipline, matching boat_calm_nav: hull drag is anisotropic and therefore
-        lives in the BODY frame, alongside the thrusters; buoyancy, heave damping and the
-        attitude terms are natural in the WORLD frame. The two are kept in separate
-        accumulators and the world-frame one is rotated into the body frame exactly once,
-        at the point of application.
+        Frame discipline, matching boat_calm_nav. Thrusters, hull drag and the
+        hydrostatic restoring moment are body-frame quantities and go straight into
+        ``forces``/``torques``; buoyancy, heave damping and the rate damping are natural
+        in the world frame and accumulate in ``force_w``/``torque_w``, which is rotated
+        into the body frame exactly once at the point of application.
 
         set_external_force_and_torque() defaults to is_global=False, i.e. it treats
         whatever it is given as body-local and rotates it by the hull attitude. Handing it
         a world-frame vector applies that rotation a second time. The error is exactly zero
         at yaw = 0 — which is where every episode starts — and grows with heading, so it
-        survives any quick test. scripts/check_wrench_frame.py is the check that catches it.
+        survives any quick test. scripts/check_catamaran_physics.py phase 3 is the check
+        that catches it, by driving thrust and yaw torque together.
         """
         phys = self.cfg.underwater_physics_cfg
         cfg  = self.cfg
@@ -199,7 +201,14 @@ class CatamaranPatrolEnv(DirectRLEnv):
         # them about fixed WORLD axes. Those angles are body quantities; the two frames
         # coincide only at yaw = 0, so it was restoring near the spawn heading and drove
         # the hull over once it turned. check_catamaran_physics.py phase 3 guards this.
-        torques += restoring_torque_body(
+        # Gated on submersion: a hydrostatic moment only exists while there is water to
+        # generate it. Without the gate an airborne hull keeps a 265/2934 N.m/rad spring
+        # while its rate damping (also gated) has dropped to the 0.05 air value, which is
+        # a violently underdamped oscillator. Measured contact with this path is currently
+        # zero -- the hull never leaves the water in calm conditions -- so this is a latent
+        # case rather than an observed one, but it is the same shape as the bugs that did
+        # bite: correct in the regime that gets tested, wrong outside it.
+        torques += in_water.unsqueeze(-1) * restoring_torque_body(
             quat, phys.restoring_stiffness_roll, phys.restoring_stiffness_pitch
         )
 
