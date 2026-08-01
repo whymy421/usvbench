@@ -133,6 +133,25 @@ class UnderwaterPhysicsCfg:
     restoring_stiffness_pitch: float = 2934.0
     rollpitch_rate_damping: float = 460.0
 
+    # Thruster response time. A real propeller cannot reverse its thrust instantly: the
+    # motor, the shaft inertia and the water column all take time, and a T200/M200-class
+    # unit sits around 0.1-0.2 s. Without it the actuator is a perfect zero-order hold and
+    # the policy is free to slam the command from one rail to the other every few steps,
+    # which is exactly what it learned to do -- measured 1.72 command sign flips per second
+    # and a mean |yaw rate| of 0.585 rad/s on the straight legs, against the 0.205 rad/s
+    # that a steady turn round the 12 m circuit actually needs.
+    #
+    # This is an addition to the model, not a bug fix: the task never had actuator
+    # dynamics. It is applied at sim dt so the time constant is independent of decimation.
+    # 0.15 s was tried first and is too slow: it fixed the weaving (command sign flips
+    # 1.72 -> 0.19 per second, matching the boat reference's 0.17) but cost 27% of the
+    # score, 19.762 -> 14.344 targets/episode, with 7 of 64 envs no longer scoring at all
+    # and worst-case approach drifting from 3.02 m to 5.85 m. The hull could no longer
+    # correct tightly enough near the goal. 0.06 s keeps the mechanism and returns most
+    # of the steering bandwidth; it is at the fast end of a real T200-class unit rather
+    # than the slow end.
+    thruster_tau: float = 0.06  # s, first-order lag on both action channels
+
     air_linear_damping: float = 0.5
     air_angular_damping: float = 0.05
 

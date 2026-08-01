@@ -32,7 +32,7 @@ Same counter as boat/ROV tasks (via `self.reached_count`).
 
 > The P1 bar is currently **TBD** in `docs/ARIF_TASKS.md`. The old ≥2.0 was calibrated
 > against reference baselines roughly 5x higher than they are now. With this task ported
-> onto the reference physics and scoring 19.762 on seed 42, the bar can be set by the same
+> onto the reference physics and scoring 20.175 on seed 42, the bar can be set by the same
 > ~80% proportion the P0 bars use — but that is Yutong's call once 123/456 are in.
 | Seed | Checkpoint | tgt/ep | source |
 |------|-----------|--------|--------|
@@ -41,7 +41,8 @@ Same counter as boat/ROV tasks (via `self.reached_count`).
 | 42 | agent_256000.pt, ported but with the broken attitude spring | 15.600 | void — the hull was tumbling |
 | 42 | agent_256000.pt, ported but with sway damped like surge (hull skated) | 17.850 | void — see FIXES.md |
 | 42 | agent_256000.pt, before the registry wiring | 19.669 | superseded |
-| 42 | agent_256000.pt (256k steps), **final** | **19.762** @ 2.462 m/s | `eval_benchmark.py`, 64×6000, eval seed 2026 |
+| 42 | agent_256000.pt, before actuator dynamics | 19.762 | superseded |
+| 42 | agent_256000.pt (256k steps), **final** | **20.175** @ 2.465 m/s | `eval_benchmark.py`, 64×6000, eval seed 2026 |
 | 123 | not yet trained | — | |
 | 456 | not yet trained | — | |
 

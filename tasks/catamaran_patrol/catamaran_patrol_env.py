@@ -63,6 +63,9 @@ class CatamaranPatrolEnv(DirectRLEnv):
         self.wps_done      = torch.zeros(N, device=D)
         self.prev_dist     = torch.zeros(N, device=D)
 
+        # Actuator state for the thruster lag in _apply_action
+        self._act_state = torch.zeros(N, 2, device=D)
+
         # For eval script compatibility (same attr as boat/ROV tasks)
         self.reached_count = 0
         self._last_reached_mask = torch.zeros(N, dtype=torch.bool, device=D)
@@ -146,11 +149,17 @@ class CatamaranPatrolEnv(DirectRLEnv):
         force_w  = torch.zeros_like(forces)
         torque_w = torch.zeros_like(torques)
 
-        # ── Thrusters (body frame), asymmetric forward/reverse ────────────────
-        a0 = self.actions[:, 0]
+        # ── Actuator lag, then thrusters (body frame) ─────────────────────────
+        # First-order lag toward the commanded action, stepped at sim dt so the time
+        # constant means the same thing whatever the decimation is.
+        alpha = self.cfg.sim.dt / (phys.thruster_tau + self.cfg.sim.dt)
+        self._act_state += alpha * (self.actions - self._act_state)
+        act = self._act_state
+
+        a0 = act[:, 0]
         thrust = torch.where(a0 >= 0, a0 * cfg.thrust_max_fwd, a0 * cfg.thrust_max_rev)
         forces[:, 0]  = FWD_X * thrust
-        torques[:, 2] = self.actions[:, 1] * cfg.yaw_torque_max
+        torques[:, 2] = act[:, 1] * cfg.yaw_torque_max
 
         # ── Buoyancy (world frame), proportional to submersion ────────────────
         z   = pos[:, 2]
@@ -355,6 +364,10 @@ class CatamaranPatrolEnv(DirectRLEnv):
         n = len(env_ids)
         D = self.device
         cfg = self.cfg
+
+        # The thruster lag carries state, so it has to be cleared or a new episode
+        # inherits the previous one's rudder command for a fraction of a second.
+        self._act_state[env_ids] = 0.0
 
         # Random heading
         yaw = torch.rand(n, device=D) * 2.0 * math.pi

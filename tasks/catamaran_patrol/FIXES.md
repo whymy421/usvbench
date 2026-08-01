@@ -211,9 +211,9 @@ Same standardized evaluation, 64 envs x 6000 steps, evaluation seed 2026:
 
 | metric | before (`3f2d799`) | after the bug fixes | after the physics port |
 |---|---|---|---|
-| targets_per_episode | 0.000 | 19.406 | **19.762** |
-| total targets | 0 | 1035 | 1054 |
-| mean speed | 4.400 m/s | 3.663 m/s | 2.462 m/s |
+| targets_per_episode | 0.000 | 19.406 | **20.175** |
+| total targets | 0 | 1035 | 1076 |
+| mean speed | 4.400 m/s | 3.663 m/s | 2.465 m/s |
 | out-of-bounds per episode | 0.000 | 0.000 | 0.000 |
 
 Only the last column is comparable to the rest of the benchmark; the middle column is on
@@ -382,6 +382,64 @@ the best-documented entry in the registry, its convention is adopted: 3x surge, 
 Measured after retraining, the change is not visible in the manoeuvring: drift angle mean
 7.2 deg either way (p95 15.0 at 600, 18.9 at 330), sway peak 0.64 vs 0.68 m/s. The 3x
 convention is sufficient for this hull.
+
+## Bang-bang steering: the actuator had no dynamics
+
+Reported from watching the vessel: it swings noticeably and often while running straight.
+The hull cannot do that on its own -- yaw has damping but no restoring torque, so the
+open-loop yaw dynamics are overdamped first order and cannot oscillate. Any weaving is
+closed-loop, from the command.
+
+Measured against `boat_calm_nav`'s own checkpoint on the same metrics, 64 envs, 30 s:
+
+| | boat | catamaran, before |
+|---|---|---|
+| yaw command sign flips | 0.17 /s | **1.72 /s** |
+| yaw rate sign flips | 0.03 /s | **1.53 /s** |
+| steps with abs(a1) > 0.9 | 21.9% | 49.9% |
+| straight-leg mean abs(yaw rate) | 0.287 rad/s | 0.585 rad/s |
+| raw command abs(a1), p95 | 16.05 | 13.27 |
+
+Two things separate out here. Action saturation is a benchmark-wide property, not a
+catamaran defect -- boat's raw commands are larger than the catamaran's, and neither
+task's reward penalises control effort. But **the weaving is specific to this task**:
+boat, equally saturated, still tracks straight. A circuit of radius 12 m at 2.46 m/s needs
+a steady 0.205 rad/s; the catamaran was averaging 0.585.
+
+Two candidate explanations were checked and neither holds: boat has no action penalty in
+its reward either, and its `ACTION_DELAY` defaults to 0.
+
+The actual gap is that the task modelled no actuator dynamics at all. A real propeller
+cannot reverse thrust instantly -- motor, shaft inertia and water column all take time,
+and a T200/M200-class unit sits around 0.1-0.2 s -- but the model was a perfect
+zero-order hold, so the policy was free to slam the command rail to rail every few steps,
+and it learned to.
+
+Fix: a first-order lag `thruster_tau` on both action channels, integrated at sim dt so the
+constant is independent of decimation, and cleared on reset. This is an addition to the
+model rather than a bug fix; the task never had actuator dynamics.
+
+Tuning it mattered more than expected:
+
+| | no lag | tau = 0.15 s | **tau = 0.06 s** |
+|---|---|---|---|
+| targets/episode | 19.762 | 14.344 | **20.175** |
+| yaw command sign flips | 1.72 /s | 0.19 /s | 0.62 /s |
+| yaw rate sign flips | 1.53 /s | 0.09 /s | 0.31 /s |
+| steps with abs(a1) > 0.9 | 49.9% | 33.5% | **20.7%** |
+| straight-leg abs(yaw rate) | 0.585 | 0.381 | 0.317 rad/s |
+| envs scoring | 64/64 | **57/64** | 64/64 |
+| worst approach | 3.017 m | **5.853 m** | 3.014 m |
+
+0.15 s fixed the weaving outright -- sign flips landed on boat's 0.17/s -- but cost 27% of
+the score, with 7 of 64 envs no longer scoring, because the hull could no longer correct
+tightly near the goal. That distinguished the two explanations for the loss: at 0.06 s the
+score comes back in full, so it was steering bandwidth, not an under-trained policy facing
+harder dynamics.
+
+At 0.06 s the vessel is quieter on the helm than the boat reference by the saturation
+measure (20.7% against 21.9%) and within a factor of two on flip rate, while scoring
+slightly above the no-lag baseline. Time spent turning hard fell from 50% to 22%.
 
 ## Still open, for Arif
 
