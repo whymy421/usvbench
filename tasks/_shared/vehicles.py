@@ -120,6 +120,65 @@ VEHICLES: dict[str, VehicleSpec] = {
         bow_body_axis="+x",
         notes="BlueBoat CAD and Blue Robotics datasheet.",
     ),
+    "catamaran": VehicleSpec(
+        name="catamaran",
+        asset_kind="rigid_object",
+        usd_relpath="catamaran.usd",
+        mass_kg=120.0,
+        # Sized for a fast patrol: 850 N gives a 2.50 m/s terminal surge against the
+        # damping below (thrust-to-weight 0.72, above the wamv's 0.51), and 740 N*m gives
+        # a 1.00 rad/s terminal yaw, i.e. a 2.5 m turning radius at cruise. Reverse keeps
+        # the wamv's 0.4 forward/reverse ratio.
+        thrust_fwd_n=850.0,
+        thrust_rev_n=340.0,
+        yaw_torque_nm=740.0,
+        # Surge and yaw: VRX WAM-V coefficients Froude-scaled the way the wamv entry is,
+        # lambda = (120/195)^(1/3) = 0.850 for this 120 kg hull. Both are anchored by a
+        # measured terminal value (2.500 m/s, 1.000 rad/s), so they are calibrated, not
+        # assumed.
+        surge_lin=65.0,
+        surge_quad=110.0,
+        # Sway follows the blueboat convention, ~3x surge, and carries the same caveat:
+        # it is a lateral-bluffness rule of thumb, not system identification. Taking the
+        # Froude-scaled VRX value instead would give 70, i.e. LESS resistance sideways
+        # than forwards, which no hull has; that error made the vessel skate through its
+        # turns at a 17.4 deg mean drift angle. blueboat is the right reference here
+        # because it is also a displacement catamaran.
+        sway_lin=195.0,
+        sway_quad=330.0,
+        heave_damping=330.0,
+        yaw_lin=385.0,
+        yaw_quad=355.0,
+        # Hydrostatics measured off the hull mesh, blueboat's method. The waterline that
+        # displaces m/rho = 0.12 m^3 sits at a 0.353 m draft, where the waterplane is
+        # 0.402 m^2 with I_T = 0.0396 and I_L = 0.3121 m^4, giving BM_T = 0.330 m,
+        # BM_L = 2.600 m and KB = 0.195 m. k = rho*g*V*GM at KG = 0.30 m.
+        #
+        # KG is the one assumed quantity, and it matters: PhysX derives this hull's
+        # inertia from a uniform-density convex decomposition and puts the COM at
+        # mid-height (measured KG = 0.50 m), which would give GM_T = 0.025 m and a
+        # k_roll of 29 -- a marginally stable hull. That is an artefact of uniform
+        # density, not a property of a real catamaran, whose machinery sits low. KG =
+        # 0.30 m is the working assumption pending an inclining test; it gives 265,
+        # against blueboat's 280 for a comparable catamaran.
+        restoring_stiffness_roll=265.0,
+        restoring_stiffness_pitch=2934.0,
+        # blueboat's scaling, c ~ sqrt(k), which holds the damping ratio: it gives
+        # zeta = 3.0 against the measured 21.75 kg*m^2 roll inertia.
+        rollpitch_rate_damping=460.0,
+        # rov_volume/rov_height feed the sim's linear submersion proxy, not geometry:
+        # 0.4 * rho * g * 0.3 balances the 1176 N weight. The hull's real displaced
+        # volume is 0.12 m^3 and its real draft 0.353 m, both above.
+        displaced_volume_m3=0.3,
+        hull_height_m=1.0,
+        buoyancy_center_offset_m=0.0,
+        bow_body_axis="+x",
+        notes=(
+            "Surge/yaw Froude-scaled from VRX WAM-V (lambda=0.85) and confirmed against "
+            "measured terminal values; sway is blueboat's ~3x-surge rule pending sysid; "
+            "restoring from mesh hydrostatics at an assumed KG=0.30 m."
+        ),
+    ),
 }
 
 

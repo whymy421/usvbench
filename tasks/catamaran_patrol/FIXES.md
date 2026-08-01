@@ -211,9 +211,9 @@ Same standardized evaluation, 64 envs x 6000 steps, evaluation seed 2026:
 
 | metric | before (`3f2d799`) | after the bug fixes | after the physics port |
 |---|---|---|---|
-| targets_per_episode | 0.000 | 19.406 | **19.669** |
-| total targets | 0 | 1035 | 1049 |
-| mean speed | 4.400 m/s | 3.663 m/s | 2.469 m/s |
+| targets_per_episode | 0.000 | 19.406 | **19.762** |
+| total targets | 0 | 1035 | 1054 |
+| mean speed | 4.400 m/s | 3.663 m/s | 2.462 m/s |
 | out-of-bounds per episode | 0.000 | 0.000 | 0.000 |
 
 Only the last column is comparable to the rest of the benchmark; the middle column is on
@@ -325,6 +325,64 @@ obviously right, and all of them change task difficulty:
 
 Leaving this for Yutong to decide rather than picking one, since all three move the bar.
 
+## Wired into the shared vehicle registry
+
+The hull's parameters were hardcoded in this task's own cfg, the way `boat_calm_nav` and
+`rov_calm_nav` still do it. The newer tasks (`docking`, `station_keeping`,
+`path_following`, ...) instead resolve everything from `tasks/_shared/vehicles.py`. The
+catamaran now does the same: a `catamaran` entry in the registry, and a `__post_init__`
+that resolves asset, mass, actuator limits, damping and restoring stiffness from it.
+Swapping hull is a one-line subclass, and the current/wave variants those tasks define
+apply here unchanged.
+
+The private attitude spring is gone too, replaced by `tasks/_shared/restoring.py`'s
+`restoring_torque_body(quat, k_roll, k_pitch)`. That module is yaw-invariant by
+construction and takes separate roll and pitch stiffnesses, which this hull needs.
+
+### Restoring stiffness, measured instead of inherited
+
+The 5000 N.m/rad used until now was copied from the boat and ROV, where it is a
+stabilisation device rather than a hydrostatic quantity. blueboat derives its stiffness
+from CAD hydrostatics, so the same was done here, off the hull mesh:
+
+| | |
+|---|---|
+| waterline that displaces m/rho = 0.12 m^3 | draft **0.353 m** |
+| waterplane area | 0.402 m^2 |
+| I_T / I_L | 0.0396 / 0.3121 m^4 |
+| BM_T / BM_L | 0.330 / 2.600 m |
+| KB | 0.195 m |
+| KG, measured from the simulator | **0.50 m** (inertia diag 21.75 / 97.06 / 103.77) |
+
+That measurement is worth stating plainly: PhysX derives this hull's inertia from a
+uniform-density convex decomposition and puts the COM at mid-height, which gives
+GM_T = 0.025 m and a roll stiffness of 29 N.m/rad -- a marginally stable vessel. That is
+an artefact of uniform density, not a property of a catamaran, whose machinery sits low.
+KG = 0.30 m is the working assumption pending an inclining test; it gives
+k_roll = 265 against blueboat's 280 for a comparable catamaran, and
+k_pitch = 2934. Damping follows blueboat's c ~ sqrt(k) scaling: 460, giving zeta = 3.0
+against the measured 21.75 kg*m^2 roll inertia.
+
+Four earlier attempts at this measurement were discarded, all for the same root cause:
+they sliced the hull at a height that was not the waterline. `-0.400 m` is the rigid
+body's root height at equilibrium, not a draft, and the sim's `rov_volume = 0.3` is a
+spring parameter tuned so `0.4 * rho * g * V` balances the 1176 N weight -- not the
+hull's displaced volume. Two of those attempts also measured the shell wall thickness
+rather than the hull section, reporting 0.015 m demihull beams on a hull 1.101 m in beam.
+
+### Sway recalibrated to the blueboat convention
+
+`sway_quad` was 600, from a crossflow estimate with an assumed Cd = 1.0. blueboat states
+its own sway as "lateral bluffness approximated as ~3x surge pending sway system
+identification" -- an explicit placeholder, the same epistemic status as the crossflow
+number and not a measurement. Since blueboat is itself a displacement catamaran and is
+the best-documented entry in the registry, its convention is adopted: 3x surge, giving
+195 / 330.
+
+Measured after retraining, the change is not visible in the manoeuvring: drift angle mean
+7.2 deg either way (p95 15.0 at 600, 18.9 at 330), sway peak 0.64 vs 0.68 m/s. The 3x
+convention is sufficient for this hull.
+
 ## Still open, for Arif
 
 - Where does `1.35 tgt/ep` come from? It is not the deterministic
@@ -337,11 +395,9 @@ Leaving this for Yutong to decide rather than picking one, since all three move 
   exact Isaac Lab and skrl versions used for training.
 - The submitted policy is saturated: mean absolute raw action ~26 before the
   environment clips to [-1, 1], and the policy `log_std` sits at the 2.0 cap.
-- No righting moment is modelled. The boat reference task adds roll and pitch
-  restoring torques; this task has none, so attitude is only damped, never
-  restored. Measured roll after the fixes is `std 1.9 deg, max 8.3 deg`, which
-  is a lot for a catamaran. Left alone here on purpose — it is a task-design
-  decision, not a bug introduced by the branch.
+- ~~No righting moment is modelled.~~ Done during the physics port — an attitude
+  spring is now in place. Measured roll under the trained policy is `-0.06 .. 0.06 deg`,
+  against `std 1.9 deg, max 8.3 deg` before.
 
 ## How to re-check
 
