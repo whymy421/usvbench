@@ -80,57 +80,27 @@ class WaveField:
         """
         raise NotImplementedError
 
-    def compute_forces(
-        self,
-        t: float,
-        x: torch.Tensor,
-        y: torch.Tensor,
-        forward_2d: torch.Tensor,
-        heave_gain: float,
-        roll_gain: float,
-        drag_gain: float,
-    ) -> dict[str, torch.Tensor]:
-        """Wave loads, matching the E7/E11 plant (``my_first_task_e11``).
+    def elevation_at(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        """Elevation at ``(num_envs, points)`` offsets, one sea state per row.
 
-            heave_force = eta * heave_gain                       (world +z)
-            roll_torque = lateral_slope * roll_gain              (body roll axis)
-            wave_drag   = max(-frontal_exposure, 0) * |eta| * drag_gain
-
-        Deliberately follows E11 rather than ``boat_calm_nav``: roll is driven
-        by the signed beam-direction slope and applied about the hull's own
-        axis, where boat_calm_nav uses the along-propagation slope scaled by a
-        magnitude-only exposure and applies it about a fixed world axis. The
-        E11 form is the correct one and keeps these tasks comparable with the
-        E7 results.
-
-        ``lateral_exposure`` stays a magnitude, since its role is the geometric
-        "how beam-on is the sea" signal rather than a torque.
+        Used to sample the surface under several stations on the same hull.
         """
-        eta = self.elevation(t, x, y)
+        raise NotImplementedError
 
-        forward = forward_2d / torch.norm(
-            forward_2d, dim=-1, keepdim=True
-        ).clamp(min=1e-6)
-        sideways = torch.stack((-forward[:, 1], forward[:, 0]), dim=-1)
+    def orbital_velocity(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        """Horizontal water particle velocity, shape ``(num_envs, 2)``.
 
-        direction = self.mean_direction
-        lateral_signed = (
-            direction[:, 0] * sideways[:, 0] + direction[:, 1] * sideways[:, 1]
-        )
-        frontal_exposure = (
-            direction[:, 0] * forward[:, 0] + direction[:, 1] * forward[:, 1]
-        )
+        Deep-water Airy kinematics at the surface: each component contributes
+        ``a * omega * cos(phase)`` along its own travel direction. Drag taken
+        against ``v_boat - u_orbital`` instead of ``v_boat`` is how waves push
+        a hull around without an authored wave-drag gain.
+        """
+        raise NotImplementedError
 
-        return {
-            "eta": eta,
-            "vertical_velocity": self.vertical_velocity(t, x, y),
-            "heave_force": eta * heave_gain,
-            "roll_torque": self.lateral_slope(t, x, y, sideways) * roll_gain,
-            "wave_drag": torch.clamp(-frontal_exposure, min=0.0)
-            * torch.abs(eta)
-            * drag_gain,
-            "lateral_exposure": torch.abs(lateral_signed),
-        }
 
     @property
     def significant_height(self) -> torch.Tensor:
@@ -172,6 +142,16 @@ class CalmWater(WaveField):
         self, t: float, xs: torch.Tensor, ys: torch.Tensor, env_index: int = 0
     ) -> torch.Tensor:
         return torch.zeros_like(xs)
+
+    def elevation_at(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        return torch.zeros_like(x)
+
+    def orbital_velocity(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        return self._zeros2
 
     @property
     def significant_height(self) -> torch.Tensor:
@@ -279,6 +259,27 @@ class AiryWaveField(WaveField):
         )
         return self.amplitude[env_index] * torch.cos(phase)
 
+    def elevation_at(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        projected = (
+            self.direction[:, 0:1] * x + self.direction[:, 1:2] * y
+        )
+        phase = (
+            self.wave_number * projected
+            - self.omega * t
+            + self.phase.unsqueeze(1)
+        )
+        return self.amplitude.unsqueeze(1) * torch.cos(phase)
+
+    def orbital_velocity(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        speed = self.amplitude * self.omega * torch.cos(self._total_phase(t, x, y))
+        return torch.stack(
+            (speed * self.direction[:, 0], speed * self.direction[:, 1]), dim=-1
+        )
+
     @property
     def significant_height(self) -> torch.Tensor:
         # A regular wave has no spectrum; Hs is defined as its wave height so
@@ -355,12 +356,13 @@ class JONSWAPWaveField(WaveField):
     ) -> torch.Tensor:
         """JONSWAP S(f) = alpha * f^-5 * exp(-1.25 (fp/f)^4) * gamma^r.
 
-        The ``(1 - 0.287 ln gamma)`` factor is what keeps ``4 sqrt(m0) == Hs``.
-        Peak enhancement adds energy on top of the Pierson-Moskowitz shape, so
-        without it the realised sea is *higher* than the requested Hs -- about
-        +22% at the standard gamma = 3.3, and gamma-dependent, which silently
-        couples the peakedness knob to the wave-height knob. The calm tasks'
-        ``jonswap_wave.py`` omits this factor; this module does not.
+        Normalised numerically against the *discrete, truncated* band rather
+        than by the usual ``(1 - 0.287 ln gamma)`` closed form. That factor is
+        derived for a continuous spectrum over all frequencies, so once the
+        band is cut at f_min/f_max and binned it no longer holds: at Tp = 4 s
+        with gamma = 5 it leaves the realised Hs about 8% low. Rescaling by the
+        band's own m0 makes ``4 sqrt(m0) == Hs`` exact for any band, Tp, or
+        gamma, which is what lets a sea state be specified by Hs at all.
         """
         fp = 1.0 / tp
         fp_e = fp.unsqueeze(1)
@@ -368,12 +370,13 @@ class JONSWAPWaveField(WaveField):
         gamma_e = gamma.unsqueeze(1)
         f_e = self.freqs.unsqueeze(0)
 
-        gamma_norm = 1.0 - 0.287 * torch.log(gamma_e)
-        alpha = 5.0 / 16.0 * hs_e ** 2 * fp_e ** 4 * gamma_norm
-        pm = alpha * f_e.pow(-5) * torch.exp(-1.25 * (fp_e / f_e).pow(4))
+        shape = f_e.pow(-5) * torch.exp(-1.25 * (fp_e / f_e).pow(4))
         sigma = torch.where(f_e <= fp_e, 0.07, 0.09)
         r = torch.exp(-0.5 * ((f_e - fp_e) / (sigma * fp_e)).pow(2))
-        return torch.clamp(pm * gamma_e.pow(r), min=0.0)
+        spectrum = torch.clamp(shape * gamma_e.pow(r), min=0.0)
+
+        m0 = (spectrum * self.df).sum(dim=1, keepdim=True).clamp(min=1e-12)
+        return spectrum * (hs_e / (4.0 * torch.sqrt(m0))) ** 2
 
     def randomize(self, env_ids: torch.Tensor) -> None:
         num = len(env_ids)
@@ -479,6 +482,36 @@ class JONSWAPWaveField(WaveField):
             + self.phases[env_index].unsqueeze(0)
         )
         return (self.amplitudes[env_index].unsqueeze(0) * torch.cos(phase)).sum(dim=1)
+
+    def elevation_at(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        # (envs, points, components): every station on the hull sees the same
+        # sea state, evaluated at its own position.
+        projected = (
+            self.comp_dir_x.unsqueeze(1) * x.unsqueeze(2)
+            + self.comp_dir_y.unsqueeze(1) * y.unsqueeze(2)
+        )
+        phase = (
+            projected * self.wave_numbers.view(1, 1, -1)
+            - self.omegas.view(1, 1, -1) * t
+            + self.phases.unsqueeze(1)
+        )
+        return (self.amplitudes.unsqueeze(1) * torch.cos(phase)).sum(dim=2)
+
+    def orbital_velocity(
+        self, t: float, x: torch.Tensor, y: torch.Tensor
+    ) -> torch.Tensor:
+        speed = (
+            self.amplitudes
+            * self.omegas.unsqueeze(0)
+            * torch.cos(self._total_phase(t, x, y))
+        )
+        return torch.stack(
+            ((speed * self.comp_dir_x).sum(dim=1),
+             (speed * self.comp_dir_y).sum(dim=1)),
+            dim=-1,
+        )
 
     @property
     def significant_height(self) -> torch.Tensor:

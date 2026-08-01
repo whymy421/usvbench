@@ -72,21 +72,33 @@ def test_airy_amplitude_and_dispersion() -> None:
 
 
 def test_jonswap_spectrum_recovers_hs() -> None:
-    """4 * sqrt(m0) must return the significant wave height that built it."""
-    for hs in (0.5, 1.0, 2.0):
-        field = JONSWAPWaveField(
-            num_envs=1,
-            device=DEVICE,
-            hs_range=(hs, hs),
-            tp_range=(5.0, 5.0),
-            gamma_range=(3.3, 3.3),
-        )
-        # m0 = sum(a_n^2 / 2) for a component sum.
-        m0 = (field.amplitudes[0] ** 2 / 2.0).sum().item()
-        recovered = 4.0 * math.sqrt(m0)
-        error = abs(recovered - hs) / hs
-        assert error < 0.05, (hs, recovered, error)
-        print(f"jonswap: Hs={hs} m recovered as {recovered:.3f} m ({error:.1%})")
+    """4 * sqrt(m0) must return the significant wave height that built it.
+
+    Swept across the corners of the band actually configured for the task, not
+    just a comfortable mid-band point: the closed-form gamma normalisation this
+    replaced held at Tp = 5 s / gamma = 3.3 but drifted ~8% low at Tp = 4 s /
+    gamma = 5, which is inside the shipped range.
+    """
+    worst = 0.0
+    for hs in (0.06, 0.18, 1.0):
+        for tp, band in ((2.0, (0.10, 1.60)), (4.0, (0.10, 1.60)), (5.0, (0.04, 0.50))):
+            for gamma in (1.0, 3.3, 5.0):
+                field = JONSWAPWaveField(
+                    num_envs=1,
+                    device=DEVICE,
+                    hs_range=(hs, hs),
+                    tp_range=(tp, tp),
+                    gamma_range=(gamma, gamma),
+                    f_min=band[0],
+                    f_max=band[1],
+                )
+                m0 = (field.amplitudes[0] ** 2 / 2.0).sum().item()
+                recovered = 4.0 * math.sqrt(m0)
+                error = abs(recovered - hs) / hs
+                worst = max(worst, error)
+                assert error < 0.01, (hs, tp, gamma, band, recovered, error)
+    print(f"jonswap: Hs recovered within {worst:.2%} across the whole "
+          f"Hs x Tp x gamma x band grid")
 
 
 def test_slope_matches_numerical_gradient() -> None:
@@ -146,66 +158,66 @@ def test_randomize_only_touches_requested_envs() -> None:
     print("randomize: untouched envs keep their sea state")
 
 
-def test_roll_torque_follows_the_hull_not_the_world() -> None:
-    """Beam seas must roll the boat whatever heading it is on.
+def test_station_sampling_separates_roll_from_pitch() -> None:
+    """The whole point of sampling across the hull rather than at a point.
 
-    Guards the bug this coupling was rewritten to avoid: driving roll from a
-    mean-direction magnitude about a fixed world axis makes the same sea roll
-    the hull on one heading and pitch it on another.
+    A beam sea must put a height difference across the beam (which becomes
+    roll) and almost none along the length; a head sea must do the opposite.
+    With one sample at the origin both are identically zero and no attitude
+    response exists at all.
     """
-    num_envs = 64
-    field = JONSWAPWaveField(num_envs=num_envs, device=DEVICE, direction_deg=0.0)
-    x = torch.zeros(num_envs)
-    y = torch.zeros(num_envs)
-
-    # Beam-on: bow along +y, so a wave travelling along +x hits the beam.
-    beam = torch.zeros(num_envs, 2)
-    beam[:, 1] = 1.0
-    # Head-on: bow along +x, straight into the same wave.
-    head = torch.zeros(num_envs, 2)
-    head[:, 0] = 1.0
-
-    gains = dict(heave_gain=100.0, roll_gain=200.0, drag_gain=15.0)
-    beam_roll = torch.cat(
-        [field.compute_forces(t * 0.05, x, y, beam, **gains)["roll_torque"]
-         for t in range(200)]
-    )
-    head_roll = torch.cat(
-        [field.compute_forces(t * 0.05, x, y, head, **gains)["roll_torque"]
-         for t in range(200)]
-    )
-    assert beam_roll.std() > 5.0 * head_roll.std(), (
-        beam_roll.std().item(), head_roll.std().item()
-    )
-    print(f"roll: beam-on RMS {beam_roll.std():.2f} N m vs head-on "
-          f"{head_roll.std():.2f} N m")
-
-
-def test_drag_only_opposes_a_head_sea() -> None:
     num_envs = 32
     field = AiryWaveField(
-        num_envs=num_envs, device=DEVICE, height_m=0.5, direction_deg=0.0
+        num_envs=num_envs, device=DEVICE, height_m=0.3, period_s=3.0,
+        direction_deg=0.0,  # travelling along +x
+    )
+    half_len, half_beam = 0.60, 0.3607  # BlueBoat: 1.2 m by 0.7214 m
+
+    # Bow along +y => the +x wave arrives on the beam.
+    beam_across = torch.tensor([[-half_len, 0.0], [half_len, 0.0]])
+    # Bow along +x => the same wave arrives head on.
+    head_along = torch.tensor([[-half_len, 0.0], [half_len, 0.0]])
+
+    def spread(offsets: torch.Tensor) -> float:
+        xs = offsets[:, 0].unsqueeze(0).expand(num_envs, -1)
+        ys = offsets[:, 1].unsqueeze(0).expand(num_envs, -1)
+        diffs = [
+            (field.elevation_at(t * 0.05, xs, ys)[:, 1]
+             - field.elevation_at(t * 0.05, xs, ys)[:, 0])
+            for t in range(120)
+        ]
+        return torch.cat(diffs).std().item()
+
+    # Stations separated along the wave direction see a large difference;
+    # stations separated across it see none.
+    along = spread(beam_across)
+    across = spread(torch.stack([
+        torch.tensor([0.0, -half_beam]), torch.tensor([0.0, half_beam])
+    ]))
+    assert along > 10.0 * across, (along, across)
+    print(f"stations: along-wave spread {along:.4f} m vs across-wave "
+          f"{across:.6f} m")
+
+
+def test_orbital_velocity_matches_airy_kinematics() -> None:
+    """Surface orbital velocity is a*omega along the direction of travel."""
+    num_envs = 16
+    height, period = 0.4, 3.0
+    field = AiryWaveField(
+        num_envs=num_envs, device=DEVICE, height_m=height, period_s=period,
+        direction_deg=0.0,
     )
     x = torch.zeros(num_envs)
     y = torch.zeros(num_envs)
-    gains = dict(heave_gain=100.0, roll_gain=200.0, drag_gain=15.0)
-
-    into = torch.zeros(num_envs, 2)
-    into[:, 0] = -1.0  # bow towards -x, wave travels +x: head sea
-    following = torch.zeros(num_envs, 2)
-    following[:, 0] = 1.0  # bow with the wave
-
-    into_drag = torch.cat(
-        [field.compute_forces(t * 0.05, x, y, into, **gains)["wave_drag"]
-         for t in range(100)]
+    samples = torch.stack(
+        [field.orbital_velocity(t * period / 240.0, x, y)[0] for t in range(241)]
     )
-    follow_drag = torch.cat(
-        [field.compute_forces(t * 0.05, x, y, following, **gains)["wave_drag"]
-         for t in range(100)]
-    )
-    assert into_drag.max() > 0.0
-    assert torch.equal(follow_drag, torch.zeros_like(follow_drag))
-    print(f"drag: head sea peaks at {into_drag.max():.2f} N, following sea 0")
+    expected_peak = (height / 2.0) * (2.0 * math.pi / period)
+    assert abs(samples[:, 0].abs().max().item() - expected_peak) < 1e-3
+    # Motion is along +x only, since the wave travels along +x.
+    assert samples[:, 1].abs().max().item() < 1e-6
+    print(f"orbital: peak {samples[:, 0].abs().max():.4f} m/s matches "
+          f"a*omega = {expected_peak:.4f} m/s, no cross-track component")
 
 
 def test_factory_dispatch() -> None:
@@ -247,7 +259,7 @@ if __name__ == "__main__":
     test_slope_matches_numerical_gradient()
     test_pinned_direction_is_shared_by_all_envs()
     test_randomize_only_touches_requested_envs()
-    test_roll_torque_follows_the_hull_not_the_world()
-    test_drag_only_opposes_a_head_sea()
+    test_station_sampling_separates_roll_from_pitch()
+    test_orbital_velocity_matches_airy_kinematics()
     test_factory_dispatch()
     print("\nAll wave-field checks passed.")

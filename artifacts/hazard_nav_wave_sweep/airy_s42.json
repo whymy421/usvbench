@@ -7,11 +7,11 @@
   "episodes": 64,
   "successes": 1,
   "success_rate": 0.015625,
-  "spl": 0.009421179004587383,
-  "mean_time_to_success_s": 50.98333740234375,
-  "median_time_to_success_s": 50.98333740234375,
-  "mean_path_length_m": 136.2353771403432,
-  "mean_min_clearance_m": 2.3624130180105567,
-  "reverse_action_ratio_pre_goal": 0.9112463536602305,
-  "reverse_velocity_ratio_pre_goal": 0.9041403319905542
+  "spl": 0.008468856750819258,
+  "mean_time_to_success_s": 55.250003814697266,
+  "median_time_to_success_s": 55.250003814697266,
+  "mean_path_length_m": 128.38176345825195,
+  "mean_min_clearance_m": 2.1432495210319757,
+  "reverse_action_ratio_pre_goal": 0.9224067578830393,
+  "reverse_velocity_ratio_pre_goal": 0.9168829872204473
 }

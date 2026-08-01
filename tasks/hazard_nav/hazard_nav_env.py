@@ -61,10 +61,27 @@ class HazardNavEnv(DirectRLEnv):
         )
         self._wave_active = str(self.cfg.wave.mode).lower() != "calm"
         self.wave_elevation = torch.zeros(self.num_envs, device=self.device)
-        self.wave_heave_force = torch.zeros(self.num_envs, device=self.device)
-        self.wave_roll_torque = torch.zeros(self.num_envs, device=self.device)
-        self.wave_drag = torch.zeros(self.num_envs, device=self.device)
+        self.wave_vertical_velocity = torch.zeros(self.num_envs, device=self.device)
+        self.wave_orbital_velocity = torch.zeros(
+            (self.num_envs, 2), device=self.device
+        )
         self.lateral_exposure = torch.zeros(self.num_envs, device=self.device)
+
+        offsets = (
+            self.vehicle_spec.surface_sample_offsets(
+                water_density=self.physics_cfg.water_density,
+                gravity=self.physics_cfg.gravity,
+            )
+            if int(self.cfg.wave.buoyancy_stations) > 1
+            else [(0.0, 0.0)]
+        )
+        self._sample_offsets_body = None
+        if len(offsets) > 1:
+            stations = torch.zeros((len(offsets), 3), device=self.device)
+            for row, (along, across) in enumerate(offsets):
+                stations[row, self._surge_axis_idx] = along
+                stations[row, self._sway_axis_idx] = across
+            self._sample_offsets_body = stations
         if self._wave_active:
             self._report_sea_state()
         self.goal_radius = float(self.cfg.goal_radius)
@@ -554,13 +571,16 @@ class HazardNavEnv(DirectRLEnv):
             [self.wave_field.elevation(t * 0.05, x, y) for t in range(200)]
         )
         peak = samples.abs().max().item()
+        stations = (
+            1 if self._sample_offsets_body is None
+            else self._sample_offsets_body.shape[0]
+        )
         print(
-            f"\n[WAVE] mode={self.cfg.wave.mode} "
+            f"\n[WAVE] plant v{self.cfg.wave.WAVE_PLANT_VERSION} "
+            f"mode={self.cfg.wave.mode} "
             f"eta_std={samples.std().item():.3f} m peak={peak:.3f} m "
             f"hull={hull:.3f} m peak/hull={peak / hull:.2f} "
-            f"| gains heave={self.cfg.wave.heave_force_gain} "
-            f"roll={self.cfg.wave.roll_torque_gain} "
-            f"drag={self.cfg.wave.wave_drag_gain}"
+            f"| {stations} buoyancy stations, no wave gains"
         )
 
     def _sim_time_s(self) -> float:
@@ -583,20 +603,14 @@ class HazardNavEnv(DirectRLEnv):
         x = positions[:, 0]
         y = positions[:, 1]
 
-        loads = self.wave_field.compute_forces(
-            t,
-            x,
-            y,
-            self._forward_2d(),
-            heave_gain=float(self.cfg.wave.heave_force_gain),
-            roll_gain=float(self.cfg.wave.roll_torque_gain),
-            drag_gain=float(self.cfg.wave.wave_drag_gain),
+        self.wave_elevation = self.wave_field.elevation(t, x, y)
+        self.wave_vertical_velocity = self.wave_field.vertical_velocity(t, x, y)
+        self.wave_orbital_velocity = self.wave_field.orbital_velocity(t, x, y)
+        forward = self._forward_2d()
+        direction = self.wave_field.mean_direction
+        self.lateral_exposure = torch.abs(
+            direction[:, 0] * -forward[:, 1] + direction[:, 1] * forward[:, 0]
         )
-        self.wave_elevation = loads["eta"]
-        self.wave_heave_force = loads["heave_force"]
-        self.wave_roll_torque = loads["roll_torque"]
-        self.wave_drag = loads["wave_drag"]
-        self.lateral_exposure = loads["lateral_exposure"]
 
         scale = float(self.cfg.wave.slope_torque_scale)
         if scale <= 0.0:
@@ -614,9 +628,10 @@ class HazardNavEnv(DirectRLEnv):
         positions = self.robot.data.root_pos_w
         orientations = self._root_quat()
         center_of_h = self.physics_cfg.rov_height / 2.0
-        # Still water. Wave lift arrives as an explicit heave force, exactly as
-        # in the calm reference tasks; folding eta in here as well would count
-        # the same effect twice.
+
+        if self._wave_active and self._sample_offsets_body is not None:
+            return self._distributed_buoyancy(positions, orientations)
+
         depth = self.physics_cfg.water_surface_z - positions[:, 2]
         submerged_ratio = torch.clamp(
             (depth + center_of_h) / self.physics_cfg.rov_height,
@@ -635,6 +650,60 @@ class HazardNavEnv(DirectRLEnv):
         offset_body[:, 2] = self.physics_cfg.buoyancy_center_offset
         offset_world = math_utils.quat_apply(orientations, offset_body)
         torque_world = torch.cross(offset_world, force_world, dim=-1)
+        return force_world, torque_world
+
+    def _distributed_buoyancy(
+        self, positions: torch.Tensor, orientations: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Buoyancy summed over stations spread across the hull.
+
+        Each station carries an equal share of the displaced volume and is
+        submerged according to the local water surface, so the same
+        hydrostatics that hold the boat up also generate its roll and pitch:
+        a crest under one hull lifts that side and the couple follows. That
+        makes the authored heave/roll gains unnecessary, and it is why the
+        hydrostatic Kroll/Kpitch restoring torque is skipped while this path is
+        active -- keeping both would count the same stiffness twice.
+        """
+        stations = self._sample_offsets_body  # (S, 3) body frame
+        count = stations.shape[0]
+
+        offsets_world = math_utils.quat_apply(
+            orientations.unsqueeze(1).expand(-1, count, -1).reshape(-1, 4),
+            stations.unsqueeze(0).expand(self.num_envs, -1, -1).reshape(-1, 3),
+        ).view(self.num_envs, count, 3)
+        points_world = positions.unsqueeze(1) + offsets_world
+
+        surface = self.physics_cfg.water_surface_z + self.wave_field.elevation_at(
+            self._sim_time_s(), points_world[:, :, 0], points_world[:, :, 1]
+        )
+        depth = surface - points_world[:, :, 2]
+        submerged_ratio = torch.clamp(
+            (depth + self.physics_cfg.rov_height / 2.0)
+            / self.physics_cfg.rov_height,
+            min=0.0,
+            max=1.0,
+        )
+        share = self.physics_cfg.rov_volume / float(count)
+        lift = (
+            self.physics_cfg.water_density
+            * share
+            * submerged_ratio
+            * self.physics_cfg.gravity
+        )
+
+        station_force = torch.zeros(
+            (self.num_envs, count, 3), device=self.device
+        )
+        station_force[:, :, 2] = lift
+        force_world = station_force.sum(dim=1)
+        torque_world = torch.cross(offsets_world, station_force, dim=-1).sum(dim=1)
+
+        # Buoyancy centre offset still acts on the resultant.
+        centre_body = torch.zeros((self.num_envs, 3), device=self.device)
+        centre_body[:, 2] = self.physics_cfg.buoyancy_center_offset
+        centre_world = math_utils.quat_apply(orientations, centre_body)
+        torque_world += torch.cross(centre_world, force_world, dim=-1)
         return force_world, torque_world
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
@@ -663,19 +732,6 @@ class HazardNavEnv(DirectRLEnv):
         force_world += buoyancy_force
         torque_world += buoyancy_torque
 
-        if self._wave_active:
-            # Channels follow my_first_task_e11 (the E7 plant): lift and drag in
-            # the world frame, roll about the hull's own longitudinal axis. The
-            # roll torque goes into `torques`, which is already body-frame, so
-            # it stays a roll whatever heading the boat is on -- applying it to
-            # a fixed world axis, as boat_calm_nav does, turns it into pitch
-            # whenever the bow is not aligned with that axis.
-            force_world[:, 2] += self.wave_heave_force
-            torques[:, 0, self._surge_axis_idx] += self.wave_roll_torque
-            force_world[:, :2] += (
-                -self.wave_drag.unsqueeze(-1) * self._forward_2d()
-            )
-
         velocity_world = self.robot.data.root_com_vel_w
         if velocity_world.shape[-1] == 6:
             linear_velocity = velocity_world[:, :3]
@@ -683,6 +739,15 @@ class HazardNavEnv(DirectRLEnv):
         else:
             linear_velocity = velocity_world
             angular_velocity = self.robot.data.root_ang_vel_w
+
+        # Damping acts on motion relative to the water, not to the ground. In
+        # still water the wave terms are zero and this is the calm expression;
+        # under waves it is what transmits the sea to the hull, replacing the
+        # authored heave/roll/drag gains entirely.
+        if self._wave_active:
+            linear_velocity = linear_velocity.clone()
+            linear_velocity[:, :2] -= self.wave_orbital_velocity
+            linear_velocity[:, 2] -= self.wave_vertical_velocity
 
         quat = self._root_quat()
         if (
@@ -719,31 +784,36 @@ class HazardNavEnv(DirectRLEnv):
         torque_world[:, :2] += (
             -self.physics_cfg.rollpitch_rate_damping * angular_velocity[:, :2]
         )
-        if (
-            self.physics_cfg.restoring_stiffness_roll
-            == self.physics_cfg.restoring_stiffness_pitch
-        ):
-            up_body_world = math_utils.quat_apply(
-                quat, self.up_dir.expand(self.num_envs, 3)
-            )
-            if wave_up is None:
-                tilt_axis = torch.stack(
-                    (up_body_world[:, 1], -up_body_world[:, 0]), dim=-1
+        # Distributed buoyancy already produces the righting couple from the
+        # local surface under each station, so the lumped Kroll/Kpitch term is
+        # skipped there. Applying both would count hydrostatic stiffness twice
+        # and roughly double the natural frequencies.
+        if self._sample_offsets_body is None or not self._wave_active:
+            if (
+                self.physics_cfg.restoring_stiffness_roll
+                == self.physics_cfg.restoring_stiffness_pitch
+            ):
+                up_body_world = math_utils.quat_apply(
+                    quat, self.up_dir.expand(self.num_envs, 3)
+                )
+                if wave_up is None:
+                    tilt_axis = torch.stack(
+                        (up_body_world[:, 1], -up_body_world[:, 0]), dim=-1
+                    )
+                else:
+                    # Same restoring couple u x n, with the wave normal
+                    # replacing global up; reduces to the above when n = e_z.
+                    tilt_axis = torch.cross(up_body_world, wave_up, dim=-1)[:, :2]
+                torque_world[:, :2] += (
+                    self.physics_cfg.restoring_stiffness_roll * tilt_axis
                 )
             else:
-                # Same restoring couple u x n, with the wave normal replacing
-                # global up; reduces to the expression above when n = e_z.
-                tilt_axis = torch.cross(up_body_world, wave_up, dim=-1)[:, :2]
-            torque_world[:, :2] += (
-                self.physics_cfg.restoring_stiffness_roll * tilt_axis
-            )
-        else:
-            torques[:, 0, :] += restoring_torque_body(
-                quat,
-                self.physics_cfg.restoring_stiffness_roll,
-                self.physics_cfg.restoring_stiffness_pitch,
-                up_world=wave_up,
-            )
+                torques[:, 0, :] += restoring_torque_body(
+                    quat,
+                    self.physics_cfg.restoring_stiffness_roll,
+                    self.physics_cfg.restoring_stiffness_pitch,
+                    up_world=wave_up,
+                )
 
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_world)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_world)
