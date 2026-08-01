@@ -164,17 +164,24 @@ class WaveCfg:
     f_max_hz: float = 1.60
     spread_deg: float = 30.0
 
-    # Wave loads, matching tasks/boat_calm_nav so the ROV/boat baselines and
-    # the E7 line stay comparable. heave lifts the hull, roll is driven by how
-    # beam-on the sea is, and drag acts against the bow so heading into the
-    # waves costs speed -- that last one is what makes waves felt at all.
-    heave_force_gain: float = 100.0
-    roll_torque_gain: float = 200.0
-    wave_drag_gain: float = 15.0
+    # Plant v2 carries no wave-specific gains. Lift, roll and pitch come out of
+    # buoyancy sampled across the hull, and the horizontal push comes out of
+    # drag taken against the water rather than the ground, so the hydrodynamic
+    # coefficients already in the vehicle registry do all the work. The v1
+    # gains (heave 100 N/m, roll 200 N m, drag 15 N/m) are gone rather than
+    # defaulted to zero, because they were authored numbers with no derivation
+    # and keeping them as knobs invites re-tuning the physics to taste.
+    WAVE_PLANT_VERSION: int = 2
 
-    # Optional second roll channel: redirects the restoring equilibrium toward
-    # the wave normal instead of world-up. Off by default -- the gains above
-    # already carry roll, and stacking both double-counts it.
+    # Sample the surface across the hull (6) or at one point (1). One point
+    # produces no attitude response at all -- buoyancy lumped at a single
+    # location cannot generate a couple however the surface tilts -- so it is
+    # the honest way back to plant v1 behaviour, not a cheaper approximation.
+    buoyancy_stations: int = 6
+
+    # Legacy channel: tilt the lumped restoring equilibrium toward the wave
+    # normal. Unused when distributed buoyancy is active, kept for vehicles
+    # that have no measured plan-form to sample.
     slope_torque_scale: float = 0.0
     # Guard against the linear-wave model being pushed past its validity: a
     # steepness this high is already outside deep-water linear theory.
