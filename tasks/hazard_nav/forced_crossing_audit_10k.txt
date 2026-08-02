@@ -1,0 +1,42 @@
+forced-crossing admission audit: 2500 layouts x 4 tiers
+  planning inflation 0.65 m (route exists) / seal inflation 0.45 m (no leak), cell 0.25 m
+
+tier 0  gate 5 beams = 4.493 m (measured, spread 0.0056)
+         route/straight  median 1.00  p90 1.03
+         gate offset from the axis  median 1.0 m  max 3.9 m
+         cylinders/layout  51-78  (cfg max_obstacles must be >= 78)
+         violations: 0
+
+tier 1  gate 4 beams = 3.593 m (measured, spread 0.0055)
+         route/straight  median 1.01  p90 1.06
+         gate offset from the axis  median 1.3 m  max 4.4 m
+         cylinders/layout  52-79  (cfg max_obstacles must be >= 79)
+         violations: 0
+
+tier 2  gate 3 beams = 2.695 m (measured, spread 0.0056)
+         route/straight  median 1.03  p90 1.09
+         gate offset from the axis  median 1.6 m  max 4.8 m
+         cylinders/layout  52-78  (cfg max_obstacles must be >= 78)
+         violations: 0
+
+tier 3  gate 2 beams = 1.795 m (measured, spread 0.0058)
+         route/straight  median 1.05  p90 1.11
+         gate offset from the axis  median 1.8 m  max 5.2 m
+         cylinders/layout  53-78  (cfg max_obstacles must be >= 78)
+         violations: 0
+
+elapsed 856 s
+max cylinders over every tier: 79
+
+=> PASS: 10000 layouts, 0 violations.
+   Sealing the gate makes the goal unreachable at the true half-beam in
+   every one, so success on this task cannot be earned by going around.
+
+   Two things the tier ladder does NOT yet control, stated so nobody
+   reads more into the pass than it says:
+   - route length barely moves across tiers (the gate's lateral offset
+     drives it, not the width), so tier difficulty is entirely 'how
+     precisely must I steer', measured only by training;
+   - the threading arc's portal test caps mean side reading at 2.25 m,
+     i.e. gaps up to 4.50 m. Tier 0 at 4.495 m sits on that boundary and
+     will pay erratically; tiers 1-3 are comfortably inside it.

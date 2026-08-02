@@ -591,13 +591,336 @@ def ray_circle_ranges(
     return torch.min(intersections, dim=-1).values.clamp(max=float(max_range_m))
 
 
+# --- Forced-crossing variant: a closed basin split by a gated bulkhead -------
+#
+# Why this exists: every certified Task A number measures willingness to
+# detour, not avoidance. The scatter arena has no boundary, terminations are
+# only reached/contact/timeout, and circumventing the whole obstacle field
+# costs 1.63-1.82x the straight line at EVERY tier -- the 128/128 champion
+# takes that route (median path 53.6 m against a 29.7 m straight line).
+#
+# Here the arena is a closed rectangle divided by a wall with exactly one gate.
+# Admission proves that with the gate sealed the goal is unreachable AT THE
+# TRUE HULL HALF-BEAM, so there is no "around" to be willing to take: every
+# success has transited the gate.
+#
+# Gate widths are declared in PHYSICAL metres, deliberately in their own table
+# rather than reusing Difficulty.bottleneck_m. That field is an INFLATED gap
+# (planner units, half-beam + margin = 0.65); silently carrying the same
+# numbers across the two meanings is exactly the checker-vs-reality confusion
+# that let the "sealed" ring ship with 1.00 m holes in a 0.899 m hull.
+FORCED_GATE_BEAMS: dict[int, float] = {0: 5.0, 1: 4.0, 2: 3.0, 3: 2.0}
+
+FORCED_PERIMETER_RADIUS_M = 1.20  # basin sides/ends: coarse, only has to seal
+FORCED_BULKHEAD_RADIUS_M = 0.80  # gate jambs: MIN_OBSTACLE_RADIUS, 2-ray covered
+FORCED_WALL_OVERLAP_M = 0.25  # surface overlap FLOOR between wall neighbours
+FORCED_ENDPOINT_CLEAR_M = 2.50  # the 5.0 m scatter disk cannot fit in a basin
+FORCED_APPROACH_MIN_M = 6.00  # endpoint-to-bulkhead room to line up
+FORCED_BASIN_HALF_WIDTH_RANGE_M = (6.0, 9.0)
+FORCED_END_MARGIN_RANGE_M = (3.6, 6.0)  # >= perimeter radius + endpoint clear
+FORCED_GOAL_DISTANCE_RANGE_M = (20.0, 34.0)
+FORCED_BULKHEAD_MIN_SIDE_M = 2.0  # each jamb must be a real wall, not a stub
+FORCED_SEAL_CELL_M = 0.25  # seal BFS resolution; walls are >= 1.6 m thick
+FORCED_GATE_FIT_MARGIN_M = 0.30  # gate must beat the beam by this much
+
+
+@dataclass(frozen=True)
+class GateSpec:
+    """The single opening in the bulkhead, described as measured not requested."""
+
+    center: np.ndarray  # midpoint of the free opening
+    along: np.ndarray  # unit vector across the opening (along the wall)
+    through: np.ndarray  # unit vector from the start chamber to the goal chamber
+    free_width_m: float  # MEASURED between physical cylinder surfaces
+    requested_width_m: float
+    wall_x: float
+
+
+def wall_segment_cylinders(
+    p0: np.ndarray,
+    p1: np.ndarray,
+    *,
+    radius_m: float,
+    overlap_m: float = FORCED_WALL_OVERLAP_M,
+) -> np.ndarray:
+    """Tile a segment with cylinder centres whose surfaces overlap.
+
+    The count comes from a ceiling, so the realised overlap is at least
+    ``overlap_m``. Overlap has to be a FLOOR: when the ring generator treated
+    it as a ceiling, bisection returned values near the loose end and 5/15
+    rings still leaked.
+    """
+    p0 = np.asarray(p0, dtype=np.float64)
+    p1 = np.asarray(p1, dtype=np.float64)
+    span = float(np.linalg.norm(p1 - p0))
+    stride = 2.0 * radius_m - overlap_m
+    if stride <= 0.0:
+        raise ValueError("overlap_m must be smaller than the cylinder diameter")
+    count = max(2, int(math.ceil(span / stride)) + 1)
+    fractions = np.linspace(0.0, 1.0, count)[:, None]
+    return p0[None, :] + fractions * (p1 - p0)[None, :]
+
+
+def _basin_cylinders(
+    x_back: float,
+    x_front: float,
+    half_width: float,
+    wall_x: float,
+    gate_y: float,
+    gate_width: float,
+    *,
+    include_bulkhead: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Four perimeter walls plus (optionally) a bulkhead split by one gate.
+
+    ``include_bulkhead=False`` builds the same basin with nothing in it. That
+    is the control for the zero-shot result: the basin introduces boundaries
+    AND a mandatory gate at once, and the Task A champion dies on the walls
+    (median path 4.95 m) before it ever reaches the bulkhead at >= 6 m, so the
+    two effects have to be separated before the number means anything.
+    """
+    r_p = FORCED_PERIMETER_RADIUS_M
+    r_b = FORCED_BULKHEAD_RADIUS_M
+    # Jamb CENTRES sit half a gate plus one radius out, so the free opening
+    # between the two physical SURFACES is exactly ``gate_width``.
+    jamb = 0.5 * gate_width + r_b
+    perimeter = [
+        ((x_back, -half_width), (x_front, -half_width)),
+        ((x_back, half_width), (x_front, half_width)),
+        ((x_back, -half_width), (x_back, half_width)),
+        ((x_front, -half_width), (x_front, half_width)),
+    ]
+    bulkhead = [
+        ((wall_x, -half_width), (wall_x, gate_y - jamb)),
+        ((wall_x, gate_y + jamb), (wall_x, half_width)),
+    ] if include_bulkhead else []
+
+    centers: list[np.ndarray] = []
+    radii: list[np.ndarray] = []
+    for segments, radius in ((perimeter, r_p), (bulkhead, r_b)):
+        if not segments:
+            continue
+        for p0, p1 in segments:
+            pts = wall_segment_cylinders(np.array(p0), np.array(p1), radius_m=radius)
+            centers.append(pts)
+            radii.append(np.full(len(pts), radius))
+    return np.vstack(centers), np.concatenate(radii)
+
+
+def _bulkhead_free_runs(
+    centers: np.ndarray,
+    radii: np.ndarray,
+    wall_x: float,
+    y_lo: float,
+    y_hi: float,
+    *,
+    samples: int = 6000,
+) -> list[tuple[float, float]]:
+    """Contiguous stretches of the bulkhead line that no cylinder covers."""
+    ys = np.linspace(y_lo, y_hi, samples)
+    points = np.stack([np.full_like(ys, wall_x), ys], axis=1)
+    distance = np.linalg.norm(points[:, None, :] - centers[None, :, :], axis=-1)
+    free = np.all(distance > radii[None, :], axis=1)
+    runs: list[tuple[float, float]] = []
+    start = None
+    for index, is_free in enumerate(free):
+        if is_free and start is None:
+            start = index
+        elif not is_free and start is not None:
+            runs.append((float(ys[start]), float(ys[index - 1])))
+            start = None
+    if start is not None:
+        runs.append((float(ys[start]), float(ys[-1])))
+    return runs
+
+
+def sample_open_basin_layout(
+    level: int,
+    rng: np.random.Generator | None = None,
+    *,
+    max_attempts: int = 60,
+) -> HazardLayout:
+    """The crossing basin with the bulkhead removed: boundaries and nothing else.
+
+    Control for the zero-shot experiment. The basin changes two things at once
+    relative to Task A -- the arena acquires walls, and the route acquires a
+    mandatory gate -- and the champion collides in 128/128 after a median 4.95 m,
+    which is short of the >= 6 m to the bulkhead. If it also fails here, the
+    walls alone explain the result and the gate contributed nothing to it.
+
+    Same perimeter distribution as the crossing task, so the only difference
+    between the two is the bulkhead.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least one")
+    difficulty = difficulty_for_level(level)
+    rng = np.random.default_rng() if rng is None else rng
+    start = np.zeros(2, dtype=np.float64)
+
+    for attempt in range(1, max_attempts + 1):
+        distance = float(rng.uniform(*FORCED_GOAL_DISTANCE_RANGE_M))
+        goal = np.array((distance, 0.0), dtype=np.float64)
+        half_width = float(rng.uniform(*FORCED_BASIN_HALF_WIDTH_RANGE_M))
+        x_back = -float(rng.uniform(*FORCED_END_MARGIN_RANGE_M))
+        x_front = distance + float(rng.uniform(*FORCED_END_MARGIN_RANGE_M))
+
+        centers, radii = _basin_cylinders(
+            x_back, x_front, half_width, 0.0, 0.0, 0.0, include_bulkhead=False
+        )
+        if not start_goal_disks_clear(
+            start, goal, centers, radii,
+            clear_radius_m=FORCED_ENDPOINT_CLEAR_M, inflation_m=0.0,
+        ):
+            continue
+        geodesic = bfs_geodesic_length(
+            start, goal, centers, radii, cell_m=FORCED_SEAL_CELL_M
+        )
+        if geodesic is None:
+            continue
+        return HazardLayout(
+            level=difficulty.level,
+            requested_obstacle_count=int(len(radii)),
+            start=start,
+            goal=goal,
+            centers=centers,
+            radii=radii,
+            geodesic_length=float(geodesic),
+            direct_blocked=direct_segment_blocked(start, goal, centers, radii),
+            attempts=attempt,
+        )
+
+    raise RuntimeError(
+        f"Could not generate an open-basin layout for level {level} "
+        f"in {max_attempts} attempts."
+    )
+
+
+def sample_forced_crossing_layout(
+    level: int,
+    rng: np.random.Generator | None = None,
+    *,
+    max_attempts: int = 60,
+) -> tuple[HazardLayout, GateSpec]:
+    """Sample a closed basin whose only route to the goal is through the gate.
+
+    Admission, in the order it rejects most cheaply:
+
+    1. the bulkhead jambs are real walls (>= FORCED_BULKHEAD_MIN_SIDE_M each);
+    2. the MEASURED free opening matches the requested width and clears the
+       hull beam by FORCED_GATE_FIT_MARGIN_M -- measured by scanning the wall
+       line, never assumed from the construction;
+    3. exactly one free run on the bulkhead line (a second one is a leak);
+    4. endpoint disks clear of every cylinder;
+    5. BFS at PLANNING inflation finds a route as built;
+    6. BFS with the gate filled in finds NO route at the TRUE half-beam with no
+       margin -- the check the ring's admission got wrong by inflating to 0.65
+       while the simulator's contact predicate uses 0.45.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least one")
+    difficulty = difficulty_for_level(level)
+    gate_width = float(FORCED_GATE_BEAMS[difficulty.level] * HULL_BEAM_M)
+    if gate_width < HULL_BEAM_M + FORCED_GATE_FIT_MARGIN_M:
+        raise ValueError(f"level {level} gate {gate_width:.3f} m cannot fit the hull")
+    rng = np.random.default_rng() if rng is None else rng
+    start = np.zeros(2, dtype=np.float64)
+
+    for attempt in range(1, max_attempts + 1):
+        distance = float(rng.uniform(*FORCED_GOAL_DISTANCE_RANGE_M))
+        goal = np.array((distance, 0.0), dtype=np.float64)
+        if distance < 2.0 * FORCED_APPROACH_MIN_M:
+            continue
+        half_width = float(rng.uniform(*FORCED_BASIN_HALF_WIDTH_RANGE_M))
+        x_back = -float(rng.uniform(*FORCED_END_MARGIN_RANGE_M))
+        x_front = distance + float(rng.uniform(*FORCED_END_MARGIN_RANGE_M))
+        wall_x = float(
+            rng.uniform(FORCED_APPROACH_MIN_M, distance - FORCED_APPROACH_MIN_M)
+        )
+        jamb = 0.5 * gate_width + FORCED_BULKHEAD_RADIUS_M
+        gate_limit = half_width - jamb - FORCED_BULKHEAD_MIN_SIDE_M
+        if gate_limit <= 0.0:
+            continue
+        gate_y = float(rng.uniform(-gate_limit, gate_limit))
+
+        centers, radii = _basin_cylinders(
+            x_back, x_front, half_width, wall_x, gate_y, gate_width
+        )
+
+        runs = _bulkhead_free_runs(centers, radii, wall_x, -half_width, half_width)
+        if len(runs) != 1:
+            continue
+        measured = runs[0][1] - runs[0][0]
+        if abs(measured - gate_width) > 0.01:
+            continue
+        if measured < HULL_BEAM_M + FORCED_GATE_FIT_MARGIN_M:
+            continue
+
+        if not start_goal_disks_clear(
+            start,
+            goal,
+            centers,
+            radii,
+            clear_radius_m=FORCED_ENDPOINT_CLEAR_M,
+            inflation_m=0.0,
+        ):
+            continue
+
+        geodesic = bfs_geodesic_length(
+            start, goal, centers, radii, cell_m=FORCED_SEAL_CELL_M
+        )
+        if geodesic is None:
+            continue
+
+        sealed_centers, sealed_radii = _basin_cylinders(
+            x_back, x_front, half_width, wall_x, gate_y, 0.0
+        )
+        leak = bfs_geodesic_length(
+            start,
+            goal,
+            sealed_centers,
+            sealed_radii,
+            cell_m=FORCED_SEAL_CELL_M,
+            inflation_m=HALF_BEAM_M,
+        )
+        if leak is not None:
+            continue
+
+        gate = GateSpec(
+            center=np.array((wall_x, 0.5 * (runs[0][0] + runs[0][1]))),
+            along=np.array((0.0, 1.0)),
+            through=np.array((1.0, 0.0)),
+            free_width_m=float(measured),
+            requested_width_m=gate_width,
+            wall_x=wall_x,
+        )
+        layout = HazardLayout(
+            level=difficulty.level,
+            requested_obstacle_count=int(len(radii)),
+            start=start,
+            goal=goal,
+            centers=centers,
+            radii=radii,
+            geodesic_length=float(geodesic),
+            direct_blocked=direct_segment_blocked(start, goal, centers, radii),
+            attempts=attempt,
+        )
+        return layout, gate
+
+    raise RuntimeError(
+        f"Could not generate a forced-crossing layout for level {level} "
+        f"in {max_attempts} attempts."
+    )
+
+
 __all__ = [
     "COLLISION_MARGIN_M",
     "DIFFICULTIES",
     "ENDPOINT_CLEAR_RADIUS_M",
+    "FORCED_GATE_BEAMS",
     "GRID_CELL_M",
     "HALF_BEAM_M",
     "HULL_BEAM_M",
+    "GateSpec",
     "HazardLayout",
     "MAX_OBSTACLE_RADIUS_M",
     "MIN_OBSTACLE_RADIUS_M",
@@ -609,6 +932,9 @@ __all__ = [
     "inflated_radii",
     "minimum_pairwise_inflated_gap",
     "ray_circle_ranges",
+    "sample_forced_crossing_layout",
     "sample_layout",
+    "sample_open_basin_layout",
     "start_goal_disks_clear",
+    "wall_segment_cylinders",
 ]

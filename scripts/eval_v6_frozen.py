@@ -61,6 +61,11 @@ while len(records) < args_cli.episodes and step < max_steps:
     with torch.inference_mode():
         outputs = runner.agent.act(obs, timestep=0, timesteps=0)
         actions = outputs[-1].get("mean_actions", outputs[0])
+    # d0_per_env is rewritten inside _reset_idx, which runs during step(), so
+    # reading it alongside the other episode stats would report the NEXT
+    # episode's straight-line distance. Snapshot it while it still belongs to
+    # the episode that is about to end.
+    d0_prev = (base.d0_per_env.clone() if hasattr(base, "d0_per_env") else None)
     obs, _, term, trunc, _ = wrapped.step(actions)
     step += 1
     done = term | trunc
@@ -78,6 +83,8 @@ while len(records) < args_cli.episodes and step < max_steps:
         }
         if hasattr(base, "episode_gates_passed"):
             rec["gates"] = int(base.episode_gates_passed[i])
+        if d0_prev is not None:
+            rec["d0_m"] = float(d0_prev[i])
         records.append(rec)
         ep_counter[i] += 1
 
@@ -104,6 +111,17 @@ print(f"  tts median={pct(tts, 0.5):.1f}s p90={pct(tts, 0.9):.1f}s" if tts
       else "  tts: no successes")
 print(f"  collision_episodes={collided}/{n} ({collided / max(n, 1):.3f}) "
       f"min_clearance p10={pct(clr, 0.10):.2f}m")
+# Success rate alone has no discriminative power on a task where detouring
+# works: the shifted-potential run certified 100%/100% on Task A while walking
+# a 68.6 m median path against a 29.7 m straight line -- a BIGGER detour than
+# the baseline policy the validity audit had already flagged as going around.
+# Only the path length made that visible, so certification prints it.
+path = sorted(r["path_length_m"] for r in succ) or sorted(
+    r["path_length_m"] for r in records)
+print(f"  path_len median={pct(path, 0.5):.1f}m p90={pct(path, 0.9):.1f}m", end="")
+ratios = sorted(r["path_length_m"] / r["d0_m"] for r in succ
+                if r.get("d0_m", 0.0) > 0.0)
+print(f"  detour median={pct(ratios, 0.5):.2f}x straight" if ratios else "")
 if args_cli.out:
     with open(args_cli.out, "w", encoding="utf-8") as f:
         json.dump({"task": TASK, "level": args_cli.level,

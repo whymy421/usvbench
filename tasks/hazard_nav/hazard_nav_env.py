@@ -26,7 +26,9 @@ from ..docking.curriculum import DockingCurriculum
 from .hazard_geometry import (
     analytic_min_clearance,
     ray_circle_ranges,
+    sample_forced_crossing_layout,
     sample_layout,
+    sample_open_basin_layout,
     sample_ring_layout,
 )
 from .hazard_nav_env_cfg import HazardNavEnvCfg
@@ -135,6 +137,7 @@ class HazardNavEnv(DirectRLEnv):
         # charged, instead of spending a training arm on a predicted null.
         self._fee_steps = torch.zeros(self.num_envs, device=self.device)
         self._ep_prox_cost = torch.zeros(self.num_envs, device=self.device)
+        self._ep_open_water_cost = torch.zeros(self.num_envs, device=self.device)
         self._ep_contact_entries = torch.zeros(self.num_envs, device=self.device)
         self._ep_goal_bonus = torch.zeros(self.num_envs, device=self.device)
         self._ep_reverse_cost = torch.zeros(self.num_envs, device=self.device)
@@ -841,6 +844,25 @@ class HazardNavEnv(DirectRLEnv):
                 contact=contact_now,
             )
 
+        # Open-water tax: charged only out in the empty water AROUND the
+        # obstacle field, so the detour stops being the cheap option. Exempt
+        # near the goal -- its own 5 m clear disk is open water by
+        # construction, and taxing it would penalise arriving.
+        open_water_cost = torch.zeros(self.num_envs, device=self.device)
+        if self.cfg.reward_open_water_scale > 0.0:
+            goal_distance = torch.norm(self.target_pos - self._com_xy(), dim=-1)
+            in_open = (
+                (clearance > self.cfg.open_water_radius_m)
+                & (goal_distance > self.cfg.open_water_goal_exempt_m)
+                & ~self._reached_goal
+            )
+            open_water_cost = (
+                self.cfg.reward_open_water_scale
+                * self.control_step_s
+                * in_open.float()
+            )
+            self._ep_open_water_cost += open_water_cost
+
         reverse_action = torch.relu(-self.actions[:, 0])
         reverse_cost = (
             self.cfg.reward_reverse_action_scale
@@ -867,6 +889,7 @@ class HazardNavEnv(DirectRLEnv):
             - safety_cost
             - prox_cost
             - swift_cost
+            - open_water_cost
             - reverse_cost
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
             - self.cfg.reward_contact_dwell_penalty * contact_now.float()
@@ -1005,6 +1028,25 @@ class HazardNavEnv(DirectRLEnv):
                         self.cfg, "ring_neighbor_overlap_m", None
                     ),
                 )
+            elif self.cfg.layout_mode == "basin":
+                # Control for the crossing task: same walls, no bulkhead. The
+                # crossing basin changes two things at once and the champion
+                # dies on the walls before reaching the gate, so this isolates
+                # which of the two the failure belongs to.
+                layout = sample_open_basin_layout(
+                    level,
+                    rng=self._layout_rng,
+                    max_attempts=max(60, self.cfg.layout_max_attempts),
+                )
+            elif self.cfg.layout_mode == "forced":
+                # Closed basin split by a gated bulkhead. Admission proves the
+                # goal is unreachable at the true half-beam once the gate is
+                # sealed, so unlike scatter there is no detour to prefer.
+                layout, _gate = sample_forced_crossing_layout(
+                    level,
+                    rng=self._layout_rng,
+                    max_attempts=max(60, self.cfg.layout_max_attempts),
+                )
             else:
                 layout = sample_layout(
                     level,
@@ -1089,6 +1131,7 @@ class HazardNavEnv(DirectRLEnv):
         self.actions[env_ids] = 0.0
         self._fee_steps[env_ids] = 0.0
         self._ep_prox_cost[env_ids] = 0.0
+        self._ep_open_water_cost[env_ids] = 0.0
         self._ep_contact_entries[env_ids] = 0.0
         self._ep_goal_bonus[env_ids] = 0.0
         self._ep_reverse_cost[env_ids] = 0.0
