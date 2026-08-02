@@ -24,7 +24,17 @@ import argparse
 import json
 import sys
 
-from isaaclab.app import AppLauncher
+# The taxonomy labels are Chinese. Redirected to a file on Windows, Python
+# picks cp1252 and the final print raises UnicodeEncodeError -- which threw
+# away 447 s of completed GPU work, because the JSON was written after the
+# printing. Fix both halves: make stdout encoding-proof here, and dump the
+# records BEFORE printing them (see the end of this file).
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, ValueError):
+    pass
+
+from isaaclab.app import AppLauncher  # noqa: E402
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--checkpoint", required=True)
@@ -178,6 +188,15 @@ order = ["success", "collision", "at_rim_no_entry", "never_engaged", "retreated"
          "stuck_in_field", "stalled"]
 counts = {k: sum(1 for r in records if r["verdict"] == k) for k in order}
 
+# Persist BEFORE reporting. The rollout is the expensive part; nothing about
+# formatting it should be able to destroy it.
+if args_cli.out:
+    with open(args_cli.out, "w", encoding="utf-8") as f:
+        json.dump({"task": TASK, "level": args_cli.level,
+                   "seed": args_cli.eval_seed,
+                   "checkpoint": os.path.abspath(args_cli.checkpoint),
+                   "counts": counts, "records": records}, f, indent=1)
+
 print(f"DIAGNOSE task={TASK} level={args_cli.level} seed={args_cli.eval_seed} "
       f"ckpt={os.path.basename(args_cli.checkpoint)}")
 print(f"  episodes={n}")
@@ -214,11 +233,6 @@ if fails:
              if succ else ""))
 
 if args_cli.out:
-    with open(args_cli.out, "w", encoding="utf-8") as f:
-        json.dump({"task": TASK, "level": args_cli.level,
-                   "seed": args_cli.eval_seed,
-                   "checkpoint": os.path.abspath(args_cli.checkpoint),
-                   "counts": counts, "records": records}, f, indent=1)
     print(f"  records -> {args_cli.out}")
 sys.stdout.flush()
 env.close()

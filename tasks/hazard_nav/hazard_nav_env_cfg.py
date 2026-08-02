@@ -264,6 +264,26 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     feasibility_sectors: int = 9
     feasibility_width_multiplier: float = 1.0
 
+    # --- Open-water tax (the advisor's proposal, priced in arc_breakeven.py) --
+    # "If the surrounding water has no obstacles, the pillar field is one big
+    # obstacle and the boat will go around it." The fix is to make the water
+    # AROUND the field cost something, rather than to pay a bonus for the gap.
+    #
+    # Why a penalty and not the half-sine arc: the deterministic ledger already
+    # prefers threading by +5.8, so detouring is bought by RISK, not by reward
+    # ranking. A bonus on the risky option is only collected on the runs that
+    # succeed, so it must be ~1/q times the gap it closes -- 58 at q=0.5, 140
+    # at q=0.3, against a goal bonus of 50-100. A tax on the safe option lands
+    # with certainty and closes the same gap at face value.
+    #
+    # Charged per second while the nearest obstacle is farther than
+    # open_water_radius_m, the hull has not reached the goal, and it is not on
+    # final approach (or the goal's own 5 m clear disk would be taxed).
+    # 0.0 keeps every existing id numerically identical.
+    reward_open_water_scale: float = 0.0
+    open_water_radius_m: float = 6.0
+    open_water_goal_exempt_m: float = 6.0
+
     # --- One-shot threading bonus (owner's half-sine arc) --------------------
     # Paid once per episode on a completed clean passage; maximum on the gap
     # centreline, zero where the hull would touch, self-normalising by gap
@@ -333,9 +353,16 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             )
         if self.yaw_rate_obs_scale_rad_s <= 0.0:
             raise ValueError("yaw_rate_obs_scale_rad_s must be positive")
-        if self.layout_mode not in ("scatter", "ring"):
-            raise ValueError("layout_mode must be 'scatter' or 'ring'")
-        min_obstacles = 18 if self.layout_mode == "ring" else 14
+        if self.layout_mode not in ("scatter", "ring", "forced", "basin"):
+            raise ValueError(
+                "layout_mode must be 'scatter', 'ring', 'forced' or 'basin'"
+            )
+        # Undersizing this crashes the first reset of the affected tier, which
+        # is how no pre-v6 run ever contained level-3 experience. The forced
+        # floor is the 10k-layout audit's worst case (79) plus headroom.
+        min_obstacles = {"ring": 18, "forced": 80, "basin": 66}.get(
+            self.layout_mode, 14
+        )
         if self.max_obstacles < min_obstacles:
             raise ValueError(
                 f"max_obstacles must be >= {min_obstacles} for "
@@ -460,3 +487,109 @@ class HazardRingSealedEnvCfg(HazardRingEnvCfg):
     """
 
     ring_neighbor_overlap_m: float = 0.55
+
+
+@configclass
+class HazardForcedCrossingEnvCfg(HazardNavV3EnvCfg):
+    """Closed basin split by a bulkhead with exactly one gate.
+
+    The scatter arena has no boundary, so every certified Task A number
+    measures willingness to detour: circumventing the field costs 1.63-1.82x
+    at every tier and the 128/128 champion takes that route. Here admission
+    proves that sealing the gate makes the goal unreachable AT THE TRUE
+    HALF-BEAM (test_forced_crossing.py), so a success is a transit.
+
+    Same observation contract and reward as v3, so a v11 champion can be
+    evaluated here zero-shot. Tier difficulty is gate width only -- 5/4/3/2
+    hull beams -- since the route length barely moves across tiers.
+    """
+
+    layout_mode: str = "forced"
+    # Walls are tiled cylinders; the audit's worst case over 10k layouts sets
+    # this. Undersizing it crashes the first reset of the affected tier, which
+    # is how no pre-v6 run ever contained level-3 experience.
+    max_obstacles: int = 96
+    layout_max_attempts: int = 60
+    # Obstacle marker prims are authored even when headless, and the reset path
+    # walks max_obstacles of them per resetting env in Python. At 96 that is 7x
+    # the scatter task's per-reset USD traffic, on a task whose walls make early
+    # terminations frequent. Off for training; HazardCrossDemo turns them back
+    # on for recording, where env counts are small.
+    visual: VisualCfg = VisualCfg(enable_obstacles=False)
+
+
+@configclass
+class HazardCrossDemoEnvCfg(HazardForcedCrossingEnvCfg):
+    """Forced crossing with the walls drawn. For recording only, few envs."""
+
+    visual: VisualCfg = VisualCfg(enable_obstacles=True)
+
+
+@configclass
+class HazardOpenWaterTaxEnvCfg(HazardNavV3EnvCfg):
+    """v11 recipe plus a tax on the empty water around the obstacle field.
+
+    The advisor's mechanism, with both parameters measured rather than guessed
+    (scripts/measure_open_water.py, paired runs on identical layouts):
+
+      per-step clearance   threading v11: p10 0.31  median 3.56  p90 9.30
+                           detouring v8 : p10 3.24  median 6.77  p90 12.09
+
+    Radius 12 m taxes 12.3% of the detour's pre-goal steps and only 2.9% of the
+    threading champion's -- the knee of the selectivity curve. A 6 m radius
+    would have taxed threading 28.4% of the time, i.e. punished the behaviour
+    we are trying to buy; that was the default before it was measured.
+
+    Scale is deliberately NOT the 5.12 that would close the modelled q = 0.5
+    risk gap in one step: q is an assumption, not a measurement, and tuning a
+    large reward term to an assumed q is how the shifted potential ended up
+    teaching a bigger detour. 2.0/s costs the detour 29.5 per episode against
+    the threading policy's 7.0 -- enough to move the balance, small enough to
+    read the result. Raise it only if training says it is not enough.
+    """
+
+    reward_open_water_scale: float = 2.0
+    open_water_radius_m: float = 12.0
+
+
+@configclass
+class HazardTaxPoolEnvCfg(HazardOpenWaterTaxEnvCfg):
+    """v10 = v9's open-water tax + v5's feasibility-pooled observation.
+
+    Owner's call (2026-08-02): combine the two interventions that each worked
+    on one side. The tax (v9) fixed the INCENTIVE -- both seeds converge to
+    35-40 m routes instead of one threading and one detouring -- but paid for
+    it in collisions (8.4% -> 14.3%), because the policy still has to infer
+    "do I fit?" from 36 raw rays while being pushed toward the gaps. Pooling
+    (v5) fixed the PERCEPTION -- beam-aware "how far can THIS hull travel per
+    sector" made one seed thread at 100% with a 33 m path -- but left the
+    incentive alone, so its other seed still sat at 71-78%.
+
+    Hypothesis: tax supplies the reason, pooling supplies the eyes; the
+    combination should keep v9's route consistency while recovering v5's
+    collision-free threading. Falsifier: if v10 collisions stay at v9 levels,
+    perception was not the binding constraint and the contact-ledger redesign
+    moves back up the queue.
+    """
+
+    obs_feasibility: bool = True
+    feasibility_sectors: int = 9
+    observation_space = 3 + 3 + 9
+
+
+@configclass
+class HazardOpenBasinEnvCfg(HazardForcedCrossingEnvCfg):
+    """The crossing basin with the bulkhead removed -- walls and nothing else.
+
+    Control for the zero-shot result. The v11 champion scores 0/128 with 128/128
+    collisions on the crossing task at BOTH tier 0 (4.5 m gate) and tier 3
+    (1.8 m gate), identically -- gate width changes nothing, and the median path
+    of 4.95 m is short of the >= 6 m to the bulkhead. If it also fails here, the
+    walls alone account for it and the gate contributed nothing.
+
+    Identical perimeter distribution to the crossing task, so the bulkhead is
+    the only difference between the two.
+    """
+
+    layout_mode: str = "basin"
+    max_obstacles: int = 80
