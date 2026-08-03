@@ -1075,7 +1075,12 @@ class HarborMissionEnv(DirectRLEnv):
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         terminated = torch.zeros_like(time_out)
         if self.cfg.terminate_on_milestone:
-            terminated = terminated | stage_done_now
+            terminal_milestone = stage_done_now
+            if self.cfg.stage2_full_mission_rewards and depth == 2:
+                # Keep Stage 2 success pinned to M2, but continue through M3 so
+                # phase-2 berth-approach and docking rewards are not gated off.
+                terminal_milestone = dock_completed
+            terminated = terminated | terminal_milestone
         if self.cfg.terminate_on_contact:
             terminated = terminated | (prefix_active & (clearance < 0.0))
         self._episode_finished.copy_(terminated | time_out)

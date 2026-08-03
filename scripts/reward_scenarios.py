@@ -12,6 +12,7 @@ environment uses, term by term, both undiscounted and discounted.
 
 Run:
     python scripts/reward_scenarios.py            # current hazard-nav reward
+    python scripts/reward_scenarios.py --v12      # softened-contact ledger
     python scripts/reward_scenarios.py --band 1.10
 """
 
@@ -19,7 +20,7 @@ from __future__ import annotations
 
 import argparse
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 # --- environment constants, mirrored from hazard_nav_env_cfg.py --------------
 DT = 1.0 / 60.0                # control step (decimation 2 @ 120 Hz sim)
@@ -31,6 +32,7 @@ SAFE_CLEARANCE_M = 0.90
 HALF_BEAM_M = 0.45
 CONTACT_ENTRY = 25.0
 CONTACT_DWELL = 1.0            # per STEP, not per second
+V12_CONTACT_DWELL = 0.1        # per STEP, not per second
 GOAL_ENTRY_BONUS = 50.0
 GOAL_TIME_BONUS = 50.0
 REVERSE_SCALE = 0.05
@@ -38,6 +40,16 @@ SWIFT_SCALE = 0.25
 SPEED_SCALE_MPS = 2.0
 GAMMA = 0.999
 N_RAYS = 36
+
+# Owner-certified inputs for the v12 pre-registered anti-brush check. The tax
+# is still 2.0/s at a 12 m radius; these episode totals are the measured split.
+V12_OPEN_WATER_SCALE = 2.0
+V12_OPEN_WATER_RADIUS_M = 12.0
+V12_DETOUR_TAX = 25.0
+V12_THREAD_TAX = 7.0
+CERTIFIED_DETOUR_M = 53.6
+CERTIFIED_THREAD_M = 32.9
+CERTIFIED_CRUISE_MPS = 1.75
 
 
 @dataclass
@@ -53,6 +65,7 @@ class Scenario:
     close_seconds: float = 0.0         # for how long that ray picture holds
     contacts: int = 0                  # number of separate contact entries
     contact_seconds: float = 0.0       # total time in contact
+    open_water_seconds: float = 0.0    # time satisfying the v9/v12 tax predicate
     mean_speed_mps: float = 1.2
     reverse_fraction: float = 0.0      # fraction of time commanding negative surge
     threads_gap: bool = False      # completed a clean gap passage
@@ -80,7 +93,7 @@ def discount_sum(steps: int) -> float:
 
 
 def score(s: Scenario, band_m: float, threading: float = 0.0,
-          pbrs_timeout_bug: bool = False) -> Scenario:
+          pbrs_timeout_bug: bool = False, v12: bool = False) -> Scenario:
     steps = int(round(s.duration_s / DT))
     close_steps = int(round(s.close_seconds / DT))
     contact_steps = int(round(s.contact_seconds / DT))
@@ -92,14 +105,21 @@ def score(s: Scenario, band_m: float, threading: float = 0.0,
     prox = prox_cost_per_step(s.close_rays, s.close_range_m, band_m) * close_steps
 
     # 3. contact ledger
-    contact = -(CONTACT_ENTRY * s.contacts) - (CONTACT_DWELL * contact_steps)
+    contact_dwell = V12_CONTACT_DWELL if v12 else CONTACT_DWELL
+    contact = -(CONTACT_ENTRY * s.contacts) - (contact_dwell * contact_steps)
 
-    # 4. terminal bonus, only if the goal was reached with a clean prefix
-    clean = s.reached_goal and s.contacts == 0
+    # 4. terminal bonus. v12 drops the reward gate only; certification still
+    # treats contacted arrivals as failures in the environment.
+    reward_eligible = s.reached_goal and (v12 or s.contacts == 0)
     remaining = max(0.0, 1.0 - s.duration_s / HORIZON_S)
-    goal = (GOAL_ENTRY_BONUS + GOAL_TIME_BONUS * remaining) if clean else 0.0
+    goal = ((GOAL_ENTRY_BONUS + GOAL_TIME_BONUS * remaining)
+            if reward_eligible else 0.0)
 
-    # 5. behaviour costs
+    # 5. v12 inherits v9's open-water tax. Scenario exposure is expressed as
+    # seconds beyond the 12 m radius so the formula remains the environment's.
+    open_water = (-V12_OPEN_WATER_SCALE * s.open_water_seconds) if v12 else 0.0
+
+    # 6. behaviour costs
     reverse = -REVERSE_SCALE * DT * steps * s.reverse_fraction  # relu(-surge)^2 ~ 1
     idle = -SWIFT_SCALE * DT * steps * (
         1.0 - min(s.mean_speed_mps / SPEED_SCALE_MPS, 1.0)
@@ -118,6 +138,8 @@ def score(s: Scenario, band_m: float, threading: float = 0.0,
         timeout_spike = PROGRESS_SCALE * (1.0 - s.progress_fraction)
 
     total = progress + prox + contact + goal + reverse + idle + arc + timeout_spike
+    if v12:
+        total += open_water
 
     # Discounted view: progress and costs accrue along the way, the bonus lands
     # at the end. This is what the agent's value function actually optimises.
@@ -129,12 +151,17 @@ def score(s: Scenario, band_m: float, threading: float = 0.0,
     disc_total = (disc_progress + disc_prox + disc_contact + disc_goal
                   + (reverse + idle) * disc_all
                   + (arc + timeout_spike) * (GAMMA ** steps))
+    if v12:
+        # The measured tax is distributed along the route, like progress and
+        # other per-step behaviour costs in this behavioural ledger.
+        disc_total += open_water * disc_all
 
     s.terms = {
         "progress": progress,
         "proximity": prox,
         "contact": contact,
         "goal_bonus": goal,
+        "open_water": open_water,
         "reverse": reverse,
         "idle": idle,
         "arc": arc,
@@ -145,9 +172,9 @@ def score(s: Scenario, band_m: float, threading: float = 0.0,
     return s
 
 
-def build_scenarios() -> list[Scenario]:
+def build_scenarios(v12: bool = False) -> list[Scenario]:
     """The behaviours we want, and the ones we fear."""
-    return [
+    scenarios = [
         # --- what we WANT to be the best ------------------------------------
         Scenario(
             "A 理想:直穿缝心,快,零接触",
@@ -215,6 +242,45 @@ def build_scenarios() -> list[Scenario]:
             mean_speed_mps=0.8,
         ),
     ]
+    if not v12:
+        return scenarios
+
+    by = {scenario.name[0]: scenario for scenario in scenarios}
+    thread_open_s = V12_THREAD_TAX / V12_OPEN_WATER_SCALE
+    detour_open_s = V12_DETOUR_TAX / V12_OPEN_WATER_SCALE
+    thread_s = CERTIFIED_THREAD_M / CERTIFIED_CRUISE_MPS
+    detour_s = CERTIFIED_DETOUR_M / CERTIFIED_CRUISE_MPS
+
+    # B and D are pinned to the owner-certified path/time inputs used to
+    # pre-register the thin anti-brush margin: D is the same nominal 32.9 m
+    # thread as a clean shortcut, except for exactly one contact step.
+    by["B"] = replace(
+        by["B"], name="B measured taxed detour", duration_s=detour_s,
+        close_rays=0, close_seconds=0.0, mean_speed_mps=CERTIFIED_CRUISE_MPS,
+        open_water_seconds=detour_open_s,
+    )
+    by["D"] = replace(
+        by["D"], name="D brush-a-pillar shortcut", duration_s=thread_s,
+        close_rays=0, close_seconds=0.0, mean_speed_mps=CERTIFIED_CRUISE_MPS,
+        open_water_seconds=thread_open_s,
+    )
+
+    # Thread-style arrivals pay the measured ~7 points. The cowardly outer
+    # detour pays ~25. H no longer terminates at contact: it spends one second
+    # in contact, recovers for five more seconds, then completes the nominal
+    # thread, matching the reviewed recovery model.
+    for key in "ACE":
+        by[key] = replace(by[key], open_water_seconds=thread_open_s)
+    by["F"] = replace(by["F"], open_water_seconds=detour_open_s)
+    recovery_s = thread_s + 6.0
+    by["H"] = replace(
+        by["H"], name="H contact then recover and reach",
+        duration_s=recovery_s, reached_goal=True, progress_fraction=1.0,
+        close_rays=0, close_seconds=0.0, contact_seconds=1.0,
+        mean_speed_mps=CERTIFIED_THREAD_M / recovery_s,
+        open_water_seconds=thread_open_s,
+    )
+    return [by[scenario.name[0]] for scenario in scenarios]
 
 
 def main() -> None:
@@ -228,22 +294,30 @@ def main() -> None:
                              "the potential at TIMEOUTS as well as at true "
                              "terminals, paying +20*(d/D0) for running out of "
                              "time far from the goal")
+    parser.add_argument("--v12", action="store_true",
+                        help="apply the v12 open-water tax and softened contact ledger")
     args = parser.parse_args()
     band = args.band
 
-    rows = [score(s, band, args.threading, args.pbrs_timeout_bug)
-            for s in build_scenarios()]
+    rows = [score(s, band, args.threading, args.pbrs_timeout_bug, args.v12)
+            for s in build_scenarios(args.v12)]
 
     print(f"奖励打分台 | 邻近带上限 {band:.2f} m | gamma={GAMMA} | 时限 {HORIZON_S:.0f}s")
-    print("=" * 108)
-    head = f"{'场景':<28}{'进展':>7}{'邻近':>8}{'接触':>8}{'终点奖':>9}{'倒车':>7}{'迟缓':>8}{'合计':>9}{'折现后':>10}"
+    if args.v12:
+        print(f"v12 | 接触不终止 | 终点奖励门已移除 | 驻留 {V12_CONTACT_DWELL}/步 | "
+              f"开放水域 {V12_OPEN_WATER_SCALE}/秒 @ {V12_OPEN_WATER_RADIUS_M:.0f} m")
+    table_width = 117 if args.v12 else 108
+    print("=" * table_width)
+    open_head = f"{'开放水域':>9}" if args.v12 else ""
+    head = f"{'场景':<28}{'进展':>7}{'邻近':>8}{'接触':>8}{'终点奖':>9}{open_head}{'倒车':>7}{'迟缓':>8}{'合计':>9}{'折现后':>10}"
     print(head)
-    print("-" * 108)
+    print("-" * table_width)
     for s in rows:
         t = s.terms
+        open_cell = f"{t['open_water']:>9.1f}" if args.v12 else ""
         print(
             f"{s.name:<28}{t['progress']:>7.1f}{t['proximity']:>8.2f}{t['contact']:>8.1f}"
-            f"{t['goal_bonus']:>9.1f}{t['reverse']:>7.2f}{t['idle']:>8.2f}"
+            f"{t['goal_bonus']:>9.1f}{open_cell}{t['reverse']:>7.2f}{t['idle']:>8.2f}"
             f"{t['TOTAL']:>9.1f}{t['DISCOUNTED']:>10.1f}"
         )
 
@@ -287,6 +361,11 @@ def main() -> None:
          max(by[k]["TOTAL"] for k in "DEFGHI")
          < min(by[k]["TOTAL"] for k in "ABC")),
     ]
+    if args.v12:
+        checks.append(
+            ("brush-a-pillar shortcut must NOT out-score the taxed detour",
+             by["D"]["TOTAL"] <= by["B"]["TOTAL"])
+        )
     for label, ok in checks:
         print(f"  [{'通过' if ok else '不通过'}] {label}")
 

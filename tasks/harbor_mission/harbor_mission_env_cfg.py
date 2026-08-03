@@ -209,6 +209,9 @@ class HarborMissionEnvCfg(DirectRLEnvCfg):
     # fixed-horizon task id byte-compatible; stage variants turn them on.
     terminate_on_milestone: bool = False
     terminate_on_contact: bool = False
+    # Let a Stage 2 episode continue through phase 2 so the full mission's
+    # berth-approach and docking reward channels are reachable.
+    stage2_full_mission_rewards: bool = False
     reward_stage_goal_bonus: float = 50.0
     reward_stage_time_bonus: float = 50.0
     # v11-style kinematic observation: body-frame surge, sway, yaw rate
@@ -304,3 +307,10 @@ class HarborStage3EnvCfg(HarborMissionEnvCfg):
     terminate_on_contact: bool = True
     obs_kinematic: bool = True
     observation_space = 49
+
+
+@configclass
+class HarborStage2AllRewEnvCfg(HarborStage2EnvCfg):
+    """Stage 2 scoring with the full mission reward trajectory enabled."""
+
+    stage2_full_mission_rewards: bool = True

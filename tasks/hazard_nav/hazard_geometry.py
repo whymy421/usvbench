@@ -380,6 +380,9 @@ RING_NEIGHBOR_OVERLAP_M = 0.30  # inflated neighbors overlap: sealed by construc
 RING_SEALED_OVERLAP_M = 0.55
 RING_GAP_SLACK_M = 0.50  # accepted gap width band: [bottleneck, bottleneck + slack]
 RING_GOAL_DISTANCE_RANGE_M = (24.0, 40.0)  # 24 keeps the goal disk clear of the ring
+DOUBLE_RING_OUTER_RADIUS_M = 17.5
+DOUBLE_RING_GOAL_DISTANCE_RANGE_M = (26.0, 40.0)
+DOUBLE_RING_MIN_GAP_OFFSET_RAD = 0.5 * math.pi
 
 
 def _ring_seal_check(
@@ -521,6 +524,315 @@ def sample_ring_layout(
 
     raise RuntimeError(
         f"Could not generate a sealed ring layout for level {level} in {max_attempts} attempts."
+    )
+
+
+@dataclass(frozen=True)
+class RingGapSpec:
+    """One ring opening, recorded from the shipped arrays after scanning."""
+
+    ring_radius_m: float
+    center: np.ndarray
+    bearing_rad: float
+    free_width_m: float
+    requested_width_m: float
+
+
+@dataclass(frozen=True)
+class DoubleRingGapSpecs:
+    """Measured openings for the inner and outer walls of a double siege."""
+
+    inner: RingGapSpec
+    outer: RingGapSpec
+
+    @property
+    def angular_offset_rad(self) -> float:
+        delta = (self.outer.bearing_rad - self.inner.bearing_rad) % (2.0 * math.pi)
+        return min(delta, 2.0 * math.pi - delta)
+
+
+def _ring_line_openings(
+    centers: np.ndarray,
+    radii: np.ndarray,
+    ring_radius_m: float,
+    *,
+    inflation_m: float = OBSTACLE_INFLATION_M,
+) -> list[tuple[float, float, int, int]]:
+    """Scan free arcs on a ring line.
+
+    Returns ``(arc_width_m, bearing_rad, before_index, after_index)`` for
+    every uncovered run. Indices address the arrays passed in. This measures
+    the constructed cylinders rather than trusting their requested bearings.
+    """
+    centers = np.asarray(centers, dtype=np.float64).reshape(-1, 2)
+    radii = np.asarray(radii, dtype=np.float64)
+    if len(centers) == 0:
+        return []
+    bearings = np.mod(np.arctan2(centers[:, 1], centers[:, 0]), 2.0 * math.pi)
+    order = np.argsort(bearings)
+    bearings = bearings[order]
+    inflated = radii[order] + float(inflation_m)
+    half_arcs = 2.0 * np.arcsin(
+        np.clip(inflated / (2.0 * float(ring_radius_m)), 0.0, 1.0)
+    )
+
+    openings: list[tuple[float, float, int, int]] = []
+    for position in range(len(order)):
+        next_position = (position + 1) % len(order)
+        current_end = float(bearings[position] + half_arcs[position])
+        next_start = float(bearings[next_position] - half_arcs[next_position])
+        if next_position == 0:
+            next_start += 2.0 * math.pi
+        free_angle = next_start - current_end
+        if free_angle > 1.0e-10:
+            bearing = (current_end + 0.5 * free_angle) % (2.0 * math.pi)
+            openings.append(
+                (
+                    float(ring_radius_m) * free_angle,
+                    bearing,
+                    int(order[position]),
+                    int(order[next_position]),
+                )
+            )
+    return openings
+
+
+def _sample_sealed_ring(
+    ring_radius_m: float,
+    gap_width_m: float,
+    gap_bearing_rad: float,
+    rng: np.random.Generator,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """Pack one ring with physical neighbour overlap and one planner gap."""
+    overlap_min = RING_SEALED_OVERLAP_M
+    overlap_max = overlap_min + 0.35
+    radii_list = [
+        float(rng.uniform(RING_OBSTACLE_RADIUS_MIN_M, RING_OBSTACLE_RADIUS_MAX_M))
+    ]
+
+    def chord_angle(chord_m: float) -> float:
+        return 2.0 * math.asin(min(1.0, chord_m / (2.0 * ring_radius_m)))
+
+    def occupied_half_angle(radius_m: float) -> float:
+        inflated = radius_m + OBSTACLE_INFLATION_M
+        return 2.0 * math.asin(min(1.0, inflated / (2.0 * ring_radius_m)))
+
+    def total_angle(overlap_m: float) -> float:
+        gap_angle = (
+            occupied_half_angle(radii_list[-1])
+            + occupied_half_angle(radii_list[0])
+            + gap_width_m / ring_radius_m
+        )
+        wall_angles = sum(
+            chord_angle(first + second - overlap_m)
+            for first, second in zip(radii_list[:-1], radii_list[1:])
+        )
+        return gap_angle + wall_angles
+
+    while total_angle(overlap_max) < 2.0 * math.pi and len(radii_list) <= 64:
+        radii_list.append(
+            float(rng.uniform(RING_OBSTACLE_RADIUS_MIN_M, RING_OBSTACLE_RADIUS_MAX_M))
+        )
+    if len(radii_list) > 64:
+        return None
+    radii_list.pop()
+    if len(radii_list) < 3 or total_angle(overlap_min) < 2.0 * math.pi:
+        return None
+
+    lo, hi = overlap_min, overlap_max
+    for _ in range(50):
+        mid = 0.5 * (lo + hi)
+        if total_angle(mid) >= 2.0 * math.pi:
+            lo = mid
+        else:
+            hi = mid
+    overlap = lo
+
+    first_half = occupied_half_angle(radii_list[0])
+    last_half = occupied_half_angle(radii_list[-1])
+    gap_angle = last_half + first_half + gap_width_m / ring_radius_m
+    angles = [gap_bearing_rad + 0.5 * gap_angle]
+    for first, second in zip(radii_list[:-1], radii_list[1:]):
+        angles.append(angles[-1] + chord_angle(first + second - overlap))
+    centers = np.stack(
+        [
+            ring_radius_m * np.cos(np.asarray(angles)),
+            ring_radius_m * np.sin(np.asarray(angles)),
+        ],
+        axis=1,
+    )
+    return centers, np.asarray(radii_list, dtype=np.float64)
+
+
+def _nearest_neighbour_surface_gaps(
+    centers: np.ndarray, radii: np.ndarray
+) -> np.ndarray:
+    delta = centers[:, None, :] - centers[None, :, :]
+    distances = np.linalg.norm(delta, axis=-1)
+    gaps = distances - radii[:, None] - radii[None, :]
+    np.fill_diagonal(gaps, np.inf)
+    return gaps.min(axis=1)
+
+
+def _ring_gap_plug(
+    centers: np.ndarray,
+    opening: tuple[float, float, int, int],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Tile plug cylinders between the scanned jambs of a shipped ring."""
+    plug_radius = 0.5 * (RING_OBSTACLE_RADIUS_MIN_M + RING_OBSTACLE_RADIUS_MAX_M)
+    before, after = opening[2], opening[3]
+    plug_centers = wall_segment_cylinders(
+        centers[before],
+        centers[after],
+        radius_m=plug_radius,
+        overlap_m=RING_SEALED_OVERLAP_M,
+    )
+    return plug_centers, np.full(len(plug_centers), plug_radius, dtype=np.float64)
+
+
+def sample_double_ring_layout(
+    level: int,
+    rng: np.random.Generator | None = None,
+    max_attempts: int = 60,
+) -> tuple[HazardLayout, DoubleRingGapSpecs]:
+    """Sample two independently sealed rings whose only exits are misaligned.
+
+    Admission is deliberately performed on the concatenated arrays returned
+    to the environment. Each opening is scanned at planning inflation; each
+    seal verdict plugs those same arrays and uses the true hull half-beam.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least one")
+    difficulty = difficulty_for_level(level)
+    rng = np.random.default_rng() if rng is None else rng
+    start = np.zeros(2, dtype=np.float64)
+    target_width = float(difficulty.bottleneck_m)
+
+    for attempt in range(1, max_attempts + 1):
+        goal = np.array(
+            (float(rng.uniform(*DOUBLE_RING_GOAL_DISTANCE_RANGE_M)), 0.0),
+            dtype=np.float64,
+        )
+        inner_bearing = float(rng.uniform(0.0, 2.0 * math.pi))
+        outer_bearing = inner_bearing + float(
+            rng.uniform(DOUBLE_RING_MIN_GAP_OFFSET_RAD, 1.5 * math.pi)
+        )
+        sampled_inner = _sample_sealed_ring(
+            RING_RADIUS_M, target_width, inner_bearing, rng
+        )
+        sampled_outer = _sample_sealed_ring(
+            DOUBLE_RING_OUTER_RADIUS_M, target_width, outer_bearing, rng
+        )
+        if sampled_inner is None or sampled_outer is None:
+            continue
+        inner_centers, inner_radii = sampled_inner
+        outer_centers, outer_radii = sampled_outer
+        centers = np.vstack((inner_centers, outer_centers))
+        radii = np.concatenate((inner_radii, outer_radii))
+
+        # 1. Scan the shipped rings: exactly one tier-width opening in each.
+        inner_openings = _ring_line_openings(
+            inner_centers, inner_radii, RING_RADIUS_M
+        )
+        outer_openings = _ring_line_openings(
+            outer_centers, outer_radii, DOUBLE_RING_OUTER_RADIUS_M
+        )
+        if len(inner_openings) != 1 or len(outer_openings) != 1:
+            continue
+        inner_opening, outer_opening = inner_openings[0], outer_openings[0]
+        if (
+            abs(inner_opening[0] - target_width) > 0.01
+            or abs(outer_opening[0] - target_width) > 0.01
+        ):
+            continue
+        angular_offset = abs(
+            (outer_opening[1] - inner_opening[1] + math.pi) % (2.0 * math.pi)
+            - math.pi
+        )
+        if angular_offset + 1.0e-9 < DOUBLE_RING_MIN_GAP_OFFSET_RAD:
+            continue
+
+        # 2. Every physical wall cylinder overlaps a same-ring neighbour.
+        if (
+            np.any(_nearest_neighbour_surface_gaps(inner_centers, inner_radii) >= 0.0)
+            or np.any(_nearest_neighbour_surface_gaps(outer_centers, outer_radii) >= 0.0)
+        ):
+            continue
+
+        # 3. The shipped layout routes at planning inflation.
+        geodesic = bfs_geodesic_length(start, goal, centers, radii)
+        if geodesic is None:
+            continue
+
+        # 4. Plug only the scanned inner opening in the shipped arrays.
+        inner_plug_c, inner_plug_r = _ring_gap_plug(inner_centers, inner_opening)
+        if bfs_geodesic_length(
+            start,
+            goal,
+            np.vstack((centers, inner_plug_c)),
+            np.concatenate((radii, inner_plug_r)),
+            cell_m=FORCED_SEAL_CELL_M,
+            inflation_m=HALF_BEAM_M,
+        ) is not None:
+            continue
+
+        # 5. Plug only the scanned outer opening in the shipped arrays.
+        outer_plug_c, outer_plug_r = _ring_gap_plug(outer_centers, outer_opening)
+        if bfs_geodesic_length(
+            start,
+            goal,
+            np.vstack((centers, outer_plug_c)),
+            np.concatenate((radii, outer_plug_r)),
+            cell_m=FORCED_SEAL_CELL_M,
+            inflation_m=HALF_BEAM_M,
+        ) is not None:
+            continue
+
+        # 6. Both real openings route at the same true-half-beam resolution.
+        if bfs_geodesic_length(
+            start,
+            goal,
+            centers,
+            radii,
+            cell_m=FORCED_SEAL_CELL_M,
+            inflation_m=HALF_BEAM_M,
+        ) is None:
+            continue
+        if not start_goal_disks_clear(start, goal, centers, radii):
+            continue
+
+        inner_spec = RingGapSpec(
+            ring_radius_m=RING_RADIUS_M,
+            center=RING_RADIUS_M
+            * np.array((math.cos(inner_opening[1]), math.sin(inner_opening[1]))),
+            bearing_rad=inner_opening[1],
+            free_width_m=inner_opening[0],
+            requested_width_m=target_width,
+        )
+        outer_spec = RingGapSpec(
+            ring_radius_m=DOUBLE_RING_OUTER_RADIUS_M,
+            center=DOUBLE_RING_OUTER_RADIUS_M
+            * np.array((math.cos(outer_opening[1]), math.sin(outer_opening[1]))),
+            bearing_rad=outer_opening[1],
+            free_width_m=outer_opening[0],
+            requested_width_m=target_width,
+        )
+        layout = HazardLayout(
+            level=difficulty.level,
+            requested_obstacle_count=len(radii),
+            start=start,
+            goal=goal,
+            centers=centers,
+            radii=radii,
+            geodesic_length=float(geodesic),
+            direct_blocked=direct_segment_blocked(start, goal, centers, radii),
+            attempts=attempt,
+        )
+        return layout, DoubleRingGapSpecs(inner=inner_spec, outer=outer_spec)
+
+    raise RuntimeError(
+        f"Could not generate a double-ring layout for level {level} "
+        f"in {max_attempts} attempts."
     )
 
 
@@ -915,6 +1227,10 @@ def sample_forced_crossing_layout(
 __all__ = [
     "COLLISION_MARGIN_M",
     "DIFFICULTIES",
+    "DOUBLE_RING_GOAL_DISTANCE_RANGE_M",
+    "DOUBLE_RING_MIN_GAP_OFFSET_RAD",
+    "DOUBLE_RING_OUTER_RADIUS_M",
+    "DoubleRingGapSpecs",
     "ENDPOINT_CLEAR_RADIUS_M",
     "FORCED_GATE_BEAMS",
     "GRID_CELL_M",
@@ -925,6 +1241,9 @@ __all__ = [
     "MAX_OBSTACLE_RADIUS_M",
     "MIN_OBSTACLE_RADIUS_M",
     "OBSTACLE_INFLATION_M",
+    "RING_RADIUS_M",
+    "RING_SEALED_OVERLAP_M",
+    "RingGapSpec",
     "analytic_min_clearance",
     "bfs_geodesic_length",
     "difficulty_for_level",
@@ -933,6 +1252,7 @@ __all__ = [
     "minimum_pairwise_inflated_gap",
     "ray_circle_ranges",
     "sample_forced_crossing_layout",
+    "sample_double_ring_layout",
     "sample_layout",
     "sample_open_basin_layout",
     "start_goal_disks_clear",

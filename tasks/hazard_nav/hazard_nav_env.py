@@ -26,6 +26,7 @@ from ..docking.curriculum import DockingCurriculum
 from .hazard_geometry import (
     analytic_min_clearance,
     ray_circle_ranges,
+    sample_double_ring_layout,
     sample_forced_crossing_layout,
     sample_layout,
     sample_open_basin_layout,
@@ -65,6 +66,9 @@ class HazardNavEnv(DirectRLEnv):
         self.goal_radius = float(self.cfg.goal_radius)
         self.target_pos = self.scene.env_origins[:, :2].clone()
         self.d0_per_env = torch.ones(self.num_envs, device=self.device)
+        self._thrust_imbalance_per_env = torch.zeros(
+            self.num_envs, device=self.device
+        )
 
         max_obstacles = int(self.cfg.max_obstacles)
         self.obstacle_centers = torch.zeros(
@@ -459,9 +463,34 @@ class HazardNavEnv(DirectRLEnv):
             thrust_action * self.cfg.thrust_max_fwd,
             thrust_action * self.cfg.thrust_max_rev,
         )
+        yaw_command = self.actions[:, 1] * self.cfg.yaw_torque_max
+        if self.cfg.thrust_imbalance_choices:
+            imbalance = self._thrust_imbalance_per_env
+        else:
+            imbalance = self.cfg.thrust_imbalance
+        if self.cfg.thrust_imbalance_choices or self.cfg.thrust_imbalance != 0.0:
+            # Suite D axis: one motor pulls harder than the other. The action
+            # space is lumped (surge, yaw), so scaling the net force would only
+            # make the boat slower -- it would not veer, which is the whole
+            # point of an imbalance. Split the command back into the port and
+            # starboard thruster shares a differential hull would actually
+            # produce, scale each side, then recombine:
+            #     T_port + T_stbd            = surge force
+            #     (T_stbd - T_port) * lever  = yaw torque
+            # At imbalance 0 this is an algebraic identity, so every existing
+            # id stays bit-identical (asserted in test_thrust_imbalance.py).
+            lever = max(float(self.cfg.half_beam_m), 1.0e-6)
+            half_yaw = yaw_command / lever
+            t_stbd = 0.5 * (thrust + half_yaw)
+            t_port = 0.5 * (thrust - half_yaw)
+            t_port = t_port * (1.0 - imbalance)
+            t_stbd = t_stbd * (1.0 + imbalance)
+            thrust = t_port + t_stbd
+            yaw_command = (t_stbd - t_port) * lever
+
         forces[:, 0, 0] = thrust * self._fwd_x
         forces[:, 0, 1] = thrust * self._fwd_y
-        torques[:, 0, 2] = self.actions[:, 1] * self.cfg.yaw_torque_max
+        torques[:, 0, 2] = yaw_command
 
         force_world = torch.zeros_like(forces[:, 0, :])
         torque_world = torch.zeros_like(torques[:, 0, :])
@@ -918,8 +947,15 @@ class HazardNavEnv(DirectRLEnv):
         reached_now = prefix_active & (
             self._horizontal_distance() <= self.goal_radius
         )
+        # Certification success remains collision-free for every variant.
+        # ``clean_goal_gate`` changes only whether a contacted arrival earns
+        # the reward; it must never change episode_success or success timing.
         success_now = reached_now & ~self._contact_before_goal
-        self._clean_goal_entry_this_step.copy_(success_now)
+        if self.cfg.clean_goal_gate:
+            rewarded_goal_entry_now = success_now
+        else:
+            rewarded_goal_entry_now = reached_now
+        self._clean_goal_entry_this_step.copy_(rewarded_goal_entry_now)
         elapsed_s = self.episode_length_buf.float() * self.control_step_s
         self._first_success_time_s.copy_(
             torch.where(success_now, elapsed_s, self._first_success_time_s)
@@ -928,11 +964,15 @@ class HazardNavEnv(DirectRLEnv):
         self._reached_goal |= reached_now
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        # Single-goal NavRL episodes terminate on either outcome: reaching
-        # the goal or entering an obstacle's contact region. The contact
-        # ledger is updated before ``success_now``, so simultaneous contact
-        # and goal entry is correctly scored as a failed episode.
-        terminated = reached_now | contact_now
+        # Reaching the single goal always terminates. Contact termination is a
+        # variant switch; the contact ledger and clean-success metric above
+        # are recorded identically even when the episode is allowed to carry
+        # on after contact.
+        terminated = (
+            reached_now | contact_now
+            if self.cfg.contact_terminates
+            else reached_now
+        )
         self._episode_finished.copy_(terminated | time_out)
         return terminated, time_out
 
@@ -1005,6 +1045,16 @@ class HazardNavEnv(DirectRLEnv):
         super()._reset_idx(env_ids)
 
         num_resets = len(env_ids)
+        if self.cfg.thrust_imbalance_choices:
+            choice_indices = self._layout_rng.integers(
+                len(self.cfg.thrust_imbalance_choices), size=num_resets
+            )
+            choices = np.asarray(
+                self.cfg.thrust_imbalance_choices, dtype=np.float32
+            )
+            self._thrust_imbalance_per_env[env_ids] = torch.as_tensor(
+                choices[choice_indices], device=self.device
+            )
         max_obstacles = self.cfg.max_obstacles
         local_goals_np = np.zeros((num_resets, 2), dtype=np.float32)
         local_centers_np = np.zeros(
@@ -1027,6 +1077,14 @@ class HazardNavEnv(DirectRLEnv):
                     neighbor_overlap_m=getattr(
                         self.cfg, "ring_neighbor_overlap_m", None
                     ),
+                )
+            elif self.cfg.layout_mode == "ring2":
+                # Harder siege: two sealed, tier-width exits separated by at
+                # least 90 degrees. Both have to be threaded in sequence.
+                layout, _gaps = sample_double_ring_layout(
+                    level,
+                    rng=self._layout_rng,
+                    max_attempts=max(60, self.cfg.layout_max_attempts),
                 )
             elif self.cfg.layout_mode == "basin":
                 # Control for the crossing task: same walls, no bulkhead. The

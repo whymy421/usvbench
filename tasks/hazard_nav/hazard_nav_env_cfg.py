@@ -211,6 +211,10 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     prox_ray_floor_m: float = 0.45
     reward_contact_entry_penalty: float = 25.0
     reward_contact_dwell_penalty: float = 1.0
+    # Defaults preserve the historical contact terminal and clean-goal reward
+    # contract for every existing environment id. New variants must opt out.
+    contact_terminates: bool = True
+    clean_goal_gate: bool = True
     # Paid once on the first collision-free goal entry. The bounded 50..100
     # range rewards decisive entry without letting lucky exploratory successes
     # dominate PPO's value targets.
@@ -290,6 +294,24 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # width so one formula covers every tier.
     reward_threading_amplitude: float = 0.0
 
+    # --- Suite D axis: left/right thrust imbalance ---------------------------
+    # Fraction by which the starboard thruster out-pulls the port one:
+    # port gain = 1 - x, starboard gain = 1 + x. 0.0 is a perfectly matched
+    # pair and is an algebraic identity with the pre-existing lumped model, so
+    # every certified id is untouched.
+    #
+    # This is the cleanest of the five Suite D axes because it is the only one
+    # that breaks a SYMMETRY rather than shifting a scalar: a heavier boat or a
+    # weaker motor makes the task uniformly harder, while an imbalance makes
+    # straight-line travel require continuous asymmetric correction. Batista's
+    # group is the closest prior work and varies it one parameter at a time
+    # with the hydrodynamics frozen during training; the held-out packs below
+    # are what they do not have.
+    thrust_imbalance: float = 0.0
+    # Non-empty values enable uniform per-episode sampling. Empty keeps the
+    # scalar path above, including its exact zero-imbalance identity.
+    thrust_imbalance_choices: tuple = ()
+
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
     yaw_torque_max: float = _DEFAULT_VEHICLE.yaw_torque_nm
@@ -353,14 +375,14 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             )
         if self.yaw_rate_obs_scale_rad_s <= 0.0:
             raise ValueError("yaw_rate_obs_scale_rad_s must be positive")
-        if self.layout_mode not in ("scatter", "ring", "forced", "basin"):
+        if self.layout_mode not in ("scatter", "ring", "ring2", "forced", "basin"):
             raise ValueError(
-                "layout_mode must be 'scatter', 'ring', 'forced' or 'basin'"
+                "layout_mode must be 'scatter', 'ring', 'ring2', 'forced' or 'basin'"
             )
         # Undersizing this crashes the first reset of the affected tier, which
         # is how no pre-v6 run ever contained level-3 experience. The forced
         # floor is the 10k-layout audit's worst case (79) plus headroom.
-        min_obstacles = {"ring": 18, "forced": 80, "basin": 66}.get(
+        min_obstacles = {"ring": 18, "ring2": 80, "forced": 80, "basin": 66}.get(
             self.layout_mode, 14
         )
         if self.max_obstacles < min_obstacles:
@@ -490,6 +512,17 @@ class HazardRingSealedEnvCfg(HazardRingEnvCfg):
 
 
 @configclass
+class HazardDoubleRingEnvCfg(HazardNavV3EnvCfg):
+    """Two sealed siege rings with deliberately misaligned tier-width gaps."""
+
+    layout_mode: str = "ring2"
+    # The admission audit's worst shipped layout uses fewer than 70 cylinders;
+    # 80 leaves reset-time headroom without inheriting the wall-heavy basin cap.
+    max_obstacles: int = 80
+    layout_max_attempts: int = 60
+
+
+@configclass
 class HazardForcedCrossingEnvCfg(HazardNavV3EnvCfg):
     """Closed basin split by a bulkhead with exactly one gate.
 
@@ -516,6 +549,13 @@ class HazardForcedCrossingEnvCfg(HazardNavV3EnvCfg):
     # terminations frequent. Off for training; HazardCrossDemo turns them back
     # on for recording, where env counts are small.
     visual: VisualCfg = VisualCfg(enable_obstacles=False)
+
+
+@configclass
+class HazardCrossImbalanceEnvCfg(HazardForcedCrossingEnvCfg):
+    """Forced crossing trained on the frozen Suite D imbalance pack."""
+
+    thrust_imbalance_choices: tuple = (0.0, 0.02, 0.04)
 
 
 @configclass
@@ -550,6 +590,15 @@ class HazardOpenWaterTaxEnvCfg(HazardNavV3EnvCfg):
 
     reward_open_water_scale: float = 2.0
     open_water_radius_m: float = 12.0
+
+
+@configclass
+class HazardSoftLedgerEnvCfg(HazardOpenWaterTaxEnvCfg):
+    """v9 open-water tax with the owner-approved softened contact ledger."""
+
+    contact_terminates: bool = False
+    clean_goal_gate: bool = False
+    reward_contact_dwell_penalty: float = 0.1
 
 
 @configclass

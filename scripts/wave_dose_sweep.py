@@ -47,8 +47,13 @@ parser.add_argument("--num-envs", type=int, default=32)
 parser.add_argument("--level", type=int, default=1)
 parser.add_argument("--eval-seed", type=int, default=42)
 parser.add_argument("--out", default=None)
+parser.add_argument("--wave-height", type=float, default=None,
+                    dest="wave_height")  # NOT --height: AppLauncher reserves it
+parser.add_argument("--wave-period", type=float, default=None, dest="wave_period")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
+if (args_cli.wave_height is None) != (args_cli.wave_period is None):
+    parser.error("--wave-height and --wave-period must be given together")
 sys.argv = [sys.argv[0]] + hydra_args
 app_launcher = AppLauncher(args_cli)
 app = app_launcher.app
@@ -66,6 +71,8 @@ GRID = [
     (0.00, 3.0), (0.02, 3.0), (0.04, 3.0), (0.08, 3.0), (0.12, 3.0),
     (0.12, 2.0), (0.12, 1.5), (0.12, 1.0),
 ]
+sweep_grid = (GRID if args_cli.wave_height is None
+              else [(args_cli.wave_height, args_cli.wave_period)])
 
 experiment_cfg = load_cfg_from_registry(args_cli.task, "skrl_cfg_entry_point")
 experiment_cfg["trainer"]["close_environment_at_exit"] = False
@@ -78,7 +85,7 @@ print(f"WAVE DOSE SWEEP  task={args_cli.task} "
       f"ckpt={os.path.basename(args_cli.checkpoint)}")
 print(f"  {'H (m)':>7} {'T (s)':>6} {'lambda/L':>9} {'SR':>8} {'path med':>9}")
 
-for height, period in GRID:
+for height, period in sweep_grid:
     env_cfg = parse_env_cfg(args_cli.task, device="cuda:0",
                             num_envs=args_cli.num_envs)
     env_cfg.seed = args_cli.eval_seed
