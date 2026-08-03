@@ -35,3 +35,27 @@ for _stage in (1, 2, 3):
             "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_stage_cfg.yaml",
         },
     )
+
+gym.register(
+    id="Isaac-USV-HarborStage2Warm-Direct-v1",
+    entry_point=f"{__name__}.harbor_mission_env:HarborMissionEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.harbor_mission_env_cfg:HarborStage2EnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_stage_cfg.yaml",
+    },
+)
+
+gym.register(
+    id="Isaac-USV-HarborStage2AllRew-Direct-v1",
+    entry_point=f"{__name__}.harbor_mission_env:HarborMissionEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.harbor_mission_env_cfg:HarborStage2AllRewEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_stage_cfg.yaml",
+    },
+)

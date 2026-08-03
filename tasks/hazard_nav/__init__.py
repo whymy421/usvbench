@@ -163,6 +163,21 @@ gym.register(
     },
 )
 
+# Deliberately skip gym id v11: "v11" is the project's colloquial name for
+# the historical champion recipe, so registering that number would collide
+# with established jargon.
+gym.register(
+    id="Isaac-USV-HazardNav-Direct-v12",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardSoftLedgerEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
 # Control for the crossing zero-shot: same basin, no bulkhead.
 gym.register(
     id="Isaac-USV-HazardBasin-Direct-v1",
@@ -185,6 +200,32 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": (
             f"{__name__}.hazard_nav_env_cfg:HazardCrossDemoEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+# Suite D: forced crossing with the frozen per-episode training pack.
+gym.register(
+    id="Isaac-USV-HazardCrossImb-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardCrossImbalanceEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+# Owner-approved harder siege: two sealed rings with misaligned exits.
+gym.register(
+    id="Isaac-USV-HazardRing2-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardDoubleRingEnvCfg"
         ),
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },
