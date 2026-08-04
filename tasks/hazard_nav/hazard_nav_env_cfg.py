@@ -173,9 +173,8 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     collision_margin_m: float = 0.20
     safe_clearance_m: float = 0.90
 
-    # "scatter" = the certified corridor layout; "ring" = the siege variant
-    # (spawn encircled by a sealed ring with exactly one tier-width gap, so
-    # avoidance is mandatory from the first second, not optional).
+    # "scatter" = the certified corridor layout; ring modes put the spawn at
+    # the center, while fortress modes put the goal there and spawn outside.
     layout_mode: str = "scatter"
 
     ray_count: int = 36  # v3: 10 deg spacing
@@ -211,6 +210,8 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     prox_ray_floor_m: float = 0.45
     reward_contact_entry_penalty: float = 25.0
     reward_contact_dwell_penalty: float = 1.0
+    reward_contact_dwell_quadratic: bool = False
+    contact_dwell_tau_s: float = 0.5
     # Defaults preserve the historical contact terminal and clean-goal reward
     # contract for every existing environment id. New variants must opt out.
     contact_terminates: bool = True
@@ -375,16 +376,34 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             )
         if self.yaw_rate_obs_scale_rad_s <= 0.0:
             raise ValueError("yaw_rate_obs_scale_rad_s must be positive")
-        if self.layout_mode not in ("scatter", "ring", "ring2", "forced", "basin"):
+        if self.layout_mode not in (
+            "scatter",
+            "ring",
+            "ring2",
+            "fortress",
+            "fortress2",
+            "bandfort",
+            "forced",
+            "basin",
+        ):
             raise ValueError(
-                "layout_mode must be 'scatter', 'ring', 'ring2', 'forced' or 'basin'"
+                "layout_mode must be 'scatter', 'ring', 'ring2', 'fortress', "
+                "'fortress2', 'bandfort', 'forced' or 'basin'"
             )
         # Undersizing this crashes the first reset of the affected tier, which
         # is how no pre-v6 run ever contained level-3 experience. The forced
         # floor is the 10k-layout audit's worst case (79) plus headroom.
-        min_obstacles = {"ring": 18, "ring2": 80, "forced": 80, "basin": 66}.get(
-            self.layout_mode, 14
-        )
+        # Fortress floors are the samplers' hard returned-array worst cases
+        # plus headroom: 23 + 9 and (32 + 56) + 8.
+        min_obstacles = {
+            "ring": 18,
+            "ring2": 80,
+            "fortress": 32,
+            "fortress2": 96,
+            "bandfort": 96,
+            "forced": 80,
+            "basin": 66,
+        }.get(self.layout_mode, 14)
         if self.max_obstacles < min_obstacles:
             raise ValueError(
                 f"max_obstacles must be >= {min_obstacles} for "
@@ -396,6 +415,8 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             raise ValueError("goal-entry reward scales must be non-negative")
         if self.reward_reverse_action_scale < 0.0:
             raise ValueError("reward_reverse_action_scale must be non-negative")
+        if self.contact_dwell_tau_s <= 0.0:
+            raise ValueError("contact_dwell_tau_s must be positive")
 
 
 @configclass
@@ -520,6 +541,47 @@ class HazardDoubleRingEnvCfg(HazardNavV3EnvCfg):
     # 80 leaves reset-time headroom without inheriting the wall-heavy basin cap.
     max_obstacles: int = 80
     layout_max_attempts: int = 60
+
+
+@configclass
+class HazardFortressEnvCfg(HazardNavV3EnvCfg):
+    """Sealed ring around the goal; the outside spawn must enter its one gap."""
+
+    layout_mode: str = "fortress"
+    # Sampler hard maximum 23 plus nine reset-buffer slots of headroom.
+    max_obstacles: int = 32
+    layout_max_attempts: int = 60
+
+
+@configclass
+class HazardFortress2EnvCfg(HazardNavV3EnvCfg):
+    """Two sealed, misaligned rings around the goal; spawn outside both."""
+
+    layout_mode: str = "fortress2"
+    # Sampler hard maximum 32 inner + 56 outer, plus eight slots headroom.
+    max_obstacles: int = 96
+    layout_max_attempts: int = 80
+
+
+@configclass
+class HazardBandFortEnvCfg(HazardNavV3EnvCfg):
+    """Two constructive brick-wall bands; geometry supplies the constraint."""
+
+    layout_mode: str = "bandfort"
+    # The 150-layout-per-tier audit observed 72 cylinders at worst; 96 leaves
+    # 24 reset-buffer slots of headroom without changing the canonical ledger.
+    max_obstacles: int = 96
+    layout_max_attempts: int = 80
+
+
+@configclass
+class HazardBandFortSoftEnvCfg(HazardBandFortEnvCfg):
+    """Band fortress with the v12 soft ledger and quadratic contact dwell."""
+
+    contact_terminates: bool = False
+    clean_goal_gate: bool = False
+    reward_contact_dwell_penalty: float = 2.0
+    reward_contact_dwell_quadratic: bool = True
 
 
 @configclass
