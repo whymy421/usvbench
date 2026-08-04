@@ -383,6 +383,21 @@ RING_GOAL_DISTANCE_RANGE_M = (24.0, 40.0)  # 24 keeps the goal disk clear of the
 DOUBLE_RING_OUTER_RADIUS_M = 17.5
 DOUBLE_RING_GOAL_DISTANCE_RANGE_M = (26.0, 40.0)
 DOUBLE_RING_MIN_GAP_OFFSET_RAD = 0.5 * math.pi
+FORTRESS_APERTURE_M: dict[int, float] = {0: 6.0, 1: 4.5, 2: 3.6, 3: 2.7}
+FORTRESS_SPAWN_RADIUS_RANGE_M = (18.0, 24.0)
+DOUBLE_RING_FORTRESS_SPAWN_RADIUS_RANGE_M = (25.0, 31.0)
+# Hard returned-array worst cases. The sealed single-ring constructor can
+# return at most 23 cylinders. The double-ring helper has a generic emergency
+# cap of 63 per ring, so fortress2 explicitly rejects above 32 inner / 56 outer
+# and can return at most 88 cylinders total.
+FORTRESS_MAX_OBSTACLES = 23
+DOUBLE_RING_FORTRESS_MAX_INNER_OBSTACLES = 32
+DOUBLE_RING_FORTRESS_MAX_OUTER_OBSTACLES = 56
+BAND_FORTRESS_MAX_OBSTACLES = 96
+BAND_FORTRESS_INNER_RADIUS_M = 9.0
+BAND_FORTRESS_SEPARATION_M = 6.0
+BAND_FORTRESS_LAYER_RADIUS_RANGE_M = (0.8, 2.0)
+BAND_FORTRESS_PLUG_RADIUS_RANGE_M = (1.6, 2.0)
 
 
 def _ring_seal_check(
@@ -405,6 +420,7 @@ def sample_ring_layout(
     *,
     max_attempts: int = 40,
     neighbor_overlap_m: float | None = None,
+    exact_gap_width_m: float | None = None,
 ) -> HazardLayout:
     """Rejection-sample a sealed ring around the spawn with one tier-width gap.
 
@@ -420,6 +436,9 @@ def sample_ring_layout(
     difficulty = difficulty_for_level(level)
     rng = np.random.default_rng() if rng is None else rng
     start = np.zeros(2, dtype=np.float64)
+
+    if exact_gap_width_m is not None and exact_gap_width_m <= 0.0:
+        raise ValueError("exact_gap_width_m must be positive")
 
     def chord_angle(chord: float) -> float:
         return 2.0 * math.asin(min(1.0, chord / (2.0 * RING_RADIUS_M)))
@@ -458,7 +477,15 @@ def sample_ring_layout(
 
         def total_angle(overlap: float) -> float:
             infl = [r + OBSTACLE_INFLATION_M for r in radii_list]
-            total = chord_angle(gap_free + infl[-1] + infl[0])
+            if exact_gap_width_m is None:
+                gap_angle = chord_angle(gap_free + infl[-1] + infl[0])
+            else:
+                gap_angle = (
+                    chord_angle(infl[-1])
+                    + chord_angle(infl[0])
+                    + exact_gap_width_m / RING_RADIUS_M
+                )
+            total = gap_angle
             for a, b in zip(infl[:-1], infl[1:]):
                 total += chord_angle(a + b - overlap)
             return total
@@ -487,7 +514,15 @@ def sample_ring_layout(
         overlap = lo
 
         infl = [r + OBSTACLE_INFLATION_M for r in radii_list]
-        angles = [gap_bearing + 0.5 * chord_angle(gap_free + infl[-1] + infl[0])]
+        if exact_gap_width_m is None:
+            gap_angle = chord_angle(gap_free + infl[-1] + infl[0])
+        else:
+            gap_angle = (
+                chord_angle(infl[-1])
+                + chord_angle(infl[0])
+                + exact_gap_width_m / RING_RADIUS_M
+            )
+        angles = [gap_bearing + 0.5 * gap_angle]
         for a, b in zip(infl[:-1], infl[1:]):
             angles.append(angles[-1] + chord_angle(a + b - overlap))
 
@@ -664,6 +699,26 @@ def _sample_sealed_ring(
     return centers, np.asarray(radii_list, dtype=np.float64)
 
 
+def _sample_double_ring_pair(
+    target_width_m: float,
+    rng: np.random.Generator,
+) -> tuple[tuple[np.ndarray, np.ndarray], tuple[np.ndarray, np.ndarray]] | None:
+    """Reuse the owner-approved 10.5/17.5 m sealed pair construction."""
+    inner_bearing = float(rng.uniform(0.0, 2.0 * math.pi))
+    outer_bearing = inner_bearing + float(
+        rng.uniform(DOUBLE_RING_MIN_GAP_OFFSET_RAD, 1.5 * math.pi)
+    )
+    sampled_inner = _sample_sealed_ring(
+        RING_RADIUS_M, target_width_m, inner_bearing, rng
+    )
+    sampled_outer = _sample_sealed_ring(
+        DOUBLE_RING_OUTER_RADIUS_M, target_width_m, outer_bearing, rng
+    )
+    if sampled_inner is None or sampled_outer is None:
+        return None
+    return sampled_inner, sampled_outer
+
+
 def _nearest_neighbour_surface_gaps(
     centers: np.ndarray, radii: np.ndarray
 ) -> np.ndarray:
@@ -713,18 +768,10 @@ def sample_double_ring_layout(
             (float(rng.uniform(*DOUBLE_RING_GOAL_DISTANCE_RANGE_M)), 0.0),
             dtype=np.float64,
         )
-        inner_bearing = float(rng.uniform(0.0, 2.0 * math.pi))
-        outer_bearing = inner_bearing + float(
-            rng.uniform(DOUBLE_RING_MIN_GAP_OFFSET_RAD, 1.5 * math.pi)
-        )
-        sampled_inner = _sample_sealed_ring(
-            RING_RADIUS_M, target_width, inner_bearing, rng
-        )
-        sampled_outer = _sample_sealed_ring(
-            DOUBLE_RING_OUTER_RADIUS_M, target_width, outer_bearing, rng
-        )
-        if sampled_inner is None or sampled_outer is None:
+        sampled_pair = _sample_double_ring_pair(target_width, rng)
+        if sampled_pair is None:
             continue
+        sampled_inner, sampled_outer = sampled_pair
         inner_centers, inner_radii = sampled_inner
         outer_centers, outer_radii = sampled_outer
         centers = np.vstack((inner_centers, outer_centers))
@@ -832,6 +879,469 @@ def sample_double_ring_layout(
 
     raise RuntimeError(
         f"Could not generate a double-ring layout for level {level} "
+        f"in {max_attempts} attempts."
+    )
+
+
+def _sample_fortress_spawn(
+    radius_range_m: tuple[float, float], rng: np.random.Generator
+) -> np.ndarray:
+    """Sample radius uniformly in the declared annulus and bearing uniformly."""
+    radius = float(rng.uniform(*radius_range_m))
+    bearing = float(rng.uniform(0.0, 2.0 * math.pi))
+    return radius * np.array((math.cos(bearing), math.sin(bearing)))
+
+
+def _ring_gap_spec(
+    ring_radius_m: float,
+    opening: tuple[float, float, int, int],
+    requested_width_m: float,
+) -> RingGapSpec:
+    bearing = opening[1]
+    return RingGapSpec(
+        ring_radius_m=ring_radius_m,
+        center=ring_radius_m
+        * np.array((math.cos(bearing), math.sin(bearing))),
+        bearing_rad=bearing,
+        free_width_m=opening[0],
+        requested_width_m=requested_width_m,
+    )
+
+
+def sample_ring_fortress_layout(
+    level: int,
+    rng: np.random.Generator | None = None,
+    *,
+    max_attempts: int = 60,
+) -> tuple[HazardLayout, RingGapSpec]:
+    """Sample one sealed ring with the goal inside and the spawn outside.
+
+    The 18--24 m spawn annulus puts the nearest 10.5 m ring centerline
+    7.5--13.5 m away, comfortably inside the environment's 30 m ray range.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least one")
+    difficulty = difficulty_for_level(level)
+    rng = np.random.default_rng() if rng is None else rng
+    goal = np.zeros(2, dtype=np.float64)
+    target_width = float(difficulty.bottleneck_m)
+
+    for attempt in range(1, max_attempts + 1):
+        start = _sample_fortress_spawn(FORTRESS_SPAWN_RADIUS_RANGE_M, rng)
+        sampled_layout = sample_ring_layout(
+            level,
+            rng=rng,
+            max_attempts=max(40, max_attempts),
+            neighbor_overlap_m=RING_SEALED_OVERLAP_M,
+            exact_gap_width_m=target_width,
+        )
+        centers, radii = sampled_layout.centers, sampled_layout.radii
+        if len(radii) > FORTRESS_MAX_OBSTACLES:
+            continue
+        openings = _ring_line_openings(centers, radii, RING_RADIUS_M)
+        if len(openings) != 1 or abs(openings[0][0] - target_width) > 0.01:
+            continue
+        if np.any(_nearest_neighbour_surface_gaps(centers, radii) >= HULL_BEAM_M):
+            continue
+        if not start_goal_disks_clear(start, goal, centers, radii):
+            continue
+        geodesic = bfs_geodesic_length(start, goal, centers, radii)
+        if geodesic is None:
+            continue
+        plug_centers, plug_radii = _ring_gap_plug(centers, openings[0])
+        if bfs_geodesic_length(
+            goal,
+            start,
+            np.vstack((centers, plug_centers)),
+            np.concatenate((radii, plug_radii)),
+            cell_m=FORCED_SEAL_CELL_M,
+            inflation_m=HALF_BEAM_M,
+        ) is not None:
+            continue
+        if bfs_geodesic_length(
+            start,
+            goal,
+            centers,
+            radii,
+            cell_m=FORCED_SEAL_CELL_M,
+            inflation_m=HALF_BEAM_M,
+        ) is None:
+            continue
+        layout = HazardLayout(
+            level=difficulty.level,
+            requested_obstacle_count=len(radii),
+            start=start,
+            goal=goal,
+            centers=centers,
+            radii=radii,
+            geodesic_length=float(geodesic),
+            direct_blocked=direct_segment_blocked(start, goal, centers, radii),
+            attempts=attempt,
+        )
+        return layout, _ring_gap_spec(RING_RADIUS_M, openings[0], target_width)
+
+    raise RuntimeError(
+        f"Could not generate a ring-fortress layout for level {level} "
+        f"in {max_attempts} attempts."
+    )
+
+
+def sample_double_ring_fortress_layout(
+    level: int,
+    rng: np.random.Generator | None = None,
+    *,
+    max_attempts: int = 80,
+) -> tuple[HazardLayout, DoubleRingGapSpecs]:
+    """Sample the sealed double ring with the goal inside and spawn outside.
+
+    The 25--31 m spawn annulus puts the nearest 17.5 m outer-ring centerline
+    7.5--13.5 m away, comfortably inside the environment's 30 m ray range.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least one")
+    difficulty = difficulty_for_level(level)
+    rng = np.random.default_rng() if rng is None else rng
+    goal = np.zeros(2, dtype=np.float64)
+    target_width = float(difficulty.bottleneck_m)
+
+    for attempt in range(1, max_attempts + 1):
+        start = _sample_fortress_spawn(
+            DOUBLE_RING_FORTRESS_SPAWN_RADIUS_RANGE_M, rng
+        )
+        sampled_pair = _sample_double_ring_pair(target_width, rng)
+        if sampled_pair is None:
+            continue
+        (inner_centers, inner_radii), (outer_centers, outer_radii) = sampled_pair
+        if (
+            len(inner_radii) > DOUBLE_RING_FORTRESS_MAX_INNER_OBSTACLES
+            or len(outer_radii) > DOUBLE_RING_FORTRESS_MAX_OUTER_OBSTACLES
+        ):
+            continue
+        centers = np.vstack((inner_centers, outer_centers))
+        radii = np.concatenate((inner_radii, outer_radii))
+        inner_openings = _ring_line_openings(
+            inner_centers, inner_radii, RING_RADIUS_M
+        )
+        outer_openings = _ring_line_openings(
+            outer_centers, outer_radii, DOUBLE_RING_OUTER_RADIUS_M
+        )
+        if len(inner_openings) != 1 or len(outer_openings) != 1:
+            continue
+        inner_opening, outer_opening = inner_openings[0], outer_openings[0]
+        if (
+            abs(inner_opening[0] - target_width) > 0.01
+            or abs(outer_opening[0] - target_width) > 0.01
+        ):
+            continue
+        angular_offset = abs(
+            (outer_opening[1] - inner_opening[1] + math.pi) % (2.0 * math.pi)
+            - math.pi
+        )
+        if angular_offset + 1.0e-9 < DOUBLE_RING_MIN_GAP_OFFSET_RAD:
+            continue
+        if (
+            np.any(
+                _nearest_neighbour_surface_gaps(inner_centers, inner_radii) >= 0.0
+            )
+            or np.any(
+                _nearest_neighbour_surface_gaps(outer_centers, outer_radii) >= 0.0
+            )
+        ):
+            continue
+        if not start_goal_disks_clear(start, goal, centers, radii):
+            continue
+        geodesic = bfs_geodesic_length(start, goal, centers, radii)
+        if geodesic is None:
+            continue
+
+        for ring_centers, opening in (
+            (inner_centers, inner_opening),
+            (outer_centers, outer_opening),
+        ):
+            plug_centers, plug_radii = _ring_gap_plug(ring_centers, opening)
+            if bfs_geodesic_length(
+                goal,
+                start,
+                np.vstack((centers, plug_centers)),
+                np.concatenate((radii, plug_radii)),
+                cell_m=FORCED_SEAL_CELL_M,
+                inflation_m=HALF_BEAM_M,
+            ) is not None:
+                break
+        else:
+            if bfs_geodesic_length(
+                start,
+                goal,
+                centers,
+                radii,
+                cell_m=FORCED_SEAL_CELL_M,
+                inflation_m=HALF_BEAM_M,
+            ) is None:
+                continue
+            inner_spec = _ring_gap_spec(
+                RING_RADIUS_M, inner_opening, target_width
+            )
+            outer_spec = _ring_gap_spec(
+                DOUBLE_RING_OUTER_RADIUS_M, outer_opening, target_width
+            )
+            layout = HazardLayout(
+                level=difficulty.level,
+                requested_obstacle_count=len(radii),
+                start=start,
+                goal=goal,
+                centers=centers,
+                radii=radii,
+                geodesic_length=float(geodesic),
+                direct_blocked=direct_segment_blocked(start, goal, centers, radii),
+                attempts=attempt,
+            )
+            return layout, DoubleRingGapSpecs(inner=inner_spec, outer=outer_spec)
+
+    raise RuntimeError(
+        f"Could not generate a double-ring-fortress layout for level {level} "
+        f"in {max_attempts} attempts."
+    )
+
+
+def _band_clear_of_all(
+    candidate: np.ndarray,
+    radius_m: float,
+    placed_centers: list[np.ndarray],
+    placed_radii: list[float],
+    aperture_m: float,
+) -> bool:
+    """Whether a candidate preserves the constructive pairwise aperture."""
+    if not placed_centers:
+        return True
+    distances = np.linalg.norm(np.asarray(placed_centers) - candidate, axis=1)
+    edge_gaps = distances - np.asarray(placed_radii) - radius_m
+    return bool(np.all(edge_gaps >= aperture_m - 1.0e-9))
+
+
+def _build_band_layer(
+    ring_radius_m: float,
+    aperture_m: float,
+    rng: np.random.Generator,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Place a chord-spaced cylinder layer, including its wrap gap."""
+    radii: list[float] = []
+    angles: list[float] = []
+    theta = start = float(rng.uniform(0.0, 2.0 * math.pi))
+    while True:
+        radius = float(rng.uniform(*BAND_FORTRESS_LAYER_RADIUS_RANGE_M))
+        if radii:
+            theta += 2.0 * math.asin(
+                min(
+                    1.0,
+                    (radii[-1] + aperture_m + radius)
+                    / (2.0 * ring_radius_m),
+                )
+            )
+        if radii and theta - start > 2.0 * math.pi:
+            break
+        if radii:
+            wrap = start + 2.0 * math.pi - theta
+            needed = 2.0 * math.asin(
+                min(
+                    1.0,
+                    (radius + aperture_m + radii[0])
+                    / (2.0 * ring_radius_m),
+                )
+            )
+            if wrap < needed:
+                break
+        angles.append(theta)
+        radii.append(radius)
+        if len(radii) > 200:
+            break
+
+    angle_array = np.asarray(angles, dtype=np.float64)
+    centers = ring_radius_m * np.stack(
+        (np.cos(angle_array), np.sin(angle_array)), axis=1
+    )
+    return centers, np.asarray(radii, dtype=np.float64), angle_array
+
+
+def _add_band_plugs(
+    angles: np.ndarray,
+    ring_radius_m: float,
+    aperture_m: float,
+    rng: np.random.Generator,
+    all_centers: list[np.ndarray],
+    all_radii: list[float],
+    *,
+    max_offset_m: float,
+) -> int:
+    """Back every layer gap with a plug and return the number skipped."""
+    skipped = 0
+    for index in range(len(angles)):
+        next_index = (index + 1) % len(angles)
+        next_angle = float(angles[next_index])
+        if next_index == 0:
+            next_angle += 2.0 * math.pi
+        midpoint = 0.5 * (float(angles[index]) + next_angle)
+        placed = False
+        radius_candidates = (
+            float(rng.uniform(*BAND_FORTRESS_PLUG_RADIUS_RANGE_M)),
+            1.4,
+            1.1,
+        )
+        for radius in radius_candidates:
+            offset = 0.8
+            while offset <= max_offset_m:
+                candidate = (ring_radius_m + offset) * np.array(
+                    (math.cos(midpoint), math.sin(midpoint)), dtype=np.float64
+                )
+                if _band_clear_of_all(
+                    candidate,
+                    radius,
+                    all_centers,
+                    all_radii,
+                    aperture_m,
+                ):
+                    all_centers.append(candidate)
+                    all_radii.append(radius)
+                    placed = True
+                    break
+                offset += 0.25
+            if placed:
+                break
+        if not placed:
+            skipped += 1
+    return skipped
+
+
+def _build_band_fortress(
+    aperture_m: float,
+    rng: np.random.Generator,
+) -> tuple[np.ndarray, np.ndarray, int, float]:
+    """Faithful constructive port of ``demos/band_v2_calc.py``."""
+    all_centers: list[np.ndarray] = []
+    all_radii: list[float] = []
+
+    inner_centers, inner_radii, inner_angles = _build_band_layer(
+        BAND_FORTRESS_INNER_RADIUS_M, aperture_m, rng
+    )
+    all_centers.extend(inner_centers)
+    all_radii.extend(inner_radii)
+    inner_skipped = _add_band_plugs(
+        inner_angles,
+        BAND_FORTRESS_INNER_RADIUS_M,
+        aperture_m,
+        rng,
+        all_centers,
+        all_radii,
+        max_offset_m=BAND_FORTRESS_SEPARATION_M - 1.0,
+    )
+
+    outer_ring_radius = (
+        BAND_FORTRESS_INNER_RADIUS_M
+        + BAND_FORTRESS_SEPARATION_M
+        + aperture_m
+        + 2.0 * BAND_FORTRESS_PLUG_RADIUS_RANGE_M[1]
+    )
+    outer_centers, outer_radii, outer_angles = _build_band_layer(
+        outer_ring_radius, aperture_m, rng
+    )
+    kept_outer_centers: list[np.ndarray] = []
+    kept_outer_radii: list[float] = []
+    for center, radius in zip(outer_centers, outer_radii):
+        if _band_clear_of_all(
+            center, radius, all_centers, all_radii, aperture_m
+        ):
+            kept_outer_centers.append(center)
+            kept_outer_radii.append(float(radius))
+    all_centers.extend(kept_outer_centers)
+    all_radii.extend(kept_outer_radii)
+    outer_skipped = _add_band_plugs(
+        outer_angles,
+        outer_ring_radius,
+        aperture_m,
+        rng,
+        all_centers,
+        all_radii,
+        max_offset_m=10.0,
+    )
+
+    centers = np.asarray(all_centers, dtype=np.float64).reshape(-1, 2)
+    radii = np.asarray(all_radii, dtype=np.float64)
+    outer_extent = float(np.max(np.linalg.norm(centers, axis=1) + radii))
+    return centers, radii, inner_skipped + outer_skipped, outer_extent
+
+
+def sample_band_fortress_layout(
+    level: int,
+    rng: np.random.Generator | None = None,
+    *,
+    max_attempts: int = 80,
+) -> HazardLayout:
+    """Sample two constructive brick-wall bands around an origin goal."""
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least one")
+    try:
+        aperture = float(FORTRESS_APERTURE_M[int(level)])
+    except (KeyError, ValueError):
+        valid = ", ".join(str(value) for value in sorted(FORTRESS_APERTURE_M))
+        raise ValueError(
+            f"Unknown band-fortress level {level!r}; expected one of {valid}."
+        ) from None
+    rng = np.random.default_rng() if rng is None else rng
+    goal = np.zeros(2, dtype=np.float64)
+
+    for attempt in range(1, max_attempts + 1):
+        centers, radii, _skipped, outer_extent = _build_band_fortress(
+            aperture, rng
+        )
+        if (
+            len(radii) == 0
+            or len(radii) > BAND_FORTRESS_MAX_OBSTACLES
+            or len(centers) != len(radii)
+            or not np.all(np.isfinite(centers))
+            or not np.all(np.isfinite(radii))
+            or not math.isfinite(outer_extent)
+        ):
+            continue
+        delta = centers[:, None, :] - centers[None, :, :]
+        edge_gaps = (
+            np.linalg.norm(delta, axis=-1)
+            - radii[:, None]
+            - radii[None, :]
+        )
+        np.fill_diagonal(edge_gaps, math.inf)
+        if float(np.min(edge_gaps)) < aperture - 1.0e-6:
+            continue
+
+        spawn_radius = float(rng.uniform(outer_extent + 2.0, outer_extent + 8.0))
+        spawn_bearing = float(rng.uniform(0.0, 2.0 * math.pi))
+        start = spawn_radius * np.array(
+            (math.cos(spawn_bearing), math.sin(spawn_bearing)), dtype=np.float64
+        )
+        geodesic = bfs_geodesic_length(
+            start,
+            goal,
+            centers,
+            radii,
+            inflation_m=HALF_BEAM_M,
+        )
+        if geodesic is None:
+            continue
+
+        # The 150-layout-per-tier admission audit observed at most 72
+        # cylinders; the 96-slot task budget therefore leaves 24 slots headroom.
+        return HazardLayout(
+            level=int(level),
+            requested_obstacle_count=len(radii),
+            start=start,
+            goal=goal,
+            centers=centers,
+            radii=radii,
+            geodesic_length=float(geodesic),
+            direct_blocked=direct_segment_blocked(start, goal, centers, radii),
+            attempts=attempt,
+        )
+
+    raise RuntimeError(
+        f"Could not generate a band-fortress layout for level {level} "
         f"in {max_attempts} attempts."
     )
 
@@ -1225,14 +1735,21 @@ def sample_forced_crossing_layout(
 
 
 __all__ = [
+    "BAND_FORTRESS_MAX_OBSTACLES",
     "COLLISION_MARGIN_M",
     "DIFFICULTIES",
     "DOUBLE_RING_GOAL_DISTANCE_RANGE_M",
     "DOUBLE_RING_MIN_GAP_OFFSET_RAD",
     "DOUBLE_RING_OUTER_RADIUS_M",
+    "DOUBLE_RING_FORTRESS_SPAWN_RADIUS_RANGE_M",
     "DoubleRingGapSpecs",
     "ENDPOINT_CLEAR_RADIUS_M",
     "FORCED_GATE_BEAMS",
+    "DOUBLE_RING_FORTRESS_MAX_INNER_OBSTACLES",
+    "DOUBLE_RING_FORTRESS_MAX_OUTER_OBSTACLES",
+    "FORTRESS_MAX_OBSTACLES",
+    "FORTRESS_APERTURE_M",
+    "FORTRESS_SPAWN_RADIUS_RANGE_M",
     "GRID_CELL_M",
     "HALF_BEAM_M",
     "HULL_BEAM_M",
@@ -1252,9 +1769,12 @@ __all__ = [
     "minimum_pairwise_inflated_gap",
     "ray_circle_ranges",
     "sample_forced_crossing_layout",
+    "sample_band_fortress_layout",
+    "sample_double_ring_fortress_layout",
     "sample_double_ring_layout",
     "sample_layout",
     "sample_open_basin_layout",
+    "sample_ring_fortress_layout",
     "start_goal_disks_clear",
     "wall_segment_cylinders",
 ]

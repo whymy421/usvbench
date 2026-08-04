@@ -26,10 +26,13 @@ from ..docking.curriculum import DockingCurriculum
 from .hazard_geometry import (
     analytic_min_clearance,
     ray_circle_ranges,
+    sample_band_fortress_layout,
+    sample_double_ring_fortress_layout,
     sample_double_ring_layout,
     sample_forced_crossing_layout,
     sample_layout,
     sample_open_basin_layout,
+    sample_ring_fortress_layout,
     sample_ring_layout,
 )
 from .hazard_nav_env_cfg import HazardNavEnvCfg
@@ -948,7 +951,17 @@ class HazardNavEnv(DirectRLEnv):
             - open_water_cost
             - reverse_cost
             - self.cfg.reward_contact_entry_penalty * contact_entry.float()
-            - self.cfg.reward_contact_dwell_penalty * contact_now.float()
+            - self.cfg.reward_contact_dwell_penalty
+            * (
+                (
+                    self._ep_contact_run_steps
+                    * self.control_step_s
+                    / self.cfg.contact_dwell_tau_s
+                ).square()
+                * contact_now.float()
+                if self.cfg.reward_contact_dwell_quadratic
+                else contact_now.float()
+            )
         )
 
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -1109,6 +1122,7 @@ class HazardNavEnv(DirectRLEnv):
                 choices[choice_indices], device=self.device
             )
         max_obstacles = self.cfg.max_obstacles
+        local_starts_np = np.zeros((num_resets, 2), dtype=np.float32)
         local_goals_np = np.zeros((num_resets, 2), dtype=np.float32)
         local_centers_np = np.zeros(
             (num_resets, max_obstacles, 2), dtype=np.float32
@@ -1139,6 +1153,30 @@ class HazardNavEnv(DirectRLEnv):
                     rng=self._layout_rng,
                     max_attempts=max(60, self.cfg.layout_max_attempts),
                 )
+            elif self.cfg.layout_mode == "fortress":
+                # Ring fortress inverts the siege: the goal is at the ring's
+                # center and the sampled spawn is outside its only opening.
+                layout, _gap = sample_ring_fortress_layout(
+                    level,
+                    rng=self._layout_rng,
+                    max_attempts=max(60, self.cfg.layout_max_attempts),
+                )
+            elif self.cfg.layout_mode == "fortress2":
+                # The sampled spawn is outside both misaligned sealed rings;
+                # success therefore requires threading both openings inward.
+                layout, _gaps = sample_double_ring_fortress_layout(
+                    level,
+                    rng=self._layout_rng,
+                    max_attempts=max(80, self.cfg.layout_max_attempts),
+                )
+            elif self.cfg.layout_mode == "bandfort":
+                # Constructive double bands keep every cylinder edge gap at
+                # the tier aperture; the sampler supplies the outside spawn.
+                layout = sample_band_fortress_layout(
+                    level,
+                    rng=self._layout_rng,
+                    max_attempts=max(80, self.cfg.layout_max_attempts),
+                )
             elif self.cfg.layout_mode == "basin":
                 # Control for the crossing task: same walls, no bulkhead. The
                 # crossing basin changes two things at once and the champion
@@ -1167,9 +1205,11 @@ class HazardNavEnv(DirectRLEnv):
             goal_angle = float(self._layout_rng.uniform(0.0, 2.0 * math.pi))
             cosine, sine = math.cos(goal_angle), math.sin(goal_angle)
             rotation = np.array(((cosine, -sine), (sine, cosine)))
+            rotated_start = layout.start @ rotation.T
             rotated_goal = layout.goal @ rotation.T
             rotated_centers = layout.centers @ rotation.T
             count = layout.obstacle_count
+            local_starts_np[row] = rotated_start
             local_goals_np[row] = rotated_goal
             local_centers_np[row, :count] = rotated_centers
             radii_np[row, :count] = layout.radii
@@ -1178,6 +1218,9 @@ class HazardNavEnv(DirectRLEnv):
             d0_np[row] = float(np.linalg.norm(layout.goal - layout.start))
             counts_np[row] = count
 
+        local_starts = torch.as_tensor(
+            local_starts_np, device=self.device, dtype=torch.float32
+        )
         local_goals = torch.as_tensor(
             local_goals_np, device=self.device, dtype=torch.float32
         )
@@ -1208,16 +1251,16 @@ class HazardNavEnv(DirectRLEnv):
         ).reshape(num_resets, 4)
         com_offset_body = self.robot.data.com_pos_b[env_ids].reshape(num_resets, 3)
         com_offset_world = math_utils.quat_apply(spawn_quats, com_offset_body)
-        com_target = self.scene.env_origins[env_ids, :3].clone()
-        # "Start at the environment origin" is a planar COM statement. Keep
-        # the USD-authored/default vertical spawn used by the calm-water task.
-        root_state[:, :2] = com_target[:, :2] - com_offset_world[:, :2]
+        com_target_xy = env_origins_xy + local_starts
+        # The sampler's start is a planar COM statement. Keep the USD-authored
+        # default vertical spawn used by the calm-water task.
+        root_state[:, :2] = com_target_xy - com_offset_world[:, :2]
         root_state[:, 3:7] = spawn_quats
         root_state[:, 7:] = 0.0
         self.robot.write_root_state_to_sim(root_state, env_ids)
 
         self.path_length[env_ids] = 0.0
-        self._previous_xy[env_ids] = env_origins_xy
+        self._previous_xy[env_ids] = com_target_xy
         self._previous_potential[env_ids] = -1.0
         self._reached_goal[env_ids] = False
         self._contact_prev[env_ids] = False
@@ -1231,7 +1274,7 @@ class HazardNavEnv(DirectRLEnv):
         self._first_success_time_s[env_ids] = torch.nan
         self._episode_finished[env_ids] = False
         initial_clearance = analytic_min_clearance(
-            env_origins_xy,
+            com_target_xy,
             self.obstacle_centers[env_ids],
             self.obstacle_radii[env_ids],
             half_beam_m=self.cfg.half_beam_m,
