@@ -130,6 +130,13 @@ class HazardNavEnv(DirectRLEnv):
         self.episode_min_clearance = torch.full(
             (self.num_envs,), torch.nan, device=self.device
         )
+        self.episode_contact_steps = torch.zeros(self.num_envs, device=self.device)
+        self.episode_contact_longest_steps = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self.episode_contact_depth_sum = torch.zeros(
+            self.num_envs, device=self.device
+        )
         self.route_geodesic_length = torch.zeros(self.num_envs, device=self.device)
         self.actions = torch.zeros(
             (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
@@ -143,6 +150,12 @@ class HazardNavEnv(DirectRLEnv):
         self._ep_prox_cost = torch.zeros(self.num_envs, device=self.device)
         self._ep_open_water_cost = torch.zeros(self.num_envs, device=self.device)
         self._ep_contact_entries = torch.zeros(self.num_envs, device=self.device)
+        self._ep_contact_steps = torch.zeros(self.num_envs, device=self.device)
+        self._ep_contact_run_steps = torch.zeros(self.num_envs, device=self.device)
+        self._ep_contact_longest_steps = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._ep_contact_depth_sum = torch.zeros(self.num_envs, device=self.device)
         self._ep_goal_bonus = torch.zeros(self.num_envs, device=self.device)
         self._ep_reverse_cost = torch.zeros(self.num_envs, device=self.device)
 
@@ -837,6 +850,20 @@ class HazardNavEnv(DirectRLEnv):
         contact_entry = contact_now & ~self._contact_prev
         self._contact_prev.copy_(contact_now)
         self._ep_contact_entries += contact_entry.float()
+        self._ep_contact_steps += contact_now.float()
+        self._ep_contact_run_steps.copy_(
+            torch.where(
+                contact_now,
+                self._ep_contact_run_steps + 1.0,
+                torch.zeros_like(self._ep_contact_run_steps),
+            )
+        )
+        self._ep_contact_longest_steps.copy_(
+            torch.maximum(
+                self._ep_contact_longest_steps, self._ep_contact_run_steps
+            )
+        )
+        self._ep_contact_depth_sum += torch.clamp(-clearance, min=0.0)
 
         swift_cost = torch.zeros_like(prox_cost)
         if self.cfg.obs_v2 or self.cfg.obs_v3:
@@ -991,6 +1018,15 @@ class HazardNavEnv(DirectRLEnv):
             self.episode_min_clearance[completed_ids] = self._min_clearance[
                 completed_ids
             ]
+            self.episode_contact_steps[completed_ids] = self._ep_contact_steps[
+                completed_ids
+            ]
+            self.episode_contact_longest_steps[completed_ids] = (
+                self._ep_contact_longest_steps[completed_ids]
+            )
+            self.episode_contact_depth_sum[completed_ids] = (
+                self._ep_contact_depth_sum[completed_ids]
+            )
             self.route_geodesic_length[completed_ids] = (
                 self._route_geodesic_length[completed_ids]
             )
@@ -1022,6 +1058,23 @@ class HazardNavEnv(DirectRLEnv):
             )
             self.extras["log"]["Episode/contact_entries"] = (
                 self._ep_contact_entries[completed_ids].mean()
+            )
+            self.extras["log"]["Episode/contact_steps"] = (
+                self._ep_contact_steps[completed_ids].mean()
+            )
+            self.extras["log"]["Episode/contact_longest_s"] = (
+                self._ep_contact_longest_steps[completed_ids].mean()
+                * self.control_step_s
+            )
+            contact_steps = self._ep_contact_steps[completed_ids]
+            contact_depth_mean = torch.where(
+                contact_steps > 0.0,
+                self._ep_contact_depth_sum[completed_ids]
+                / contact_steps.clamp_min(1.0),
+                torch.zeros_like(contact_steps),
+            )
+            self.extras["log"]["Episode/contact_depth_mean_m"] = (
+                contact_depth_mean.mean()
             )
             self.extras["log"]["Episode/reward_goal_bonus_sum"] = (
                 self._ep_goal_bonus[completed_ids].mean()
@@ -1191,6 +1244,10 @@ class HazardNavEnv(DirectRLEnv):
         self._ep_prox_cost[env_ids] = 0.0
         self._ep_open_water_cost[env_ids] = 0.0
         self._ep_contact_entries[env_ids] = 0.0
+        self._ep_contact_steps[env_ids] = 0.0
+        self._ep_contact_run_steps[env_ids] = 0.0
+        self._ep_contact_longest_steps[env_ids] = 0.0
+        self._ep_contact_depth_sum[env_ids] = 0.0
         self._ep_goal_bonus[env_ids] = 0.0
         self._ep_reverse_cost[env_ids] = 0.0
 
