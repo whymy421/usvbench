@@ -13,6 +13,7 @@ environment uses, term by term, both undiscounted and discounted.
 Run:
     python scripts/reward_scenarios.py            # current hazard-nav reward
     python scripts/reward_scenarios.py --v12      # softened-contact ledger
+    python scripts/reward_scenarios.py --all-versions
     python scripts/reward_scenarios.py --band 1.10
 """
 
@@ -74,6 +75,64 @@ class Scenario:
     terms: dict = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class Ledger:
+    """One registered Task-A reward ledger and its config-class overrides."""
+
+    name: str
+    description: str
+    overrides: dict
+    fidelity_note: str = ""
+
+
+LEDGERS = (
+    Ledger("v1/v3", "基线账本", {}),
+    Ledger(
+        "v4", "策略不变 PBRS（负势函数）", {"pbrs_correct": True},
+        "逐步势函数轨迹未被场景记录；数值按本台既有的均匀进展约定投影。",
+    ),
+    Ledger(
+        "v5", "可行性池化；观测改动，账本不变",
+        {"obs_feasibility": True, "feasibility_sectors": 9, "observation_space": 15},
+        "CPU 奖励台不能测量观测对策略的影响；奖励数值与 v1/v3 完全相同。",
+    ),
+    Ledger("v6", "半正弦穿缝弧，幅值 5", {"reward_threading_amplitude": 5.0}),
+    Ledger(
+        "v7", "PBRS + 真终止势函数归零",
+        {"pbrs_correct": True, "pbrs_zero_at_terminal": True},
+        "逐步势函数轨迹未被场景记录；数值按本台既有的均匀进展约定投影。",
+    ),
+    Ledger(
+        "v8", "非负 PBRS 平移（含超时残余）",
+        {"pbrs_correct": True, "pbrs_shift_potential": True},
+        "逐步势函数轨迹未被场景记录；按均匀进展投影并保留 -1 重置势；cfg 未启用超时归零。",
+    ),
+    Ledger(
+        "v9", "开放水域税 2.0/秒 @ 12 m",
+        {"reward_open_water_scale": 2.0, "open_water_radius_m": 12.0},
+        "使用脚本中已认证的穿缝/绕行开放水域暴露总量，不模拟几何谓词。",
+    ),
+    Ledger(
+        "v10", "开放水域税 + 可行性池化；观测改动，账本不变",
+        {
+            "reward_open_water_scale": 2.0, "open_water_radius_m": 12.0,
+            "obs_feasibility": True, "feasibility_sectors": 9,
+            "observation_space": 15,
+        },
+        "池化效果不能由 CPU 奖励台测量；奖励数值与 v9 完全相同。",
+    ),
+    Ledger(
+        "v12", "软账本：接触不停机、终点奖不设清洁门、驻留 0.1/步",
+        {
+            "reward_open_water_scale": 2.0, "open_water_radius_m": 12.0,
+            "contact_terminates": False, "clean_goal_gate": False,
+            "reward_contact_dwell_penalty": 0.1,
+        },
+        "沿用已认证的 v12 暴露与恢复模型；其 B、D、H 是现有 --v12 定义。",
+    ),
+)
+
+
 def prox_cost_per_step(close_rays: int, close_range_m: float, band_m: float) -> float:
     """Per-step proximity contribution to the REWARD (i.e. already negative).
 
@@ -92,14 +151,42 @@ def discount_sum(steps: int) -> float:
     return (1.0 - GAMMA**steps) / (1.0 - GAMMA)
 
 
+def pbrs_progress(s: Scenario, steps: int, mode: str) -> tuple[float, float]:
+    """Project the env's stepwise PBRS over this bench's uniform-progress path.
+
+    Scenario stores endpoints, not a distance trace. The existing discounted
+    view already treats aggregate progress as uniformly accrued; all-version
+    PBRS uses that same explicit convention and reports the limitation.
+    """
+    previous = -1.0  # hazard_nav_env.py resets this value for every cfg class
+    total = 0.0
+    discounted = 0.0
+    true_terminal = s.reached_goal or s.contacts > 0
+    for step in range(steps):
+        covered = s.progress_fraction * (step + 1) / max(steps, 1)
+        potential = covered if mode == "shifted" else covered - 1.0
+        next_potential = potential
+        if mode == "negative_terminal" and true_terminal and step == steps - 1:
+            next_potential = 0.0
+        contribution = PROGRESS_SCALE * (GAMMA * next_potential - previous)
+        total += contribution
+        discounted += (GAMMA**step) * contribution
+        previous = potential
+    return total, discounted
+
+
 def score(s: Scenario, band_m: float, threading: float = 0.0,
-          pbrs_timeout_bug: bool = False, v12: bool = False) -> Scenario:
+          pbrs_timeout_bug: bool = False, v12: bool = False,
+          pbrs: str = "raw", open_water_tax: bool = False) -> Scenario:
     steps = int(round(s.duration_s / DT))
     close_steps = int(round(s.close_seconds / DT))
     contact_steps = int(round(s.contact_seconds / DT))
 
     # 1. potential progress -- telescopes, so only the endpoints matter
     progress = PROGRESS_SCALE * s.progress_fraction
+    disc_progress = None
+    if pbrs != "raw":
+        progress, disc_progress = pbrs_progress(s, steps, pbrs)
 
     # 2. proximity, paid only while the close-ray picture holds
     prox = prox_cost_per_step(s.close_rays, s.close_range_m, band_m) * close_steps
@@ -117,7 +204,8 @@ def score(s: Scenario, band_m: float, threading: float = 0.0,
 
     # 5. v12 inherits v9's open-water tax. Scenario exposure is expressed as
     # seconds beyond the 12 m radius so the formula remains the environment's.
-    open_water = (-V12_OPEN_WATER_SCALE * s.open_water_seconds) if v12 else 0.0
+    open_water = (-V12_OPEN_WATER_SCALE * s.open_water_seconds
+                  if v12 or open_water_tax else 0.0)
 
     # 6. behaviour costs
     reverse = -REVERSE_SCALE * DT * steps * s.reverse_fraction  # relu(-surge)^2 ~ 1
@@ -138,20 +226,21 @@ def score(s: Scenario, band_m: float, threading: float = 0.0,
         timeout_spike = PROGRESS_SCALE * (1.0 - s.progress_fraction)
 
     total = progress + prox + contact + goal + reverse + idle + arc + timeout_spike
-    if v12:
+    if v12 or open_water_tax:
         total += open_water
 
     # Discounted view: progress and costs accrue along the way, the bonus lands
     # at the end. This is what the agent's value function actually optimises.
     disc_all = discount_sum(steps) / max(steps, 1)
-    disc_progress = progress * disc_all
+    if disc_progress is None:
+        disc_progress = progress * disc_all
     disc_prox = prox * (discount_sum(close_steps) / max(close_steps, 1)) if close_steps else 0.0
     disc_contact = contact * (GAMMA ** (steps // 2))  # contact happens mid-run
     disc_goal = goal * (GAMMA**steps)
     disc_total = (disc_progress + disc_prox + disc_contact + disc_goal
                   + (reverse + idle) * disc_all
                   + (arc + timeout_spike) * (GAMMA ** steps))
-    if v12:
+    if v12 or open_water_tax:
         # The measured tax is distributed along the route, like progress and
         # other per-step behaviour costs in this behavioural ledger.
         disc_total += open_water * disc_all
@@ -172,7 +261,7 @@ def score(s: Scenario, band_m: float, threading: float = 0.0,
     return s
 
 
-def build_scenarios(v12: bool = False) -> list[Scenario]:
+def build_scenarios(v12: bool = False, open_water_tax: bool = False) -> list[Scenario]:
     """The behaviours we want, and the ones we fear."""
     scenarios = [
         # --- what we WANT to be the best ------------------------------------
@@ -242,7 +331,7 @@ def build_scenarios(v12: bool = False) -> list[Scenario]:
             mean_speed_mps=0.8,
         ),
     ]
-    if not v12:
+    if not v12 and not open_water_tax:
         return scenarios
 
     by = {scenario.name[0]: scenario for scenario in scenarios}
@@ -250,6 +339,13 @@ def build_scenarios(v12: bool = False) -> list[Scenario]:
     detour_open_s = V12_DETOUR_TAX / V12_OPEN_WATER_SCALE
     thread_s = CERTIFIED_THREAD_M / CERTIFIED_CRUISE_MPS
     detour_s = CERTIFIED_DETOUR_M / CERTIFIED_CRUISE_MPS
+
+    if open_water_tax and not v12:
+        for key in "ACDE":
+            by[key] = replace(by[key], open_water_seconds=thread_open_s)
+        for key in "BF":
+            by[key] = replace(by[key], open_water_seconds=detour_open_s)
+        return [by[scenario.name[0]] for scenario in scenarios]
 
     # B and D are pinned to the owner-certified path/time inputs used to
     # pre-register the thin anti-brush margin: D is the same nominal 32.9 m
@@ -283,6 +379,100 @@ def build_scenarios(v12: bool = False) -> list[Scenario]:
     return [by[scenario.name[0]] for scenario in scenarios]
 
 
+def ordering_checks(rows: list[Scenario], v12: bool = False) -> list[tuple[str, bool]]:
+    """Return the historical eight criteria plus v12's anti-brush criterion."""
+    by = {s.name[0]: s.terms for s in rows}
+    checks = [
+        ("理想 A 必须排第一(未折现)",
+         all(by["A"]["TOTAL"] >= v["TOTAL"] for v in by.values())),
+        ("理想 A 必须排第一(折现后)",
+         all(by["A"]["DISCOUNTED"] >= v["DISCOUNTED"] for v in by.values())),
+        ("蹭一下抄近路 D 必须差于理想 A",
+         by["D"]["TOTAL"] < by["A"]["TOTAL"]),
+        ("撞死 H 必须差于胆怯超时 F(否则撞船是划算的)",
+         by["H"]["TOTAL"] < by["F"]["TOTAL"]),
+        ("贴缝 C 必须优于绕行 B(否则奖励在劝退穿缝)",
+         by["C"]["TOTAL"] > by["B"]["TOTAL"]),
+        ("停着不动 G 必须差于所有到达场景",
+         by["G"]["TOTAL"] < min(by[k]["TOTAL"] for k in "ABC")),
+        ("超时后走得少的必须差于走得多的(抓'离目标越远越划算')",
+         by["F"]["TOTAL"] < by["I"]["TOTAL"]),
+        ("最好的失败必须差于最差的成功",
+         max(by[k]["TOTAL"] for k in "DEFGHI")
+         < min(by[k]["TOTAL"] for k in "ABC")),
+    ]
+    if v12:
+        checks.append(
+            ("brush-a-pillar shortcut must NOT out-score the taxed detour",
+             by["D"]["TOTAL"] <= by["B"]["TOTAL"])
+        )
+    return checks
+
+
+def print_all_versions(band: float) -> None:
+    """Print per-ledger winners/checks, followed by PPO's discounted matrix."""
+    results = []
+    print(f"全版本奖励对照 | 邻近带上限 {band:.2f} m | gamma={GAMMA} | 时限 {HORIZON_S:.0f}s")
+    print("数值口径：折现列是 PPO 优化口径；PBRS 行按均匀进展投影，观测改动不在本台测量范围内。")
+    print()
+
+    for ledger in LEDGERS:
+        overrides = ledger.overrides
+        is_v12 = overrides.get("contact_terminates") is False
+        has_tax = overrides.get("reward_open_water_scale", 0.0) > 0.0 and not is_v12
+        if overrides.get("pbrs_shift_potential"):
+            pbrs_mode = "shifted"
+        elif overrides.get("pbrs_zero_at_terminal"):
+            pbrs_mode = "negative_terminal"
+        elif overrides.get("pbrs_correct"):
+            pbrs_mode = "negative"
+        else:
+            pbrs_mode = "raw"
+        rows = [
+            score(
+                scenario, band,
+                threading=overrides.get("reward_threading_amplitude", 0.0),
+                v12=is_v12,
+                pbrs=pbrs_mode,
+                open_water_tax=has_tax,
+            )
+            for scenario in build_scenarios(is_v12, has_tax)
+        ]
+        checks = ordering_checks(rows, is_v12)
+        failed = [label for label, ok in checks if not ok]
+        raw_winner = max(rows, key=lambda row: row.terms["TOTAL"])
+        disc_winner = max(rows, key=lambda row: row.terms["DISCOUNTED"])
+        override_text = ", ".join(
+            f"{key}={value}" for key, value in overrides.items()
+        ) or "无"
+
+        print(f"[{ledger.name}] {ledger.description}")
+        print(f"  参数覆盖: {override_text}")
+        if ledger.fidelity_note:
+            print(f"  能力边界: {ledger.fidelity_note}")
+        print(f"  冠军(未折现): {raw_winner.name} ({raw_winner.terms['TOTAL']:.1f})")
+        print(f"  冠军(折现后): {disc_winner.name} ({disc_winner.terms['DISCOUNTED']:.1f})")
+        print(f"  判据: {len(checks) - len(failed)}/{len(checks)} 通过")
+        print(f"  失败: {'；'.join(failed) if failed else '无'}")
+        print()
+        results.append((ledger, rows))
+
+    print("折现合计矩阵（PPO 优化口径；列 A-I 对应既有九个场景）")
+    print(f"{'账本':<8}" + "".join(f"{key:>10}" for key in "ABCDEFGHI"))
+    print("-" * 98)
+    for ledger, rows in results:
+        by = {row.name[0]: row.terms["DISCOUNTED"] for row in rows}
+        print(f"{ledger.name:<8}" + "".join(f"{by[key]:>10.1f}" for key in "ABCDEFGHI"))
+
+    print()
+    print("不可由本 CPU 账本忠实测量的版本差异:")
+    print("  v5: 可行性池化只改变观测；奖励数字与 v1/v3 相同。")
+    print("  v10: 池化部分只改变观测；奖励数字与 v9 相同。")
+    print("  v4/v7/v8: 场景没有逐步距离轨迹，未折现 PBRS 不能精确重放；表中是明确标注的均匀进展投影。")
+    print("  v8: 权威 cfg 是非负势平移且未启用超时归零；旧 --pbrs-timeout-bug 不代表当前注册 v8，故未套用。")
+    print("  v12: 为保持现有 --v12 口径，B、D、H 使用已认证的测量/恢复版本，不能与其它行当作同轨迹反事实。")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--band", type=float, default=SAFE_CLEARANCE_M + HALF_BEAM_M,
@@ -296,8 +486,14 @@ def main() -> None:
                              "time far from the goal")
     parser.add_argument("--v12", action="store_true",
                         help="apply the v12 open-water tax and softened contact ledger")
+    parser.add_argument("--all-versions", action="store_true",
+                        help="score every registered Task-A ledger and print a matrix")
     args = parser.parse_args()
     band = args.band
+
+    if args.all_versions:
+        print_all_versions(band)
+        return
 
     rows = [score(s, band, args.threading, args.pbrs_timeout_bug, args.v12)
             for s in build_scenarios(args.v12)]
@@ -332,40 +528,9 @@ def main() -> None:
         print(f"  {i}. {s.name:<28} {s.terms['DISCOUNTED']:>8.1f}")
 
     # --- the checks that must hold --------------------------------------
-    by = {s.name[0]: s.terms for s in rows}
     print()
     print("必须成立的判据:")
-    checks = [
-        ("理想 A 必须排第一(未折现)",
-         all(by["A"]["TOTAL"] >= v["TOTAL"] for v in by.values())),
-        ("理想 A 必须排第一(折现后)",
-         all(by["A"]["DISCOUNTED"] >= v["DISCOUNTED"] for v in by.values())),
-        ("蹭一下抄近路 D 必须差于理想 A",
-         by["D"]["TOTAL"] < by["A"]["TOTAL"]),
-        ("撞死 H 必须差于胆怯超时 F(否则撞船是划算的)",
-         by["H"]["TOTAL"] < by["F"]["TOTAL"]),
-        ("贴缝 C 必须优于绕行 B(否则奖励在劝退穿缝)",
-         by["C"]["TOTAL"] > by["B"]["TOTAL"]),
-        ("停着不动 G 必须差于所有到达场景",
-         by["G"]["TOTAL"] < min(by[k]["TOTAL"] for k in "ABC")),
-        # Added 2026-07-30 after a real 5-GPU-hour loss. The first six checks
-        # all passed while the reward paid +3.5 for hugging the rim until the
-        # clock ran out. The signature of that defect is not "a failure scores
-        # positive" -- scenario I is mildly positive even in a healthy reward,
-        # because the potential legitimately pays for covering 95% of the route.
-        # The signature is an INVERSION: timing out after 35% of the route
-        # outscoring timing out after 95%.
-        ("超时后走得少的必须差于走得多的(抓'离目标越远越划算')",
-         by["F"]["TOTAL"] < by["I"]["TOTAL"]),
-        ("最好的失败必须差于最差的成功",
-         max(by[k]["TOTAL"] for k in "DEFGHI")
-         < min(by[k]["TOTAL"] for k in "ABC")),
-    ]
-    if args.v12:
-        checks.append(
-            ("brush-a-pillar shortcut must NOT out-score the taxed detour",
-             by["D"]["TOTAL"] <= by["B"]["TOTAL"])
-        )
+    checks = ordering_checks(rows, args.v12)
     for label, ok in checks:
         print(f"  [{'通过' if ok else '不通过'}] {label}")
 

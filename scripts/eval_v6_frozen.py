@@ -72,6 +72,13 @@ while len(records) < args_cli.episodes and step < max_steps:
     done = done.squeeze(-1) if done.dim() > 1 else done
     ids = torch.nonzero(done).flatten()
     for i in ids.tolist():
+        episode_contact_steps = getattr(base, "episode_contact_steps", None)
+        episode_contact_longest_steps = getattr(
+            base, "episode_contact_longest_steps", None
+        )
+        episode_contact_depth_sum = getattr(
+            base, "episode_contact_depth_sum", None
+        )
         rec = {
             "env": i,
             "ep": int(ep_counter[i]),
@@ -81,6 +88,22 @@ while len(records) < args_cli.episodes and step < max_steps:
             "min_clearance_m": float(base.episode_min_clearance[i]),
             "path_length_m": float(base.episode_path_length[i]),
         }
+        if (
+            episode_contact_steps is not None
+            and episode_contact_longest_steps is not None
+            and episode_contact_depth_sum is not None
+        ):
+            contact_steps = float(episode_contact_steps[i])
+            rec["contact_steps"] = int(contact_steps)
+            rec["contact_seconds"] = contact_steps * base.control_step_s
+            rec["contact_longest_seconds"] = (
+                float(episode_contact_longest_steps[i]) * base.control_step_s
+            )
+            rec["contact_depth_mean_m"] = (
+                float(episode_contact_depth_sum[i]) / contact_steps
+                if contact_steps > 0.0
+                else 0.0
+            )
         if hasattr(base, "episode_gates_passed"):
             rec["gates"] = int(base.episode_gates_passed[i])
         if d0_prev is not None:
@@ -111,6 +134,28 @@ print(f"  tts median={pct(tts, 0.5):.1f}s p90={pct(tts, 0.9):.1f}s" if tts
       else "  tts: no successes")
 print(f"  collision_episodes={collided}/{n} ({collided / max(n, 1):.3f}) "
       f"min_clearance p10={pct(clr, 0.10):.2f}m")
+if records and all("contact_steps" in r for r in records):
+    contact_records = [r for r in records if r["contact_steps"] > 0]
+    contact_seconds = sorted(r["contact_seconds"] for r in contact_records)
+    contact_longest_seconds = sorted(
+        r["contact_longest_seconds"] for r in contact_records
+    )
+    total_contact_steps = sum(r["contact_steps"] for r in contact_records)
+    depth_mean = (
+        sum(
+            r["contact_depth_mean_m"] * r["contact_steps"]
+            for r in contact_records
+        ) / total_contact_steps
+        if total_contact_steps > 0
+        else float("nan")
+    )
+    print(
+        f"  contact: episodes_with_contact={len(contact_records)}/{n} "
+        f"total_s median={pct(contact_seconds, 0.5):.2f} "
+        f"p90={pct(contact_seconds, 0.9):.2f}  "
+        f"longest_s median={pct(contact_longest_seconds, 0.5):.2f}  "
+        f"depth_mean={depth_mean:.3f} m"
+    )
 # Success rate alone has no discriminative power on a task where detouring
 # works: the shifted-potential run certified 100%/100% on Task A while walking
 # a 68.6 m median path against a 29.7 m straight line -- a BIGGER detour than
