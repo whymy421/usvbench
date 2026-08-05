@@ -19,7 +19,12 @@ import isaaclab.utils.math as math_utils
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
 
-from .._shared.obs_superset import SPEED_SCALE_MPS
+from .._shared.obs_superset import (
+    SLICES,
+    SPEED_SCALE_MPS,
+    SUPERSET_DIM,
+    SUPERSET_DIM_V2,
+)
 from .._shared.restoring import restoring_torque_body
 from .._shared.vehicles import get_vehicle
 from ..docking.curriculum import DockingCurriculum
@@ -805,6 +810,18 @@ class HazardNavEnv(DirectRLEnv):
                 zero,  # no dwell state
             )
         )
+        if getattr(self.cfg, "superset_version", 1) == 2:
+            contract_observation = superset_observation.new_zeros(
+                (*superset_observation.shape[:-1], SUPERSET_DIM_V2)
+            )
+            contract_observation[..., :SUPERSET_DIM] = superset_observation
+            contract_observation[..., SLICES["kinematics"]] = torch.hstack(
+                self._body_motion_observation()
+            )
+            # Hazard navigation has no task-specific v2 channels.
+            contract_observation[..., SLICES["task_specific"]] = 0.0
+            contract_observation[..., SLICES["reserved"]] = 0.0
+            return {"policy": contract_observation}
         return {"policy": superset_observation}
 
     def _potential(self, distance: torch.Tensor) -> torch.Tensor:

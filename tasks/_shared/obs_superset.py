@@ -123,6 +123,9 @@ NATIVE_LAYOUTS: dict[str, list[int] | UnsupportedNativeLayout] = {
     "Isaac-USV-HazardFortress2-Direct-v1": list(_HAZARD_V3),
     "Isaac-USV-HazardBandFort-Direct-v1": list(_HAZARD_V3),
     "Isaac-USV-HazardBandFortSoft-Direct-v1": list(_HAZARD_V3),
+    # Contract-mode observations are already in v2 superset order, including
+    # the zero-filled task-specific and reserved slices.
+    "Isaac-USV-HazardNavC64-Direct-v1": list(range(SUPERSET_DIM_V2)),
     # Harbor staged curricula append kinematics immediately after nav.
     "Isaac-USV-HarborStage1-Direct-v1": list(_HARBOR_KIN),
     "Isaac-USV-HarborStage2-Direct-v1": list(_HARBOR_KIN),

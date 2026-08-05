@@ -294,3 +294,14 @@ gym.register(
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },
 )
+
+# First contract-mode id, subject of the smoke acceptance.
+gym.register(
+    id="Isaac-USV-HazardNavC64-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.hazard_nav_env_cfg:HazardNavC64EnvCfg",
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
