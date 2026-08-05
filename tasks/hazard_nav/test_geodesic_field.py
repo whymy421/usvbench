@@ -24,6 +24,9 @@ SPEC.loader.exec_module(geometry)
 
 LEVELS = (0, 3)
 FIELD_PADDING_M = 1.0
+WAYPOINT_LAYOUTS_PER_LEVEL = 50
+WAYPOINT_LOOKAHEAD_M = 6.0
+FOLLOW_STEP_M = 0.5
 
 
 def _field_bounds(layout: object) -> tuple[float, float, float, float]:
@@ -54,17 +57,8 @@ def _nearest_index(
 
 
 def _bilinear_value(field: np.ndarray, point: np.ndarray, origin: np.ndarray) -> float:
-    col_f, row_f = (point - origin) / geometry.GRID_CELL_M
-    col0, row0 = int(math.floor(col_f)), int(math.floor(row_f))
-    col1, row1 = min(col0 + 1, field.shape[1] - 1), min(
-        row0 + 1, field.shape[0] - 1
-    )
-    col_t, row_t = col_f - col0, row_f - row0
-    return float(
-        (1.0 - row_t) * (1.0 - col_t) * field[row0, col0]
-        + (1.0 - row_t) * col_t * field[row0, col1]
-        + row_t * (1.0 - col_t) * field[row1, col0]
-        + row_t * col_t * field[row1, col1]
+    return geometry.geodesic_field_value(
+        field, point, origin, geometry.GRID_CELL_M
     )
 
 
@@ -98,6 +92,54 @@ def _greedy_reaches_goal(
     raise AssertionError(f"greedy walk exceeded {maximum_steps} steps")
 
 
+def _follow_waypoints(
+    field: np.ndarray,
+    layout: object,
+    origin: np.ndarray,
+) -> tuple[float, int, float]:
+    descent = geometry.geodesic_descent_directions(field)
+    position = np.asarray(layout.start, dtype=np.float64).copy()
+    geodesic_distance = _bilinear_value(field, position, origin)
+    path_length = 0.0
+    minimum_waypoint_clearance = math.inf
+    maximum_steps = int(math.ceil(3.0 * geodesic_distance / FOLLOW_STEP_M)) + 1
+    for steps in range(maximum_steps):
+        distance_to_goal = float(np.linalg.norm(position - layout.goal))
+        if distance_to_goal <= 1.0e-9:
+            return path_length, steps, minimum_waypoint_clearance
+        waypoint = geometry.geodesic_waypoint(
+            field,
+            descent,
+            position,
+            layout.goal,
+            origin,
+            WAYPOINT_LOOKAHEAD_M,
+            geometry.GRID_CELL_M,
+        )
+        clearance = float(
+            np.min(np.linalg.norm(waypoint - layout.centers, axis=1) - layout.radii)
+        )
+        assert clearance + 1.0e-9 >= geometry.HALF_BEAM_M, (
+            clearance,
+            waypoint,
+        )
+        minimum_waypoint_clearance = min(minimum_waypoint_clearance, clearance)
+        to_waypoint = waypoint - position
+        waypoint_distance = float(np.linalg.norm(to_waypoint))
+        assert waypoint_distance > 1.0e-12, (position, waypoint)
+        travel = min(FOLLOW_STEP_M, waypoint_distance)
+        position += travel * to_waypoint / waypoint_distance
+        path_length += travel
+        assert path_length <= 3.0 * geodesic_distance + 1.0e-9, (
+            path_length,
+            geodesic_distance,
+        )
+    raise AssertionError(
+        f"waypoint follower missed goal after {maximum_steps} steps and "
+        f"{path_length:.3f} m"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--layouts", type=int, default=100)
@@ -110,6 +152,12 @@ def main() -> None:
     failures: list[str] = []
     total_started = time.perf_counter()
     total_fields = 0
+    waypoint_layouts = 0
+    waypoint_steps_max = 0
+    waypoint_path_ratio_max = 0.0
+    waypoint_clearance_min = math.inf
+    descent_build_ms: list[float] = []
+    waypoint_call_us: list[float] = []
     for level in LEVELS:
         build_ms: list[float] = []
         worst_route_error = 0.0
@@ -171,6 +219,36 @@ def main() -> None:
                     field[start_idx],
                     euclidean,
                 )
+                if index < WAYPOINT_LAYOUTS_PER_LEVEL:
+                    descent_started = time.perf_counter()
+                    descent = geometry.geodesic_descent_directions(field)
+                    descent_build_ms.append(
+                        1000.0 * (time.perf_counter() - descent_started)
+                    )
+                    call_started = time.perf_counter()
+                    geometry.geodesic_waypoint(
+                        field,
+                        descent,
+                        layout.start,
+                        layout.goal,
+                        origin,
+                        WAYPOINT_LOOKAHEAD_M,
+                        geometry.GRID_CELL_M,
+                    )
+                    waypoint_call_us.append(
+                        1.0e6 * (time.perf_counter() - call_started)
+                    )
+                    path_length, steps, clearance = _follow_waypoints(
+                        field, layout, origin
+                    )
+                    waypoint_layouts += 1
+                    waypoint_steps_max = max(waypoint_steps_max, steps)
+                    waypoint_path_ratio_max = max(
+                        waypoint_path_ratio_max, path_length / spawn_distance
+                    )
+                    waypoint_clearance_min = min(
+                        waypoint_clearance_min, clearance
+                    )
                 total_fields += 1
             except Exception as error:
                 failures.append(f"level {level} layout {index}: {error}")
@@ -197,6 +275,14 @@ def main() -> None:
         f"PASS: {total_fields} geodesic fields across levels {LEVELS}; "
         f"goal=0, router agreement<=one cell diagonal, greedy descent reached goal, "
         f"outside>=Euclidean ({elapsed:.2f}s)"
+    )
+    print(
+        f"PASS: {waypoint_layouts} waypoint followers; "
+        f"steps_max={waypoint_steps_max}, "
+        f"path/geodesic_max={waypoint_path_ratio_max:.3f}, "
+        f"waypoint_clearance_min={waypoint_clearance_min:.3f}m, "
+        f"descent_build_mean={np.mean(descent_build_ms):.2f}ms, "
+        f"waypoint_call_mean={np.mean(waypoint_call_us):.2f}us"
     )
 
 

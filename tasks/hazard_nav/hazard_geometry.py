@@ -273,6 +273,133 @@ def geodesic_distance_field(
     return _dijkstra_distance_field(occupied, (goal_row, goal_col), cell_m)
 
 
+def geodesic_descent_directions(field: np.ndarray) -> np.ndarray:
+    """Return the lowest-neighbour descent hop for every field cell.
+
+    Directions are ``(d_row, d_col)`` int8 pairs. A zero pair marks the goal
+    or a cell with no strictly lower finite neighbour. Computing this once at
+    reset keeps waypoint extraction to indexed lookups during control steps.
+    """
+    field = np.asarray(field)
+    if field.ndim != 2 or not np.issubdtype(field.dtype, np.floating):
+        raise ValueError("field must be a two-dimensional floating array")
+
+    height, width = field.shape
+    offsets = np.asarray(
+        (
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+        ),
+        dtype=np.int64,
+    )
+    padded = np.pad(field, 1, constant_values=np.inf)
+    neighbours = np.stack(
+        [
+            padded[
+                1 + d_row : 1 + d_row + height,
+                1 + d_col : 1 + d_col + width,
+            ]
+            for d_row, d_col in offsets
+        ]
+    )
+    choice = np.argmin(neighbours, axis=0)
+    best = np.take_along_axis(neighbours, choice[None], axis=0)[0]
+    directions = np.zeros((*field.shape, 2), dtype=np.int8)
+    descending = best < field
+    directions[descending] = offsets[choice[descending]]
+    return directions
+
+
+def geodesic_field_value(
+    field: np.ndarray,
+    point_xy: np.ndarray,
+    origin_xy: np.ndarray,
+    cell_m: float = GRID_CELL_M,
+) -> float:
+    """Bilinearly sample a field without evaluating ``0 * inf`` corners."""
+    if cell_m <= 0.0:
+        raise ValueError("cell_m must be positive")
+    col_f, row_f = (
+        np.asarray(point_xy, dtype=np.float64)
+        - np.asarray(origin_xy, dtype=np.float64)
+    ) / cell_m
+    col_f = float(np.clip(col_f, 0.0, field.shape[1] - 1))
+    row_f = float(np.clip(row_f, 0.0, field.shape[0] - 1))
+    col0, row0 = int(math.floor(col_f)), int(math.floor(row_f))
+    col1, row1 = min(col0 + 1, field.shape[1] - 1), min(
+        row0 + 1, field.shape[0] - 1
+    )
+    col_t, row_t = col_f - col0, row_f - row0
+    sampled = 0.0
+    for row, col, weight in (
+        (row0, col0, (1.0 - row_t) * (1.0 - col_t)),
+        (row0, col1, (1.0 - row_t) * col_t),
+        (row1, col0, row_t * (1.0 - col_t)),
+        (row1, col1, row_t * col_t),
+    ):
+        if weight > 0.0:
+            sampled += weight * float(field[row, col])
+    return sampled
+
+
+def geodesic_waypoint(
+    field: np.ndarray,
+    descent_directions: np.ndarray,
+    point_xy: np.ndarray,
+    goal_xy: np.ndarray,
+    origin_xy: np.ndarray,
+    lookahead_m: float,
+    cell_m: float = GRID_CELL_M,
+) -> np.ndarray:
+    """Extract a lookahead waypoint by hopping down a solved field."""
+    if lookahead_m <= 0.0 or cell_m <= 0.0:
+        raise ValueError("lookahead_m and cell_m must be positive")
+    if descent_directions.shape != (*field.shape, 2):
+        raise ValueError("descent_directions shape must be (*field.shape, 2)")
+
+    point = np.asarray(point_xy, dtype=np.float64)
+    goal = np.asarray(goal_xy, dtype=np.float64)
+    origin = np.asarray(origin_xy, dtype=np.float64)
+    if geodesic_field_value(field, point, origin, cell_m) < lookahead_m:
+        return goal.copy()
+
+    col, row = np.rint((point - origin) / cell_m).astype(np.int64)
+    row = int(np.clip(row, 0, field.shape[0] - 1))
+    col = int(np.clip(col, 0, field.shape[1] - 1))
+    waypoint = origin + cell_m * np.asarray((col, row), dtype=np.float64)
+    remaining = float(lookahead_m)
+
+    # Attach the exact continuous position to its nearest route cell first.
+    attachment = float(np.linalg.norm(waypoint - point))
+    if attachment >= remaining:
+        return waypoint
+    remaining -= attachment
+
+    max_hops = int(math.ceil(lookahead_m / cell_m)) + 1
+    for _ in range(max_hops):
+        d_row, d_col = (
+            int(value) for value in descent_directions[row, col]
+        )
+        hop_m = cell_m * math.hypot(d_row, d_col)
+        if hop_m == 0.0:
+            # This is unreachable for a valid finite non-goal Dijkstra cell.
+            # The exact goal is the only safe, deterministic recovery target.
+            return goal.copy()
+        waypoint += cell_m * np.asarray((d_col, d_row))
+        remaining -= hop_m
+        if remaining <= 1.0e-9:
+            return waypoint
+        row += d_row
+        col += d_col
+    return waypoint
+
+
 def route_geodesic_length(
     start_xy: np.ndarray,
     centers: np.ndarray,
@@ -1975,7 +2102,10 @@ __all__ = [
     "bfs_geodesic_length",
     "difficulty_for_level",
     "direct_segment_blocked",
+    "geodesic_descent_directions",
     "geodesic_distance_field",
+    "geodesic_field_value",
+    "geodesic_waypoint",
     "inflated_radii",
     "minimum_pairwise_inflated_gap",
     "ray_circle_ranges",
