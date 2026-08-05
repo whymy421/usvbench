@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
+import heapq
 import math
 import warnings
 
@@ -146,6 +147,220 @@ def minimum_pairwise_inflated_gap(
     return float(np.min(gap))
 
 
+def _occupancy_grid(
+    centers: np.ndarray,
+    radii: np.ndarray,
+    xs: np.ndarray,
+    ys: np.ndarray,
+    inflation_m: float,
+) -> np.ndarray:
+    """Rasterize inflated cylinders at the supplied grid-cell centers."""
+    centers = np.asarray(centers, dtype=np.float64).reshape(-1, 2)
+    radii_i = inflated_radii(np.asarray(radii, dtype=np.float64), inflation_m)
+    occupied = np.zeros((len(ys), len(xs)), dtype=np.bool_)
+    if len(centers):
+        xx, yy = np.meshgrid(xs, ys)
+        dx = xx[..., None] - centers[:, 0]
+        dy = yy[..., None] - centers[:, 1]
+        occupied = np.any(dx * dx + dy * dy <= radii_i * radii_i, axis=-1)
+    return occupied
+
+
+def _dijkstra_distance_field(
+    occupied: np.ndarray,
+    goal_idx: tuple[int, int],
+    cell_m: float,
+) -> np.ndarray:
+    """Return weighted eight-connected distances from one free goal cell."""
+    if occupied[goal_idx]:
+        return np.full(occupied.shape, np.inf, dtype=np.float32)
+
+    cardinal_cost = float(cell_m)
+    diagonal_cost = math.sqrt(2.0) * cardinal_cost
+    height, width = occupied.shape
+    stride = width + 2
+    padded_occupied = np.ones((height + 2, width + 2), dtype=np.bool_)
+    padded_occupied[1:-1, 1:-1] = occupied
+    occupied_flat = padded_occupied.ravel()
+    neighbours = (
+        (1, cardinal_cost),
+        (-1, cardinal_cost),
+        (stride, cardinal_cost),
+        (-stride, cardinal_cost),
+        (stride + 1, diagonal_cost),
+        (stride - 1, diagonal_cost),
+        (-stride + 1, diagonal_cost),
+        (-stride - 1, diagonal_cost),
+    )
+    # Keep heap and array costs at the same precision. Storing heap candidates
+    # into float32 can round upward and repeatedly re-enqueue the same cell.
+    distances = np.full(padded_occupied.size, np.inf, dtype=np.float64)
+    goal_node = (goal_idx[0] + 1) * stride + goal_idx[1] + 1
+    distances[goal_node] = 0.0
+    queue: list[tuple[float, int]] = [(0.0, goal_node)]
+    while queue:
+        distance, node = heapq.heappop(queue)
+        if distance > distances[node]:
+            continue
+        for offset, move_cost in neighbours:
+            next_node = node + offset
+            if occupied_flat[next_node]:
+                continue
+            candidate = distance + move_cost
+            if candidate < distances[next_node]:
+                distances[next_node] = candidate
+                heapq.heappush(queue, (candidate, next_node))
+    return distances.reshape(height + 2, width + 2)[1:-1, 1:-1].astype(
+        np.float32
+    )
+
+
+def _bounded_grid_axes(
+    bounds_m: float | tuple[float, float, float, float], cell_m: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return snapped cell-center axes for scalar or explicit arena bounds."""
+    if np.isscalar(bounds_m):
+        extent = float(bounds_m)
+        if extent <= 0.0:
+            raise ValueError("scalar bounds_m must be positive")
+        x_min = y_min = -extent
+        x_max = y_max = extent
+    else:
+        if len(bounds_m) != 4:
+            raise ValueError(
+                "bounds_m must be a scalar or (x_min, x_max, y_min, y_max)"
+            )
+        x_min, x_max, y_min, y_max = (float(value) for value in bounds_m)
+        if x_min >= x_max or y_min >= y_max:
+            raise ValueError("bounds_m minima must be smaller than maxima")
+
+    x_min = math.floor(x_min / cell_m) * cell_m
+    x_max = math.ceil(x_max / cell_m) * cell_m
+    y_min = math.floor(y_min / cell_m) * cell_m
+    y_max = math.ceil(y_max / cell_m) * cell_m
+    xs = np.arange(x_min, x_max + 0.5 * cell_m, cell_m, dtype=np.float64)
+    ys = np.arange(y_min, y_max + 0.5 * cell_m, cell_m, dtype=np.float64)
+    return xs, ys
+
+
+def geodesic_distance_field(
+    centers: np.ndarray,
+    radii: np.ndarray,
+    goal_xy: np.ndarray,
+    bounds_m: float | tuple[float, float, float, float],
+    cell_m: float = GRID_CELL_M,
+    half_beam_m: float = HALF_BEAM_M,
+) -> np.ndarray:
+    """Build a float32 geodesic distance-to-goal field over an arena grid.
+
+    A scalar ``bounds_m`` denotes the square ``[-bounds_m, bounds_m]^2``.
+    Four values denote ``(x_min, x_max, y_min, y_max)``. Bounds are snapped
+    outward to the cell lattice, cells are sampled at those lattice points,
+    and cells inside half-beam-inflated cylinders remain ``+inf``.
+    """
+    if cell_m <= 0.0 or half_beam_m < 0.0:
+        raise ValueError("cell_m must be positive and half_beam_m non-negative")
+    xs, ys = _bounded_grid_axes(bounds_m, cell_m)
+    occupied = _occupancy_grid(centers, radii, xs, ys, half_beam_m)
+
+    goal = np.asarray(goal_xy, dtype=np.float64)
+    goal_col = int(
+        np.clip(round((float(goal[0]) - xs[0]) / cell_m), 0, len(xs) - 1)
+    )
+    goal_row = int(
+        np.clip(round((float(goal[1]) - ys[0]) / cell_m), 0, len(ys) - 1)
+    )
+    return _dijkstra_distance_field(occupied, (goal_row, goal_col), cell_m)
+
+
+def route_geodesic_length(
+    start_xy: np.ndarray,
+    centers: np.ndarray,
+    radii: np.ndarray,
+    goal_xy: np.ndarray,
+    bounds_m: float | tuple[float, float, float, float],
+    cell_m: float = GRID_CELL_M,
+    half_beam_m: float = HALF_BEAM_M,
+) -> float | None:
+    """Independently route start-to-goal with weighted eight-connected A*."""
+    if cell_m <= 0.0 or half_beam_m < 0.0:
+        raise ValueError("cell_m must be positive and half_beam_m non-negative")
+    xs, ys = _bounded_grid_axes(bounds_m, cell_m)
+    occupied = _occupancy_grid(centers, radii, xs, ys, half_beam_m)
+    start = np.asarray(start_xy, dtype=np.float64)
+    goal = np.asarray(goal_xy, dtype=np.float64)
+
+    def nearest_index(point: np.ndarray) -> tuple[int, int]:
+        col = int(np.clip(round((float(point[0]) - xs[0]) / cell_m), 0, len(xs) - 1))
+        row = int(np.clip(round((float(point[1]) - ys[0]) / cell_m), 0, len(ys) - 1))
+        return row, col
+
+    start_idx, goal_idx = nearest_index(start), nearest_index(goal)
+    if occupied[start_idx] or occupied[goal_idx]:
+        return None
+
+    cardinal_cost = float(cell_m)
+    diagonal_cost = math.sqrt(2.0) * cardinal_cost
+    neighbours = (
+        (0, 1, cardinal_cost),
+        (0, -1, cardinal_cost),
+        (1, 0, cardinal_cost),
+        (-1, 0, cardinal_cost),
+        (1, 1, diagonal_cost),
+        (1, -1, diagonal_cost),
+        (-1, 1, diagonal_cost),
+        (-1, -1, diagonal_cost),
+    )
+
+    def heuristic(row: int, col: int) -> float:
+        d_row = abs(goal_idx[0] - row)
+        d_col = abs(goal_idx[1] - col)
+        diagonal_steps = min(d_row, d_col)
+        return diagonal_steps * diagonal_cost + abs(d_row - d_col) * cardinal_cost
+
+    best = np.full(occupied.shape, np.inf, dtype=np.float64)
+    best[start_idx] = 0.0
+    queue: list[tuple[float, float, int, int]] = [
+        (heuristic(*start_idx), 0.0, start_idx[0], start_idx[1])
+    ]
+    height, width = occupied.shape
+    route_length: float | None = None
+    while queue:
+        _estimate, distance, row, col = heapq.heappop(queue)
+        if distance > best[row, col]:
+            continue
+        if (row, col) == goal_idx:
+            route_length = distance
+            break
+        for d_row, d_col, move_cost in neighbours:
+            next_row, next_col = row + d_row, col + d_col
+            if not (0 <= next_row < height and 0 <= next_col < width):
+                continue
+            if occupied[next_row, next_col]:
+                continue
+            candidate = distance + move_cost
+            if candidate < best[next_row, next_col]:
+                best[next_row, next_col] = candidate
+                heapq.heappush(
+                    queue,
+                    (
+                        candidate + heuristic(next_row, next_col),
+                        candidate,
+                        next_row,
+                        next_col,
+                    ),
+                )
+    if route_length is None:
+        return None
+    start_cell = np.array((xs[start_idx[1]], ys[start_idx[0]]))
+    goal_cell = np.array((xs[goal_idx[1]], ys[goal_idx[0]]))
+    return (
+        route_length
+        + float(np.linalg.norm(start - start_cell))
+        + float(np.linalg.norm(goal - goal_cell))
+    )
+
+
 def bfs_geodesic_length(
     start: np.ndarray,
     goal: np.ndarray,
@@ -187,12 +402,7 @@ def bfs_geodesic_length(
     xs = np.arange(x_min, x_max + 0.5 * cell_m, cell_m)
     ys = np.arange(y_min, y_max + 0.5 * cell_m, cell_m)
 
-    occupied = np.zeros((len(ys), len(xs)), dtype=np.bool_)
-    if len(centers):
-        xx, yy = np.meshgrid(xs, ys)
-        dx = xx[..., None] - centers[:, 0]
-        dy = yy[..., None] - centers[:, 1]
-        occupied = np.any(dx * dx + dy * dy <= radii_i * radii_i, axis=-1)
+    occupied = _occupancy_grid(centers, radii, xs, ys, inflation_m)
 
     def nearest_index(point: np.ndarray) -> tuple[int, int]:
         col = int(np.clip(round((float(point[0]) - x_min) / cell_m), 0, len(xs) - 1))
@@ -1765,9 +1975,11 @@ __all__ = [
     "bfs_geodesic_length",
     "difficulty_for_level",
     "direct_segment_blocked",
+    "geodesic_distance_field",
     "inflated_radii",
     "minimum_pairwise_inflated_gap",
     "ray_circle_ranges",
+    "route_geodesic_length",
     "sample_forced_crossing_layout",
     "sample_band_fortress_layout",
     "sample_double_ring_fortress_layout",

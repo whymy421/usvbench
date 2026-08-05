@@ -198,6 +198,10 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     eval_level: int = 0
 
     reward_progress_scale: float = 20.0
+    # Optional fortress-only substitution: progress follows the certified
+    # half-beam geodesic field instead of straight-line distance. Off keeps the
+    # historical reward path byte-for-byte unchanged for every existing id.
+    reward_progress_geodesic: bool = False
     # v6a: quadratic graze tax retired (0.0) but KEPT for the shape-ablation
     # arm -- reward_clearance_scale=1.0 + reward_prox_scale=0.0 restores the
     # exact v5 reward path.
@@ -390,6 +394,15 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
                 "layout_mode must be 'scatter', 'ring', 'ring2', 'fortress', "
                 "'fortress2', 'bandfort', 'forced' or 'basin'"
             )
+        if self.reward_progress_geodesic and self.layout_mode not in (
+            "bandfort",
+            "fortress",
+            "fortress2",
+        ):
+            raise ValueError(
+                "reward_progress_geodesic requires layout_mode 'bandfort', "
+                "'fortress' or 'fortress2'"
+            )
         # Undersizing this crashes the first reset of the affected tier, which
         # is how no pre-v6 run ever contained level-3 experience. The forced
         # floor is the 10k-layout audit's worst case (79) plus headroom.
@@ -572,6 +585,13 @@ class HazardBandFortEnvCfg(HazardNavV3EnvCfg):
     # 24 reset-buffer slots of headroom without changing the canonical ledger.
     max_obstacles: int = 96
     layout_max_attempts: int = 80
+
+
+@configclass
+class HazardBandFortGeoEnvCfg(HazardBandFortEnvCfg):
+    """Band fortress whose unchanged progress ledger uses route distance."""
+
+    reward_progress_geodesic: bool = True
 
 
 @configclass

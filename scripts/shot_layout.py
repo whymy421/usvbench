@@ -15,10 +15,11 @@ parser.add_argument("--level", type=int, required=True)
 parser.add_argument("--out", required=True)
 parser.add_argument("--warmup-frames", type=int, default=90)
 AppLauncher.add_app_launcher_args(parser)
-args_cli, hydra_args = parser.parse_known_args()
-args_cli.headless = True
-args_cli.enable_cameras = True
-sys.argv = [sys.argv[0]] + hydra_args
+# Boot EXACTLY like demos/render_probe.py, which renders fine on the same
+# dual-GPU machine where the parse_known_args + sys.argv-strip variant dies
+# at AppLauncher with "Vulkan: Flags 0x6 must be the same for both device
+# and instance". Kit reads sys.argv during boot; do not strip it.
+args_cli = parser.parse_args()
 app = AppLauncher(args_cli).app
 
 import gymnasium as gym  # noqa: E402
@@ -35,7 +36,12 @@ if hasattr(env_cfg, "curriculum_frozen"):
     env_cfg.curriculum_frozen = True
     env_cfg.eval_level = args_cli.level
 
-env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array")
+# No render_mode: rgb_array makes DirectRLEnv build its own viewport render
+# product, and on the dual-GPU 4080 that internal engine lands on the AMD
+# iGPU and Hydra dies ("failed creating scene renderer", deviceMask 1) --
+# every probe that skips env-owned rendering and captures via an explicit
+# replicator product on /OmniverseKit_Persp works on the same machine.
+env = gym.make(args_cli.task, cfg=env_cfg)
 base = env.unwrapped
 env.reset()
 
@@ -49,8 +55,15 @@ base.sim.set_camera_view(
 render_product = rep.create.render_product("/OmniverseKit_Persp", (1280, 1280))
 rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb")
 rgb_annotator.attach([render_product])
-for _ in range(args_cli.warmup_frames):
+# The env's viewer controller re-applies its own (robot-follow, close-up)
+# eye during rendering -- the same fight the demo recorder hit. Keep
+# re-asserting the top-down framing through the warmup, and once more
+# right before capture.
+for i in range(args_cli.warmup_frames):
+    if i % 10 == 0:
+        base.sim.set_camera_view(eye=(ox, oy, 95.0), target=(ox, oy, 0.0))
     base.sim.render()
+base.sim.set_camera_view(eye=(ox, oy, 95.0), target=(ox, oy, 0.0))
 
 frame = None
 for _ in range(4):
