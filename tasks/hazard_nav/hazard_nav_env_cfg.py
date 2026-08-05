@@ -17,7 +17,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 
-from .._shared.obs_superset import SUPERSET_DIM
+from .._shared.obs_superset import SUPERSET_DIM, SUPERSET_DIM_V2
 from .._shared.vehicles import VehicleSpec, get_vehicle
 
 
@@ -149,6 +149,7 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     observation_space = 39
     state_space = 0
     emit_superset_obs: bool = False
+    superset_version: int = 1
     # B1 (v2 id): native obs gains the reached latch + speed_norm (41-D), the
     # superset stage slot carries the latch, and the swiftness term activates.
     obs_v2: bool = False
@@ -357,6 +358,8 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
 
         if self.obs_v2 and self.obs_v3:
             raise ValueError("obs_v2 and obs_v3 are mutually exclusive")
+        if self.superset_version not in (1, 2):
+            raise ValueError("superset_version must be 1 or 2")
         # Feasibility pooling collapses the ray block into one number per
         # sector, so the range part of the observation shrinks accordingly.
         range_dim = (
@@ -368,14 +371,18 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             native_dim = 5 + range_dim
         else:
             native_dim = 3 + range_dim
-        expected_observation_space = (
-            SUPERSET_DIM if self.emit_superset_obs else native_dim
-        )
+        if self.emit_superset_obs:
+            expected_observation_space = (
+                SUPERSET_DIM_V2 if self.superset_version == 2 else SUPERSET_DIM
+            )
+        else:
+            expected_observation_space = native_dim
         if self.ray_count != 36 or self.observation_space != expected_observation_space:
             raise ValueError(
                 "HazardNav requires 36 rays and observation_space="
                 f"{expected_observation_space} when "
                 f"emit_superset_obs={self.emit_superset_obs}, "
+                f"superset_version={self.superset_version}, "
                 f"obs_v2={self.obs_v2}, obs_v3={self.obs_v3}"
             )
         if self.yaw_rate_obs_scale_rad_s <= 0.0:
@@ -461,6 +468,15 @@ class HazardNavV3EnvCfg(HazardNavEnvCfg):
         asset_name="robot",
         resolution=(1280, 720),
     )
+
+
+@configclass
+class HazardNavC64EnvCfg(HazardNavV3EnvCfg):
+    """V3 scatter task emitting the complete observation contract v2."""
+
+    emit_superset_obs: bool = True
+    superset_version: int = 2
+    observation_space = 64
 
 
 @configclass
