@@ -24,7 +24,10 @@ from .._shared.restoring import restoring_torque_body
 from .._shared.vehicles import get_vehicle
 from ..docking.curriculum import DockingCurriculum
 from .hazard_geometry import (
+    GRID_CELL_M,
+    HALF_BEAM_M,
     analytic_min_clearance,
+    geodesic_distance_field,
     ray_circle_ranges,
     sample_band_fortress_layout,
     sample_double_ring_fortress_layout,
@@ -41,6 +44,27 @@ from .hazard_nav_env_cfg import HazardNavEnvCfg
 def _space_dim(space: object) -> int:
     shape = getattr(space, "shape", None)
     return int(shape[0]) if shape else int(space)
+
+
+_GEODESIC_FIELD_EXTENT_M = 45.0
+_GEODESIC_FIELD_PADDING_M = 1.0
+_GEODESIC_FIELD_CELLS = int(2.0 * _GEODESIC_FIELD_EXTENT_M / GRID_CELL_M) + 1
+
+
+def _bilinear_numpy(field: np.ndarray, xy: np.ndarray, origin: np.ndarray) -> float:
+    """Sample one in-bounds CPU field using the runtime interpolation rule."""
+    col_f, row_f = (np.asarray(xy) - origin) / GRID_CELL_M
+    col0, row0 = int(math.floor(col_f)), int(math.floor(row_f))
+    col1, row1 = min(col0 + 1, field.shape[1] - 1), min(
+        row0 + 1, field.shape[0] - 1
+    )
+    col_t, row_t = col_f - col0, row_f - row0
+    return float(
+        (1.0 - row_t) * (1.0 - col_t) * field[row0, col0]
+        + (1.0 - row_t) * col_t * field[row0, col1]
+        + row_t * (1.0 - col_t) * field[row1, col0]
+        + row_t * col_t * field[row1, col1]
+    )
 
 
 class HazardNavEnv(DirectRLEnv):
@@ -90,6 +114,28 @@ class HazardNavEnv(DirectRLEnv):
             self.num_envs, dtype=torch.long, device=self.device
         )
         self._route_geodesic_length = torch.zeros(self.num_envs, device=self.device)
+        if self.cfg.reward_progress_geodesic:
+            self._geodesic_fields = torch.full(
+                (
+                    self.num_envs,
+                    _GEODESIC_FIELD_CELLS,
+                    _GEODESIC_FIELD_CELLS,
+                ),
+                torch.inf,
+                device=self.device,
+            )
+            self._geodesic_field_origin = torch.zeros(
+                (self.num_envs, 2), device=self.device
+            )
+            self._geodesic_field_cell = torch.full(
+                (self.num_envs,), GRID_CELL_M, device=self.device
+            )
+            self._geodesic_field_shape = torch.zeros(
+                (self.num_envs, 2), dtype=torch.long, device=self.device
+            )
+            self._geodesic_field_max = torch.zeros(
+                self.num_envs, device=self.device
+            )
 
         self.path_length = torch.zeros(self.num_envs, device=self.device)
         self._min_clearance = torch.full(
@@ -778,9 +824,59 @@ class HazardNavEnv(DirectRLEnv):
             return 1.0 - fraction
         return -fraction
 
+    def _geodesic_progress_distance(
+        self, euclidean_distance: torch.Tensor
+    ) -> torch.Tensor:
+        """Bilinearly sample each environment's local geodesic field."""
+        local_xy = self._com_xy() - self.scene.env_origins[:, :2]
+        grid_xy = (local_xy - self._geodesic_field_origin) / (
+            self._geodesic_field_cell.unsqueeze(-1)
+        )
+        col_f, row_f = grid_xy.unbind(dim=-1)
+        height = self._geodesic_field_shape[:, 0]
+        width = self._geodesic_field_shape[:, 1]
+        outside = (
+            (col_f < 0.0)
+            | (row_f < 0.0)
+            | (col_f > (width - 1).float())
+            | (row_f > (height - 1).float())
+        )
+
+        col_f = torch.minimum(
+            torch.clamp_min(col_f, 0.0), (width - 1).float()
+        )
+        row_f = torch.minimum(
+            torch.clamp_min(row_f, 0.0), (height - 1).float()
+        )
+        col0 = torch.floor(col_f).long()
+        row0 = torch.floor(row_f).long()
+        col1 = torch.minimum(col0 + 1, width - 1)
+        row1 = torch.minimum(row0 + 1, height - 1)
+        col_t = col_f - col0.float()
+        row_t = row_f - row0.float()
+        env_index = torch.arange(self.num_envs, device=self.device)
+
+        def weighted(row: torch.Tensor, col: torch.Tensor, weight: torch.Tensor):
+            values = self._geodesic_fields[env_index, row, col]
+            return torch.where(weight > 0.0, values * weight, torch.zeros_like(values))
+
+        sampled = (
+            weighted(row0, col0, (1.0 - row_t) * (1.0 - col_t))
+            + weighted(row0, col1, (1.0 - row_t) * col_t)
+            + weighted(row1, col0, row_t * (1.0 - col_t))
+            + weighted(row1, col1, row_t * col_t)
+        )
+        # Leaving the solved arena (or overlapping an inflated blocked cell)
+        # cannot manufacture progress: use field_max + straight-line distance.
+        fallback = self._geodesic_field_max + euclidean_distance
+        return torch.where(outside | ~torch.isfinite(sampled), fallback, sampled)
+
     def _get_rewards(self) -> torch.Tensor:
         distance = self._horizontal_distance()
-        potential = self._potential(distance)
+        progress_distance = distance
+        if self.cfg.reward_progress_geodesic:
+            progress_distance = self._geodesic_progress_distance(distance)
+        potential = self._potential(progress_distance)
         if self.cfg.pbrs_correct:
             # gamma*Phi(s') - Phi(s): the form that provably leaves the optimal
             # policy unchanged (Ng, Harada & Russell 1999). IsaacLab fills
@@ -1132,6 +1228,19 @@ class HazardNavEnv(DirectRLEnv):
         geodesic_np = np.zeros(num_resets, dtype=np.float32)
         d0_np = np.zeros(num_resets, dtype=np.float32)
         counts_np = np.zeros(num_resets, dtype=np.int64)
+        if self.cfg.reward_progress_geodesic:
+            geodesic_fields_np = np.full(
+                (
+                    num_resets,
+                    _GEODESIC_FIELD_CELLS,
+                    _GEODESIC_FIELD_CELLS,
+                ),
+                np.inf,
+                dtype=np.float32,
+            )
+            geodesic_origins_np = np.zeros((num_resets, 2), dtype=np.float32)
+            geodesic_shapes_np = np.zeros((num_resets, 2), dtype=np.int64)
+            geodesic_max_np = np.zeros(num_resets, dtype=np.float32)
         level = self.current_level
         for row in range(num_resets):
             if self.cfg.layout_mode == "ring":
@@ -1214,8 +1323,71 @@ class HazardNavEnv(DirectRLEnv):
             local_centers_np[row, :count] = rotated_centers
             radii_np[row, :count] = layout.radii
             active_np[row, :count] = True
-            geodesic_np[row] = layout.geodesic_length
-            d0_np[row] = float(np.linalg.norm(layout.goal - layout.start))
+            if self.cfg.reward_progress_geodesic:
+                inflated = layout.radii + HALF_BEAM_M
+                bounds = (
+                    min(
+                        rotated_start[0],
+                        rotated_goal[0],
+                        np.min(rotated_centers[:, 0] - inflated),
+                    )
+                    - _GEODESIC_FIELD_PADDING_M,
+                    max(
+                        rotated_start[0],
+                        rotated_goal[0],
+                        np.max(rotated_centers[:, 0] + inflated),
+                    )
+                    + _GEODESIC_FIELD_PADDING_M,
+                    min(
+                        rotated_start[1],
+                        rotated_goal[1],
+                        np.min(rotated_centers[:, 1] - inflated),
+                    )
+                    - _GEODESIC_FIELD_PADDING_M,
+                    max(
+                        rotated_start[1],
+                        rotated_goal[1],
+                        np.max(rotated_centers[:, 1] + inflated),
+                    )
+                    + _GEODESIC_FIELD_PADDING_M,
+                )
+                field = geodesic_distance_field(
+                    rotated_centers,
+                    layout.radii,
+                    rotated_goal,
+                    bounds,
+                    cell_m=GRID_CELL_M,
+                    half_beam_m=HALF_BEAM_M,
+                )
+                height, width = field.shape
+                if (
+                    height > _GEODESIC_FIELD_CELLS
+                    or width > _GEODESIC_FIELD_CELLS
+                ):
+                    raise RuntimeError(
+                        f"geodesic field {field.shape} exceeds packed "
+                        f"{_GEODESIC_FIELD_CELLS}x{_GEODESIC_FIELD_CELLS} arena"
+                    )
+                origin = GRID_CELL_M * np.floor(
+                    np.asarray((bounds[0], bounds[2])) / GRID_CELL_M
+                )
+                finite = np.isfinite(field)
+                if not np.any(finite):
+                    raise RuntimeError("geodesic field has no goal-reachable cells")
+                spawn_geodesic = _bilinear_numpy(field, rotated_start, origin)
+                if not math.isfinite(spawn_geodesic):
+                    raise RuntimeError("spawn is not finite in geodesic field")
+                geodesic_fields_np[row, :height, :width] = field
+                geodesic_origins_np[row] = origin
+                geodesic_shapes_np[row] = (height, width)
+                geodesic_max_np[row] = float(np.max(field[finite]))
+                # The progress denominator and the public route diagnostic are
+                # exactly the same bilinear spawn-to-goal field distance.
+                geodesic_np[row] = spawn_geodesic
+                d0_np[row] = spawn_geodesic
+            else:
+                geodesic_np[row] = layout.geodesic_length
+                d0_np[row] = float(np.linalg.norm(layout.goal - layout.start))
             counts_np[row] = count
 
         local_starts = torch.as_tensor(
@@ -1238,6 +1410,19 @@ class HazardNavEnv(DirectRLEnv):
         self._route_geodesic_length[env_ids] = torch.as_tensor(
             geodesic_np, device=self.device
         )
+        if self.cfg.reward_progress_geodesic:
+            self._geodesic_fields[env_ids] = torch.as_tensor(
+                geodesic_fields_np, device=self.device
+            )
+            self._geodesic_field_origin[env_ids] = torch.as_tensor(
+                geodesic_origins_np, device=self.device
+            )
+            self._geodesic_field_shape[env_ids] = torch.as_tensor(
+                geodesic_shapes_np, device=self.device
+            )
+            self._geodesic_field_max[env_ids] = torch.as_tensor(
+                geodesic_max_np, device=self.device
+            )
         self.obstacle_count[env_ids] = torch.as_tensor(counts_np, device=self.device)
         self.curriculum_level[env_ids] = level
 
