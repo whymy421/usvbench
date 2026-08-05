@@ -203,6 +203,10 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # half-beam geodesic field instead of straight-line distance. Off keeps the
     # historical reward path byte-for-byte unchanged for every existing id.
     reward_progress_geodesic: bool = False
+    # Option-b perception coupling: point nav channels at a short-horizon
+    # carrot on the solved route. Off preserves every existing observation.
+    nav_targets_waypoint: bool = False
+    waypoint_lookahead_m: float = 6.0
     # v6a: quadratic graze tax retired (0.0) but KEPT for the shape-ablation
     # arm -- reward_clearance_scale=1.0 + reward_prox_scale=0.0 restores the
     # exact v5 reward path.
@@ -410,6 +414,12 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
                 "reward_progress_geodesic requires layout_mode 'bandfort', "
                 "'fortress' or 'fortress2'"
             )
+        if self.nav_targets_waypoint and not self.reward_progress_geodesic:
+            raise ValueError(
+                "nav_targets_waypoint requires reward_progress_geodesic"
+            )
+        if self.waypoint_lookahead_m <= 0.0:
+            raise ValueError("waypoint_lookahead_m must be positive")
         # Undersizing this crashes the first reset of the affected tier, which
         # is how no pre-v6 run ever contained level-3 experience. The forced
         # floor is the 10k-layout audit's worst case (79) plus headroom.
@@ -608,6 +618,14 @@ class HazardBandFortGeoEnvCfg(HazardBandFortEnvCfg):
     """Band fortress whose unchanged progress ledger uses route distance."""
 
     reward_progress_geodesic: bool = True
+
+
+@configclass
+class HazardBandFortWayEnvCfg(HazardBandFortGeoEnvCfg):
+    """Geodesic band fortress exposing a moving route waypoint."""
+
+    nav_targets_waypoint: bool = True
+    waypoint_lookahead_m: float = 6.0
 
 
 @configclass

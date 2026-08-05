@@ -32,6 +32,7 @@ from .hazard_geometry import (
     GRID_CELL_M,
     HALF_BEAM_M,
     analytic_min_clearance,
+    geodesic_descent_directions,
     geodesic_distance_field,
     ray_circle_ranges,
     sample_band_fortress_layout,
@@ -141,6 +142,17 @@ class HazardNavEnv(DirectRLEnv):
             self._geodesic_field_max = torch.zeros(
                 self.num_envs, device=self.device
             )
+            if self.cfg.nav_targets_waypoint:
+                self._geodesic_descent_directions = torch.zeros(
+                    (
+                        self.num_envs,
+                        _GEODESIC_FIELD_CELLS,
+                        _GEODESIC_FIELD_CELLS,
+                        2,
+                    ),
+                    dtype=torch.int8,
+                    device=self.device,
+                )
 
         self.path_length = torch.zeros(self.num_envs, device=self.device)
         self._min_clearance = torch.full(
@@ -724,7 +736,17 @@ class HazardNavEnv(DirectRLEnv):
     def _get_observations(self) -> dict:
         position_to_goal = self.target_pos - self._com_xy()
         distance = torch.norm(position_to_goal, dim=-1, keepdim=True)
-        direction_to_goal = position_to_goal / distance.clamp_min(1.0e-6)
+        if self.cfg.nav_targets_waypoint:
+            geodesic_distance = self._geodesic_progress_distance(
+                distance.squeeze(-1)
+            )
+            waypoint = self._geodesic_waypoint(geodesic_distance)
+            position_to_goal = waypoint - self._com_xy()
+            distance = geodesic_distance.unsqueeze(-1)
+            bearing_distance = torch.norm(position_to_goal, dim=-1, keepdim=True)
+        else:
+            bearing_distance = distance
+        direction_to_goal = position_to_goal / bearing_distance.clamp_min(1.0e-6)
         forward = self._forward_2d()
         dot = torch.sum(forward * direction_to_goal, dim=-1, keepdim=True)
         cross = (
@@ -887,6 +909,59 @@ class HazardNavEnv(DirectRLEnv):
         # cannot manufacture progress: use field_max + straight-line distance.
         fallback = self._geodesic_field_max + euclidean_distance
         return torch.where(outside | ~torch.isfinite(sampled), fallback, sampled)
+
+    def _geodesic_waypoint(
+        self, remaining_geodesic: torch.Tensor
+    ) -> torch.Tensor:
+        """Follow each prebuilt descent map to its metric-lookahead cell."""
+        local_xy = self._com_xy() - self.scene.env_origins[:, :2]
+        cell_m = self._geodesic_field_cell
+        grid_xy = (local_xy - self._geodesic_field_origin) / cell_m.unsqueeze(-1)
+        col_f, row_f = grid_xy.unbind(dim=-1)
+        height = self._geodesic_field_shape[:, 0]
+        width = self._geodesic_field_shape[:, 1]
+        col = torch.minimum(
+            torch.clamp_min(torch.round(col_f).long(), 0), width - 1
+        )
+        row = torch.minimum(
+            torch.clamp_min(torch.round(row_f).long(), 0), height - 1
+        )
+        waypoint_local = self._geodesic_field_origin + cell_m.unsqueeze(-1) * (
+            torch.stack((col, row), dim=-1).float()
+        )
+        lookahead_m = float(self.cfg.waypoint_lookahead_m)
+        budget = torch.clamp_min(
+            lookahead_m - torch.norm(waypoint_local - local_xy, dim=-1), 0.0
+        )
+        route_target = remaining_geodesic >= lookahead_m
+        active = route_target & (budget > 1.0e-9)
+        fallback_to_goal = torch.zeros_like(active)
+        env_index = torch.arange(self.num_envs, device=self.device)
+
+        # Cardinal hops are the shortest, so this bound also covers diagonal
+        # routes and the sub-cell attachment from the continuous boat pose.
+        max_hops = int(math.ceil(lookahead_m / GRID_CELL_M)) + 1
+        for _ in range(max_hops):
+            direction = self._geodesic_descent_directions[
+                env_index, row, col
+            ].long()
+            hop_m = cell_m * torch.norm(direction.float(), dim=-1)
+            stuck = active & (hop_m <= 0.0)
+            fallback_to_goal |= stuck
+            moving = active & ~stuck
+            waypoint_local += (
+                cell_m.unsqueeze(-1)
+                * torch.stack((direction[:, 1], direction[:, 0]), dim=-1)
+                * moving.unsqueeze(-1)
+            )
+            budget = torch.where(moving, budget - hop_m, budget)
+            row += direction[:, 0] * moving
+            col += direction[:, 1] * moving
+            active = moving & (budget > 1.0e-9)
+
+        waypoint_world = waypoint_local + self.scene.env_origins[:, :2]
+        use_goal = ~route_target | fallback_to_goal
+        return torch.where(use_goal.unsqueeze(-1), self.target_pos, waypoint_world)
 
     def _get_rewards(self) -> torch.Tensor:
         distance = self._horizontal_distance()
@@ -1258,6 +1333,16 @@ class HazardNavEnv(DirectRLEnv):
             geodesic_origins_np = np.zeros((num_resets, 2), dtype=np.float32)
             geodesic_shapes_np = np.zeros((num_resets, 2), dtype=np.int64)
             geodesic_max_np = np.zeros(num_resets, dtype=np.float32)
+            if self.cfg.nav_targets_waypoint:
+                geodesic_descent_np = np.zeros(
+                    (
+                        num_resets,
+                        _GEODESIC_FIELD_CELLS,
+                        _GEODESIC_FIELD_CELLS,
+                        2,
+                    ),
+                    dtype=np.int8,
+                )
         level = self.current_level
         for row in range(num_resets):
             if self.cfg.layout_mode == "ring":
@@ -1398,6 +1483,10 @@ class HazardNavEnv(DirectRLEnv):
                 geodesic_origins_np[row] = origin
                 geodesic_shapes_np[row] = (height, width)
                 geodesic_max_np[row] = float(np.max(field[finite]))
+                if self.cfg.nav_targets_waypoint:
+                    geodesic_descent_np[row, :height, :width] = (
+                        geodesic_descent_directions(field)
+                    )
                 # The progress denominator and the public route diagnostic are
                 # exactly the same bilinear spawn-to-goal field distance.
                 geodesic_np[row] = spawn_geodesic
@@ -1440,6 +1529,10 @@ class HazardNavEnv(DirectRLEnv):
             self._geodesic_field_max[env_ids] = torch.as_tensor(
                 geodesic_max_np, device=self.device
             )
+            if self.cfg.nav_targets_waypoint:
+                self._geodesic_descent_directions[env_ids] = torch.as_tensor(
+                    geodesic_descent_np, device=self.device
+                )
         self.obstacle_count[env_ids] = torch.as_tensor(counts_np, device=self.device)
         self.curriculum_level[env_ids] = level
 
