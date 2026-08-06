@@ -133,6 +133,7 @@ NATIVE_LAYOUTS: dict[str, list[int] | UnsupportedNativeLayout] = {
     "Isaac-USV-HarborStage3-Direct-v1": list(_HARBOR_KIN),
     "Isaac-USV-HarborStage2Warm-Direct-v1": list(_HARBOR_KIN),
     "Isaac-USV-HarborStage2AllRew-Direct-v1": list(_HARBOR_KIN),
+    "Isaac-USV-HarborMissionKin-Direct-v1": list(_HARBOR_KIN),
     "Isaac-USV-PathHazard-Direct-v2": list(_PATH_HAZARD_KIN),
     # Kinematic and solid-wall docking registrations.
     "Isaac-USV-Dock-BlueBoat-Kin-Direct-v1": list(_DOCK_KIN),

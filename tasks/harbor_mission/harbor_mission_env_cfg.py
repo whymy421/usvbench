@@ -314,3 +314,11 @@ class HarborStage2AllRewEnvCfg(HarborStage2EnvCfg):
     """Stage 2 scoring with the full mission reward trajectory enabled."""
 
     stage2_full_mission_rewards: bool = True
+
+
+@configclass
+class HarborMissionKinEnvCfg(HarborMissionEnvCfg):
+    """Full ordered harbor mission with the staged 49-D observation contract."""
+
+    obs_kinematic: bool = True
+    observation_space = 49
