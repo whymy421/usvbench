@@ -59,3 +59,16 @@ gym.register(
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_stage_cfg.yaml",
     },
 )
+
+# 49-D contract parity so bridged policies keep their velocity channels on the full chain.
+gym.register(
+    id="Isaac-USV-HarborMissionKin-Direct-v1",
+    entry_point=f"{__name__}.harbor_mission_env:HarborMissionEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.harbor_mission_env_cfg:HarborMissionKinEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)

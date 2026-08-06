@@ -87,6 +87,7 @@ EXPECTED_V2_DIMS = {
     "Isaac-USV-HarborStage3-Direct-v1": 49,  # harbor_mission_env_cfg.py:309
     "Isaac-USV-HarborStage2Warm-Direct-v1": 49,  # harbor_mission_env_cfg.py:298
     "Isaac-USV-HarborStage2AllRew-Direct-v1": 49,  # harbor_mission_env_cfg.py:298
+    "Isaac-USV-HarborMissionKin-Direct-v1": 49,  # harbor_mission_env_cfg.py:324
     "Isaac-USV-PathHazard-Direct-v2": 46,  # path_hazard_env_cfg.py:299
     "Isaac-USV-Dock-BlueBoat-Kin-Direct-v1": 9,  # docking_env_cfg.py:299
     "Isaac-USV-Dock-BlueBoat-Current-Kin-Direct-v1": 9,  # docking_env_cfg.py:307
