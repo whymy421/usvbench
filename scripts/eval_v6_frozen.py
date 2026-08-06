@@ -79,6 +79,7 @@ while len(records) < args_cli.episodes and step < max_steps:
         episode_contact_depth_sum = getattr(
             base, "episode_contact_depth_sum", None
         )
+        episode_max_phase = getattr(base, "episode_max_phase", None)
         rec = {
             "env": i,
             "ep": int(ep_counter[i]),
@@ -104,6 +105,8 @@ while len(records) < args_cli.episodes and step < max_steps:
                 if contact_steps > 0.0
                 else 0.0
             )
+        if episode_max_phase is not None:
+            rec["max_phase"] = int(episode_max_phase[i])
         if hasattr(base, "episode_gates_passed"):
             rec["gates"] = int(base.episode_gates_passed[i])
         if d0_prev is not None:
@@ -134,6 +137,12 @@ print(f"  tts median={pct(tts, 0.5):.1f}s p90={pct(tts, 0.9):.1f}s" if tts
       else "  tts: no successes")
 print(f"  collision_episodes={collided}/{n} ({collided / max(n, 1):.3f}) "
       f"min_clearance p10={pct(clr, 0.10):.2f}m")
+if getattr(base, "episode_max_phase", None) is not None:
+    phase_distribution = {
+        phase: sum(r.get("max_phase") == phase for r in records)
+        for phase in range(4)
+    }
+    print(f"  stages: reached_phase distribution {phase_distribution}")
 if records and all("contact_steps" in r for r in records):
     contact_records = [r for r in records if r["contact_steps"] > 0]
     contact_seconds = sorted(r["contact_seconds"] for r in contact_records)
