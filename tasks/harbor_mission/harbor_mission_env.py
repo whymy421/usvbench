@@ -129,6 +129,10 @@ class HarborMissionEnv(DirectRLEnv):
         self.hold_timer = torch.zeros(self.num_envs, device=self.device)
 
         self.path_length = torch.zeros(self.num_envs, device=self.device)
+        self._max_phase = torch.zeros(
+            self.num_envs, dtype=torch.long, device=self.device
+        )
+        self._phase_time_s = torch.zeros((self.num_envs, 4), device=self.device)
         self._min_clearance = torch.full(
             (self.num_envs,), torch.inf, device=self.device
         )
@@ -152,6 +156,12 @@ class HarborMissionEnv(DirectRLEnv):
         # Completed-episode snapshots survive DirectRLEnv auto-reset.
         self.episode_success = torch.zeros(
             self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.episode_max_phase = torch.zeros(
+            self.num_envs, dtype=torch.long, device=self.device
+        )
+        self.episode_phase_time_s = torch.zeros(
+            (self.num_envs, 4), device=self.device
         )
         self.time_to_success = torch.full(
             (self.num_envs,), torch.nan, device=self.device
@@ -925,6 +935,10 @@ class HarborMissionEnv(DirectRLEnv):
         phase_at_step_start = self._phase_at_step_start
         exit_progress_at_step_start = self._exit_progress_at_step_start
         prefix_active = ~self._m3
+        self._phase_time_s += (
+            functional.one_hot(phase_at_step_start, num_classes=4).float()
+            * self.control_step_s
+        )
 
         travelled = torch.norm(current_xy - self._previous_xy, dim=-1)
         self.path_length += torch.where(
@@ -1033,6 +1047,7 @@ class HarborMissionEnv(DirectRLEnv):
         self.phase.copy_(
             torch.where(dock_completed, torch.full_like(self.phase, 3), self.phase)
         )
+        self._max_phase.copy_(torch.maximum(self._max_phase, self.phase))
 
         ordered_trace = (
             self._m1
@@ -1099,6 +1114,8 @@ class HarborMissionEnv(DirectRLEnv):
             completed_m2 = self._m2[completed_ids]
             completed_m3 = self._m3[completed_ids]
             self.episode_success[completed_ids] = success
+            self.episode_max_phase[completed_ids] = self._max_phase[completed_ids]
+            self.episode_phase_time_s[completed_ids] = self._phase_time_s[completed_ids]
             self.time_to_success[completed_ids] = success_time
             self.stage_reached[completed_ids] = self.phase[completed_ids]
             self.episode_path_length[completed_ids] = self.path_length[completed_ids]
@@ -1231,6 +1248,8 @@ class HarborMissionEnv(DirectRLEnv):
         self._hold_steps[env_ids] = 0
         self.hold_timer[env_ids] = 0.0
         self.path_length[env_ids] = 0.0
+        self._max_phase[env_ids] = 0
+        self._phase_time_s[env_ids] = 0.0
         self._previous_xy[env_ids] = origins_xy
         self._phase_at_step_start[env_ids] = 0
         self._exit_progress_at_step_start[env_ids] = 0
