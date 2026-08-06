@@ -16,7 +16,9 @@ parser.add_argument("--checkpoint", required=True)
 parser.add_argument("--out", required=True, help="output mp4 path")
 parser.add_argument("--seconds", type=float, default=130.0)
 parser.add_argument("--skip-seconds", type=float, default=0.0)
-parser.add_argument("--cam-height", type=float, default=40.0)
+parser.add_argument("--cam-height", type=float, default=110.0,
+                    help="static top-down camera height; 110 m frames the "
+                         "full fortress arena at the default FOV")
 parser.add_argument("--cam-back", type=float, default=16.0)
 parser.add_argument("--env-seed", type=int, default=None)
 parser.add_argument("--fps", type=int, default=60)
@@ -60,7 +62,7 @@ base = env.unwrapped
 obs, _ = wrapped.reset()
 
 
-def aim_camera():
+def scene_center():
     origin = base.scene.env_origins[0]
     tx, ty = float(origin[0]), float(origin[1])
     if hasattr(base, "target_pos"):
@@ -73,13 +75,8 @@ def aim_camera():
         wp = base.waypoints[0] + base.scene.env_origins[0, :2]
         tx = float(wp[:, 0].mean())
         ty = float(wp[:, 1].mean())
-    base.sim.set_camera_view(
-        eye=(tx, ty - args_cli.cam_back, args_cli.cam_height),
-        target=(tx, ty, 0.0),
-    )
+    return tx, ty
 
-
-aim_camera()
 
 # env.render() returns all-zero frames under --headless --enable_cameras on
 # both machines we own, which is why every demo before 2026-08-04 was black
@@ -89,8 +86,19 @@ aim_camera()
 import numpy as np  # noqa: E402
 import omni.replicator.core as rep  # noqa: E402
 
+# DEDICATED static top-down camera. The shared viewport camera
+# (/OmniverseKit_Persp) is re-aimed by the env's own viewer controller every
+# reset, which made --cam-height a no-op for weeks and turned periodic
+# re-aiming into a visible tug-of-war (the owner's "视角一直在秒切换").
+# A camera prim of our own is touched by nobody: park it once over the
+# arena center and the whole run stays in one wide frame.
+_cx, _cy = scene_center()
+_camera = rep.create.camera(
+    position=(_cx, _cy, args_cli.cam_height),
+    look_at=(_cx, _cy, 0.0),
+)
 render_product = rep.create.render_product(
-    "/OmniverseKit_Persp", (args_cli.render_width, args_cli.render_height)
+    _camera, (args_cli.render_width, args_cli.render_height)
 )
 rgb_annotator = rep.AnnotatorRegistry.get_annotator("rgb")
 rgb_annotator.attach([render_product])
@@ -136,12 +144,6 @@ for t in range(skip_steps + steps):
         outputs = runner.agent.act(obs, timestep=0, timesteps=0)
         actions = outputs[-1].get("mean_actions", outputs[0])
     obs, _, term, trunc, _ = wrapped.step(actions)
-    # Re-aim periodically: something downstream of reset re-applies the env's
-    # ViewerCfg eye, which is why --cam-height looked like a no-op for weeks
-    # (measured: a 4 m obstacle filled 370 of 1280 px, i.e. a ~13 m wide view,
-    # exactly Isaac's default 7.5,7.5,7.5 viewer, not the 75 m we asked for).
-    if t % 30 == 0:
-        aim_camera()
     if t >= skip_steps:
         frame = grab_frame()
         if frame is not None:
@@ -162,7 +164,6 @@ for t in range(skip_steps + steps):
     if bool(term[0]) or bool(trunc[0]):
         ok = bool(getattr(base, "episode_success", [False])[0])
         print(f"episode end t={t / 60.0:.1f}s success={ok}", flush=True)
-        aim_camera()
 
 if writer is not None:
     writer.stdin.close()
