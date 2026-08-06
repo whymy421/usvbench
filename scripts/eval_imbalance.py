@@ -15,7 +15,14 @@ parser.add_argument("--task", default="Isaac-USV-HazardCross-Direct-v1")
 parser.add_argument("--episodes", type=int, default=128)
 parser.add_argument("--level", type=int, default=0)
 parser.add_argument("--eval-seed", type=int, default=42)
-parser.add_argument("--imbalance", type=float, required=True)
+parser.add_argument("--imbalance", type=float, default=None)
+# Suite D grew from one axis to five. Same evaluator, one axis at a time:
+# --axis names the cfg field, --value is the held-out perturbation. The
+# original --imbalance form still works and means --axis thrust_imbalance.
+parser.add_argument("--axis", default=None,
+                    help="cfg field to override, e.g. mass_scale, drag_scale, "
+                         "thrust_cap_scale, motor_tau_s, thrust_imbalance")
+parser.add_argument("--value", type=float, default=None)
 parser.add_argument("--out", default=None, help="JSON per-episode records")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
@@ -36,8 +43,25 @@ from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg
 TASK = args_cli.task
 env_cfg = parse_env_cfg(TASK, device="cuda:0", num_envs=64)
 env_cfg.seed = args_cli.eval_seed
-env_cfg.thrust_imbalance = args_cli.imbalance
-env_cfg.thrust_imbalance_choices = ()
+if args_cli.axis is not None:
+    axis, value = args_cli.axis, args_cli.value
+    if value is None:
+        raise SystemExit("--axis requires --value")
+elif args_cli.imbalance is not None:
+    axis, value = "thrust_imbalance", args_cli.imbalance
+else:
+    raise SystemExit("give --axis/--value or --imbalance")
+if not hasattr(env_cfg, axis):
+    raise SystemExit(f"cfg has no field {axis!r}")
+setattr(env_cfg, axis, value)
+# Kill the per-episode randomization for EVERY axis, not just the one under
+# test: a held-out evaluation must vary exactly one thing.
+for choices in ("thrust_imbalance_choices", "mass_scale_choices",
+                "drag_scale_choices", "thrust_cap_scale_choices",
+                "motor_tau_s_choices"):
+    if hasattr(env_cfg, choices):
+        setattr(env_cfg, choices, ())
+print(f"axis={axis} value={value}", flush=True)
 if hasattr(env_cfg, "curriculum_frozen"):
     env_cfg.curriculum_frozen = True
     env_cfg.eval_level = args_cli.level
@@ -107,7 +131,7 @@ def pct(sorted_vals, q):
 sr = len(succ) / max(n, 1)
 print(f"EVAL task={TASK} level={args_cli.level} seed={args_cli.eval_seed} "
       f"ckpt={os.path.basename(args_cli.checkpoint)}")
-print(f"imbalance={args_cli.imbalance}")
+print(f"imbalance={axis}={value}")
 print(f"  episodes={n} SR={sr:.4f} ({len(succ)}/{n})")
 print(f"  tts median={pct(tts, 0.5):.1f}s p90={pct(tts, 0.9):.1f}s" if tts
       else "  tts: no successes")
