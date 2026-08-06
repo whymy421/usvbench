@@ -103,6 +103,20 @@ class HazardNavEnv(DirectRLEnv):
         self._thrust_imbalance_per_env = torch.zeros(
             self.num_envs, device=self.device
         )
+        self._mass_scale_per_env = torch.ones(self.num_envs, device=self.device)
+        self._drag_scale_per_env = torch.ones(self.num_envs, device=self.device)
+        self._thrust_cap_scale_per_env = torch.ones(
+            self.num_envs, device=self.device
+        )
+        self._motor_tau_s_per_env = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._applied_thrust_per_env = torch.zeros(
+            self.num_envs, device=self.device
+        )
+        self._applied_yaw_per_env = torch.zeros(
+            self.num_envs, device=self.device
+        )
 
         max_obstacles = int(self.cfg.max_obstacles)
         self.obstacle_centers = torch.zeros(
@@ -543,6 +557,15 @@ class HazardNavEnv(DirectRLEnv):
             thrust_action * self.cfg.thrust_max_fwd,
             thrust_action * self.cfg.thrust_max_rev,
         )
+        if self.cfg.thrust_cap_scale_choices:
+            thrust_cap_scale = self._thrust_cap_scale_per_env
+        else:
+            thrust_cap_scale = self.cfg.thrust_cap_scale
+        if (
+            self.cfg.thrust_cap_scale_choices
+            or self.cfg.thrust_cap_scale != 1.0
+        ):
+            thrust = thrust * thrust_cap_scale
         yaw_command = self.actions[:, 1] * self.cfg.yaw_torque_max
         if self.cfg.thrust_imbalance_choices:
             imbalance = self._thrust_imbalance_per_env
@@ -567,6 +590,34 @@ class HazardNavEnv(DirectRLEnv):
             t_stbd = t_stbd * (1.0 + imbalance)
             thrust = t_port + t_stbd
             yaw_command = (t_stbd - t_port) * lever
+
+        if self.cfg.motor_tau_s_choices:
+            motor_tau_s = self._motor_tau_s_per_env
+        else:
+            motor_tau_s = self.cfg.motor_tau_s
+        if self.cfg.motor_tau_s_choices or self.cfg.motor_tau_s != 0.0:
+            # Backward-Euler first-order lag, independently for surge and yaw.
+            # torch.where is essential for a mixed pack containing tau=0: the
+            # selected command is the original tensor exactly, not the result
+            # of a nominally equivalent subtract/add round trip.
+            physics_step_s = self.cfg.sim.dt
+            alpha = physics_step_s / (motor_tau_s + physics_step_s)
+            filtered_thrust = self._applied_thrust_per_env + (
+                thrust - self._applied_thrust_per_env
+            ) * alpha
+            filtered_yaw = self._applied_yaw_per_env + (
+                yaw_command - self._applied_yaw_per_env
+            ) * alpha
+            if self.cfg.motor_tau_s_choices:
+                thrust = torch.where(motor_tau_s == 0.0, thrust, filtered_thrust)
+                yaw_command = torch.where(
+                    motor_tau_s == 0.0, yaw_command, filtered_yaw
+                )
+            else:
+                thrust = filtered_thrust
+                yaw_command = filtered_yaw
+            self._applied_thrust_per_env.copy_(thrust)
+            self._applied_yaw_per_env.copy_(yaw_command)
 
         forces[:, 0, 0] = thrust * self._fwd_x
         forces[:, 0, 1] = thrust * self._fwd_y
@@ -593,10 +644,15 @@ class HazardNavEnv(DirectRLEnv):
         ):
             planar_velocity = linear_velocity[:, :2]
             planar_speed = torch.norm(planar_velocity, dim=-1, keepdim=True)
-            force_world[:, :2] += -(
+            planar_drag = -(
                 self.physics_cfg.surge_lin_damping
                 + self.physics_cfg.surge_quad_damping * planar_speed
             ) * planar_velocity
+            if self.cfg.drag_scale_choices:
+                planar_drag = planar_drag * self._drag_scale_per_env.unsqueeze(-1)
+            elif self.cfg.drag_scale != 1.0:
+                planar_drag = planar_drag * self.cfg.drag_scale
+            force_world[:, :2] += planar_drag
         else:
             velocity_body = math_utils.quat_apply_inverse(quat, linear_velocity)
             drag_body = torch.zeros_like(velocity_body)
@@ -610,14 +666,23 @@ class HazardNavEnv(DirectRLEnv):
                 self.physics_cfg.sway_lin_damping
                 + self.physics_cfg.sway_quad_damping * torch.abs(sway)
             ) * sway
+            if self.cfg.drag_scale_choices:
+                drag_body[:, :2] *= self._drag_scale_per_env.unsqueeze(-1)
+            elif self.cfg.drag_scale != 1.0:
+                drag_body[:, :2] *= self.cfg.drag_scale
             forces[:, 0, :2] += drag_body[:, :2]
         force_world[:, 2] += -self.physics_cfg.heave_damping * linear_velocity[:, 2]
 
         yaw_rate = angular_velocity[:, 2]
-        torque_world[:, 2] += -(
+        yaw_drag = -(
             self.physics_cfg.yaw_lin_damping
             + self.physics_cfg.yaw_quad_damping * torch.abs(yaw_rate)
         ) * yaw_rate
+        if self.cfg.drag_scale_choices:
+            yaw_drag = yaw_drag * self._drag_scale_per_env
+        elif self.cfg.drag_scale != 1.0:
+            yaw_drag = yaw_drag * self.cfg.drag_scale
+        torque_world[:, 2] += yaw_drag
         torque_world[:, :2] += (
             -self.physics_cfg.rollpitch_rate_damping * angular_velocity[:, :2]
         )
@@ -643,6 +708,19 @@ class HazardNavEnv(DirectRLEnv):
 
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_world)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_world)
+        if self.cfg.mass_scale_choices:
+            # The rigid-body mass/inertia live in the USD. Dividing the full
+            # external wrench gives the same free-body accelerations as a
+            # common mass/inertia multiplier without mutating the asset.
+            mass_scale = self._mass_scale_per_env.unsqueeze(-1).unsqueeze(-1)
+            scaled_forces = forces / mass_scale
+            scaled_torques = torques / mass_scale
+            identity = mass_scale == 1.0
+            forces = torch.where(identity, forces, scaled_forces)
+            torques = torch.where(identity, torques, scaled_torques)
+        elif self.cfg.mass_scale != 1.0:
+            forces = forces / self.cfg.mass_scale
+            torques = torques / self.cfg.mass_scale
         self.robot.set_external_force_and_torque(forces, torques)
 
     @staticmethod
@@ -1310,6 +1388,43 @@ class HazardNavEnv(DirectRLEnv):
             self._thrust_imbalance_per_env[env_ids] = torch.as_tensor(
                 choices[choice_indices], device=self.device
             )
+        if self.cfg.mass_scale_choices:
+            choice_indices = self._layout_rng.integers(
+                len(self.cfg.mass_scale_choices), size=num_resets
+            )
+            choices = np.asarray(self.cfg.mass_scale_choices, dtype=np.float32)
+            self._mass_scale_per_env[env_ids] = torch.as_tensor(
+                choices[choice_indices], device=self.device
+            )
+        if self.cfg.drag_scale_choices:
+            choice_indices = self._layout_rng.integers(
+                len(self.cfg.drag_scale_choices), size=num_resets
+            )
+            choices = np.asarray(self.cfg.drag_scale_choices, dtype=np.float32)
+            self._drag_scale_per_env[env_ids] = torch.as_tensor(
+                choices[choice_indices], device=self.device
+            )
+        if self.cfg.thrust_cap_scale_choices:
+            choice_indices = self._layout_rng.integers(
+                len(self.cfg.thrust_cap_scale_choices), size=num_resets
+            )
+            choices = np.asarray(
+                self.cfg.thrust_cap_scale_choices, dtype=np.float32
+            )
+            self._thrust_cap_scale_per_env[env_ids] = torch.as_tensor(
+                choices[choice_indices], device=self.device
+            )
+        if self.cfg.motor_tau_s_choices:
+            choice_indices = self._layout_rng.integers(
+                len(self.cfg.motor_tau_s_choices), size=num_resets
+            )
+            choices = np.asarray(self.cfg.motor_tau_s_choices, dtype=np.float32)
+            self._motor_tau_s_per_env[env_ids] = torch.as_tensor(
+                choices[choice_indices], device=self.device
+            )
+        # Actuator memory is episode-local for both scalar and choice modes.
+        self._applied_thrust_per_env[env_ids] = 0.0
+        self._applied_yaw_per_env[env_ids] = 0.0
         max_obstacles = self.cfg.max_obstacles
         local_starts_np = np.zeros((num_resets, 2), dtype=np.float32)
         local_goals_np = np.zeros((num_resets, 2), dtype=np.float32)
