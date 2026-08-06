@@ -322,6 +322,23 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # scalar path above, including its exact zero-imbalance identity.
     thrust_imbalance_choices: tuple = ()
 
+    # --- Suite D axes: scalar identity + optional per-episode pack ----------
+    # BlueBoat's mass and inertia are authored on the USD rigid body. The
+    # environment therefore models a common mass/inertia multiplier by scaling
+    # the assembled external wrench, never by mutating the shared asset.
+    mass_scale: float = 1.0
+    mass_scale_choices: tuple = ()
+    # Multiplier on planar surge/sway and yaw linear/quadratic drag loads.
+    drag_scale: float = 1.0
+    drag_scale_choices: tuple = ()
+    # Multiplier on forward/reverse surge caps (yaw remains its own channel).
+    thrust_cap_scale: float = 1.0
+    thrust_cap_scale_choices: tuple = ()
+    # First-order actuator lag. Zero bypasses filtering exactly and preserves
+    # the legacy instantaneous-thrust trajectory bit for bit.
+    motor_tau_s: float = 0.0
+    motor_tau_s_choices: tuple = ()
+
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
     yaw_torque_max: float = _DEFAULT_VEHICLE.yaw_torque_nm
@@ -774,3 +791,49 @@ class HazardOpenBasinEnvCfg(HazardForcedCrossingEnvCfg):
 
     layout_mode: str = "basin"
     max_obstacles: int = 80
+
+
+# Append-only Suite D v3 training carriers. Each changes exactly one dynamics
+# axis from HazardForcedCrossingEnvCfg and samples the frozen train pack.
+@configclass
+class HazardCrossMassEnvCfg(HazardForcedCrossingEnvCfg):
+    """Forced crossing trained on the frozen Suite D mass pack."""
+
+    mass_scale_choices: tuple = (0.80, 1.00, 1.30)
+
+
+@configclass
+class HazardCrossDragEnvCfg(HazardForcedCrossingEnvCfg):
+    """Forced crossing trained on the frozen Suite D drag pack."""
+
+    drag_scale_choices: tuple = (0.75, 1.00, 1.50)
+
+
+@configclass
+class HazardCrossThrustEnvCfg(HazardForcedCrossingEnvCfg):
+    """Forced crossing trained on the frozen Suite D thrust-cap pack."""
+
+    thrust_cap_scale_choices: tuple = (0.75, 0.875, 1.00)
+
+
+@configclass
+class HazardCrossTauEnvCfg(HazardForcedCrossingEnvCfg):
+    """Forced crossing trained on the frozen Suite D motor-lag pack."""
+
+    motor_tau_s_choices: tuple = (0.00, 0.10, 0.25)
+
+
+# Clean discount-coupling control. These inherit the same carrier and differ
+# only in the one flag named by the experiment.
+@configclass
+class HazardPbrsNoGammaEnvCfg(HazardForcedCrossingEnvCfg):
+    """Forced crossing with the legacy missing-gamma potential difference."""
+
+    pbrs_correct: bool = False
+
+
+@configclass
+class HazardPbrsGammaEnvCfg(HazardPbrsNoGammaEnvCfg):
+    """Forced crossing with gamma*Phi(s') - Phi(s)."""
+
+    pbrs_correct: bool = True
