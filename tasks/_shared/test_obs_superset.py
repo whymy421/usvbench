@@ -61,6 +61,7 @@ V1_NATIVE_LAYOUTS = {
 # cite the declaration that fixes the inherited observation_space value.
 EXPECTED_V2_DIMS = {
     "Isaac-USV-HazardNavC64-Direct-v1": 64,  # hazard_nav_env_cfg.py
+    "Isaac-USV-Iceberg-Direct-v1": 64,  # hazard_nav_env_cfg.py
     "Isaac-USV-HazardNav-Direct-v3": 42,  # hazard_nav_env_cfg.py:439
     "Isaac-USV-HazardRing-Direct-v1": 42,  # hazard_nav_env_cfg.py:439
     "Isaac-USV-HazardNav-Direct-v4": 42,  # hazard_nav_env_cfg.py:439
@@ -108,7 +109,10 @@ V1_SLICES = {
 }
 
 
-CONTRACT_MODE_ID = "Isaac-USV-HazardNavC64-Direct-v1"
+CONTRACT_MODE_IDS = {
+    "Isaac-USV-HazardNavC64-Direct-v1",
+    "Isaac-USV-Iceberg-Direct-v1",
+}
 
 
 def _assert_raises(expected_type, text: str, function, *args) -> None:
@@ -170,7 +174,7 @@ def test_v2_dimensions_and_roundtrips() -> tuple[int, int]:
         assert len(set(layout)) == len(layout), gym_id
         assert all(isinstance(index, int) for index in layout), gym_id
         assert all(0 <= index < 64 for index in layout), gym_id
-        if gym_id != CONTRACT_MODE_ID:
+        if gym_id not in CONTRACT_MODE_IDS:
             assert all(index < 58 for index in layout), (
                 f"reserved slot claimed by {gym_id}"
             )
@@ -179,7 +183,7 @@ def test_v2_dimensions_and_roundtrips() -> tuple[int, int]:
         native += 0.25
         superset = obs.native_to_superset(native, gym_id)
         assert superset.shape == (2, 64), gym_id
-        if gym_id != CONTRACT_MODE_ID:
+        if gym_id not in CONTRACT_MODE_IDS:
             assert np.count_nonzero(superset[..., 58:64]) == 0, gym_id
         restored = obs.extract_native(superset, gym_id)
         assert np.array_equal(restored, native), gym_id
@@ -188,14 +192,15 @@ def test_v2_dimensions_and_roundtrips() -> tuple[int, int]:
 
 
 def test_contract_mode_identity() -> None:
-    assert CONTRACT_MODE_ID in obs.NATIVE_LAYOUTS
-    assert obs.NATIVE_LAYOUTS[CONTRACT_MODE_ID] == list(range(obs.SUPERSET_DIM_V2))
+    for gym_id in CONTRACT_MODE_IDS:
+        assert gym_id in obs.NATIVE_LAYOUTS
+        assert obs.NATIVE_LAYOUTS[gym_id] == list(range(obs.SUPERSET_DIM_V2))
 
-    contract = np.arange(obs.SUPERSET_DIM_V2, dtype=np.float32)
-    extracted = obs.extract_native(contract, CONTRACT_MODE_ID)
-    assert np.array_equal(extracted, contract)
-    restored = obs.native_to_superset(extracted, CONTRACT_MODE_ID)
-    assert np.array_equal(restored, contract)
+        contract = np.arange(obs.SUPERSET_DIM_V2, dtype=np.float32)
+        extracted = obs.extract_native(contract, gym_id)
+        assert np.array_equal(extracted, contract)
+        restored = obs.native_to_superset(extracted, gym_id)
+        assert np.array_equal(restored, contract)
 
 
 def test_hazard_to_harbor_project() -> None:
@@ -224,7 +229,7 @@ def main() -> None:
         f"{unsupported} pooled ids explicitly unsupported"
     )
     test_contract_mode_identity()
-    print("PASS contract mode: C64 layout is 64-D identity")
+    print("PASS contract mode: C64 and Iceberg layouts are 64-D identity")
     test_hazard_to_harbor_project()
     print("PASS project: HazardNav-v3 -> HarborStage2 is 49-D with aligned rays")
 

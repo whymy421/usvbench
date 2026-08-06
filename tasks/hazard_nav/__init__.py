@@ -306,6 +306,17 @@ gym.register(
     },
 )
 
+# Detour-capability twin of the threading family; first new task born on contract v2.
+gym.register(
+    id="Isaac-USV-Iceberg-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.hazard_nav_env_cfg:HazardIcebergEnvCfg",
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
 # Route waypoints couple the fortress policy's bearing channels to geodesic progress.
 gym.register(
     id="Isaac-USV-HazardBandFortWay-Direct-v1",

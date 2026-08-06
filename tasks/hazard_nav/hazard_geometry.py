@@ -705,6 +705,134 @@ def sample_layout(
     )
 
 
+# --- Iceberg variant: a few huge obstacles that demand an early detour -------
+# Kept separate from DIFFICULTIES for the same reason forced gates have their
+# own table: these tiers vary physical cylinder count/radius, not gap width.
+ICEBERG_TIERS: dict[int, tuple[int, float, float]] = {
+    0: (1, 5.0, 8.0),
+    1: (2, 6.0, 10.0),
+    2: (3, 7.0, 12.0),
+    3: (3, 9.0, 14.0),
+}
+ICEBERG_EDGE_GAP_M = 8.0
+ICEBERG_GOAL_DISTANCE_RANGE_M = (28.0, 40.0)
+
+
+def sample_iceberg_layout(
+    level: int,
+    rng: np.random.Generator | None = None,
+    max_attempts: int = 60,
+) -> HazardLayout:
+    """Sample open water where huge cylinders force a long-range detour.
+
+    The local-frame start/goal and protected endpoint disks deliberately use
+    the scatter task's conventions. The first cylinder center lies exactly on
+    the direct segment; later cylinders alternate sides and extend the field
+    laterally, while leaving at least eight metres between physical edges.
+    """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least one")
+    try:
+        count, radius_min, radius_max = ICEBERG_TIERS[int(level)]
+    except (KeyError, ValueError):
+        valid = ", ".join(str(value) for value in sorted(ICEBERG_TIERS))
+        raise ValueError(
+            f"Unknown iceberg level {level!r}; expected one of {valid}."
+        ) from None
+
+    rng = np.random.default_rng() if rng is None else rng
+    start = np.zeros(2, dtype=np.float64)
+    endpoint_inflation = ENDPOINT_CLEAR_RADIUS_M + OBSTACLE_INFLATION_M
+
+    for attempt in range(1, max_attempts + 1):
+        distance = float(rng.uniform(*ICEBERG_GOAL_DISTANCE_RANGE_M))
+        goal = np.array((distance, 0.0), dtype=np.float64)
+        radii = rng.uniform(radius_min, radius_max, size=count)
+        centers = np.empty((count, 2), dtype=np.float64)
+
+        # Exactly-on-segment placement makes direct blockage constructive, not
+        # probabilistic. The standard scatter endpoint disks remain inviolate.
+        blocker_low = float(radii[0] + endpoint_inflation)
+        blocker_high = float(distance - radii[0] - endpoint_inflation)
+        if blocker_low > blocker_high:
+            continue
+        middle_low = max(blocker_low, 0.38 * distance)
+        middle_high = min(blocker_high, 0.62 * distance)
+        if middle_low > middle_high:
+            continue
+        centers[0] = (rng.uniform(middle_low, middle_high), 0.0)
+
+        first_side = -1.0 if rng.random() < 0.5 else 1.0
+        admitted = True
+        for index in range(1, count):
+            side = first_side if index % 2 else -first_side
+            required_endpoint = float(
+                radii[index] + ENDPOINT_CLEAR_RADIUS_M + OBSTACLE_INFLATION_M
+            )
+            placed = False
+            for _ in range(600):
+                # Keep the lateral iceberg near enough to form one leg of the
+                # obstacle field, but never turn its gap into a bottleneck.
+                x = float(rng.uniform(0.25 * distance, 0.75 * distance))
+                required_from_blocker = float(
+                    radii[0] + radii[index] + ICEBERG_EDGE_GAP_M
+                )
+                dx = x - float(centers[0, 0])
+                minimum_abs_y = math.sqrt(
+                    max(0.0, required_from_blocker**2 - dx**2)
+                )
+                abs_y = float(
+                    rng.uniform(minimum_abs_y, minimum_abs_y + 4.0)
+                )
+                candidate = np.array((x, side * abs_y), dtype=np.float64)
+
+                if np.linalg.norm(candidate - start) < required_endpoint:
+                    continue
+                if np.linalg.norm(candidate - goal) < required_endpoint:
+                    continue
+                separation = np.linalg.norm(centers[:index] - candidate, axis=1)
+                required = radii[:index] + radii[index] + ICEBERG_EDGE_GAP_M
+                if np.any(separation + 1.0e-9 < required):
+                    continue
+                centers[index] = candidate
+                placed = True
+                break
+            if not placed:
+                admitted = False
+                break
+        if not admitted:
+            continue
+
+        if not start_goal_disks_clear(start, goal, centers, radii):
+            continue
+        physical_gap = minimum_pairwise_inflated_gap(
+            centers, radii, inflation_m=0.0
+        )
+        if physical_gap + 1.0e-9 < ICEBERG_EDGE_GAP_M:
+            continue
+        geodesic = bfs_geodesic_length(start, goal, centers, radii)
+        if geodesic is None:
+            continue
+        if not direct_segment_blocked(start, goal, centers, radii):
+            continue
+        return HazardLayout(
+            level=int(level),
+            requested_obstacle_count=count,
+            start=start,
+            goal=goal,
+            centers=centers,
+            radii=radii,
+            geodesic_length=float(geodesic),
+            direct_blocked=True,
+            attempts=attempt,
+        )
+
+    raise RuntimeError(
+        f"Could not generate an iceberg layout for level {level} "
+        f"in {max_attempts} attempts."
+    )
+
+
 # --- Ring-siege variant (user-requested): spawn encircled, exactly one
 # passable gap whose inflated width follows the tier ladder. Escape requires
 # threading from the very first second -- avoidance as a mandatory skill.
@@ -2090,6 +2218,9 @@ __all__ = [
     "GRID_CELL_M",
     "HALF_BEAM_M",
     "HULL_BEAM_M",
+    "ICEBERG_EDGE_GAP_M",
+    "ICEBERG_GOAL_DISTANCE_RANGE_M",
+    "ICEBERG_TIERS",
     "GateSpec",
     "HazardLayout",
     "MAX_OBSTACLE_RADIUS_M",
@@ -2111,6 +2242,7 @@ __all__ = [
     "ray_circle_ranges",
     "route_geodesic_length",
     "sample_forced_crossing_layout",
+    "sample_iceberg_layout",
     "sample_band_fortress_layout",
     "sample_double_ring_fortress_layout",
     "sample_double_ring_layout",

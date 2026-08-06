@@ -39,6 +39,7 @@ from .hazard_geometry import (
     sample_double_ring_fortress_layout,
     sample_double_ring_layout,
     sample_forced_crossing_layout,
+    sample_iceberg_layout,
     sample_layout,
     sample_open_basin_layout,
     sample_ring_fortress_layout,
@@ -1394,6 +1395,14 @@ class HazardNavEnv(DirectRLEnv):
                 # dies on the walls before reaching the gate, so this isolates
                 # which of the two the failure belongs to.
                 layout = sample_open_basin_layout(
+                    level,
+                    rng=self._layout_rng,
+                    max_attempts=max(60, self.cfg.layout_max_attempts),
+                )
+            elif self.cfg.layout_mode == "iceberg":
+                # Open-water long-range avoidance: the sampler supplies the
+                # spawn because its direct route is constructively blocked.
+                layout = sample_iceberg_layout(
                     level,
                     rng=self._layout_rng,
                     max_attempts=max(60, self.cfg.layout_max_attempts),

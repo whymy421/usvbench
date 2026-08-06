@@ -400,10 +400,11 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             "bandfort",
             "forced",
             "basin",
+            "iceberg",
         ):
             raise ValueError(
                 "layout_mode must be 'scatter', 'ring', 'ring2', 'fortress', "
-                "'fortress2', 'bandfort', 'forced' or 'basin'"
+                "'fortress2', 'bandfort', 'forced', 'basin' or 'iceberg'"
             )
         if self.reward_progress_geodesic and self.layout_mode not in (
             "bandfort",
@@ -433,6 +434,7 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             "bandfort": 96,
             "forced": 80,
             "basin": 66,
+            "iceberg": 3,
         }.get(self.layout_mode, 14)
         if self.max_obstacles < min_obstacles:
             raise ValueError(
@@ -484,6 +486,20 @@ class HazardNavV3EnvCfg(HazardNavEnvCfg):
 class HazardNavC64EnvCfg(HazardNavV3EnvCfg):
     """V3 scatter task emitting the complete observation contract v2."""
 
+    emit_superset_obs: bool = True
+    superset_version: int = 2
+    observation_space = 64
+
+
+@configclass
+class HazardIcebergEnvCfg(HazardNavV3EnvCfg):
+    """Few huge cylinders in open water; success requires an early detour."""
+
+    layout_mode: str = "iceberg"
+    # ICEBERG_TIERS tops out at three cylinders; three spare slots are reset
+    # buffer headroom. The validator's hard floor is the tier maximum, three.
+    max_obstacles: int = 6
+    layout_max_attempts: int = 60
     emit_superset_obs: bool = True
     superset_version: int = 2
     observation_space = 64
