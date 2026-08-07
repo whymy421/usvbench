@@ -24,6 +24,10 @@ parser.add_argument("--env-seed", type=int, default=None)
 parser.add_argument("--fps", type=int, default=60)
 parser.add_argument("--warmup-frames", type=int, default=60,
                     help="renderer burn-in before the first captured frame")
+parser.add_argument("--axis", default=None,
+                    help="Suite D cfg field to override for the recording, "
+                         "e.g. thrust_imbalance / mass_scale / motor_tau_s")
+parser.add_argument("--value", type=float, default=None)
 parser.add_argument("--render-width", type=int, default=1280)
 parser.add_argument("--render-height", type=int, default=720)
 parser.add_argument("--visual-usd", default=None,
@@ -47,6 +51,18 @@ if args_cli.env_seed is not None:
     env_cfg.seed = args_cli.env_seed
 if args_cli.visual_usd is not None:
     env_cfg.robot_cfg.spawn.usd_path = args_cli.visual_usd
+if args_cli.axis is not None:
+    if args_cli.value is None:
+        raise SystemExit("--axis requires --value")
+    if not hasattr(env_cfg, args_cli.axis):
+        raise SystemExit(f"cfg has no field {args_cli.axis!r}")
+    setattr(env_cfg, args_cli.axis, args_cli.value)
+    for choices in ("thrust_imbalance_choices", "mass_scale_choices",
+                    "drag_scale_choices", "thrust_cap_scale_choices",
+                    "motor_tau_s_choices"):
+        if hasattr(env_cfg, choices):
+            setattr(env_cfg, choices, ())
+    print(f"axis override: {args_cli.axis}={args_cli.value}", flush=True)
 experiment_cfg = load_cfg_from_registry(args_cli.task, "skrl_cfg_entry_point")
 env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array")
 wrapped = SkrlVecEnvWrapper(env, ml_framework="torch")
