@@ -83,7 +83,7 @@ Every wave run prints what it is actually simulating:
 Watch `peak/hull`. Past about 0.5 the hull leaves the water or submerges
 entirely, the submerged fraction clamps, and the sea state stops being
 something the boat can respond to. Do not copy sea states from `rov_calm_nav`
-or `boat_calm_nav`: the ROV displaces 20 m³ against BlueBoat's 0.0346 m³, and
+or `boat_calm_nav`: the ROV displaces 0.5 m³ against BlueBoat's 0.0346 m³, and
 its settings drive `peak/hull` past 2.
 
 ## Sea state parameters
