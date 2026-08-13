@@ -27,6 +27,21 @@ boat hull and needs a tuned reward (see its STARTER doc for why).
 
 More vessel scales and conditions will be added as the benchmark grows.
 
+## Wave benchmark
+
+HazardNav provides calm, Airy, and JONSWAP variants with identical policy
+observation and action layouts. Wave generation is shared across tasks in
+[`tasks/_shared/waves.py`](tasks/_shared/waves.py); the JONSWAP spectrum uses
+30 frequency components and is normalized so the configured `Hs` equals
+`4 sqrt(m0)`. HazardNav plant v2 couples the surface to the BlueBoat through
+six distributed buoyancy stations and relative-water drag, with no authored
+wave-force gains.
+
+See [`tasks/hazard_nav/WAVES.md`](tasks/hazard_nav/WAVES.md) for task ids and
+commands, and [`docs/WAVE_PARAMETER_ALIGNMENT.md`](docs/WAVE_PARAMETER_ALIGNMENT.md)
+for the unified `Hs`/`Tp` definitions and reporting fields. No wave-trained
+baseline is claimed yet.
+
 ## Repo layout
 
 ```
@@ -51,7 +66,8 @@ usvbench/
    git clone https://github.com/whymy421/usvbench.git ~/usvbench
    ```
 2. Install [Isaac Lab](https://isaac-sim.github.io/IsaacLab/) and activate its conda env.
-3. Copy a task folder into Isaac Lab and run it — see
+3. Copy the task folder and `tasks/_shared/` into the same Isaac Lab `direct/`
+   directory, then run it — see
    [`tasks/rov_calm_nav/STARTER_TASK.md`](tasks/rov_calm_nav/STARTER_TASK.md).
 
 ## Evaluation

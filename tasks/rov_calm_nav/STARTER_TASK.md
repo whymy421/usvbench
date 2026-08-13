@@ -30,9 +30,10 @@ a new target spawns — so a good policy reaches **many** targets per episode.
 
 ## Install
 
-1. Copy this folder into your Isaac Lab tasks directory:
+1. Copy this folder and the shared modules into your Isaac Lab tasks directory:
    ```
    <IsaacLab>/source/isaaclab_tasks/isaaclab_tasks/direct/rov_calm_nav/
+   <IsaacLab>/source/isaaclab_tasks/isaaclab_tasks/direct/_shared/
    ```
 2. The vessel USD is auto-located via `USVBENCH_ASSETS` (the train script sets it
    to `<repo>/assets` for you). If you run manually, set it yourself:
