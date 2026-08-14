@@ -38,12 +38,51 @@ Tp = 1 / fp
 偏差。如需记录该离散频点，应另写为 `f_peak_bin` 或
 `T_peak_bin = 1 / f_peak_bin`，不要与配置参数 `Tp` 混用。
 
-### 其他海况参数
+### 当前默认值与抽样律
 
-- `gamma`：JONSWAP 峰增强因子。
-- `f_min_hz`、`f_max_hz`：频谱离散化使用的频率范围。
-- `spread_deg`：各频率分量围绕平均波向的方向展布范围。
-- `direction_deg`：平均波浪传播方向；未指定时，每个环境随机采样。
+HazardNav 当前共享实现的默认值如下；这些是代码默认值，不等同于双方
+尚未签字的训练/认证档位：
+
+| 参数 | 默认值 | 含义 |
+|---|---:|---|
+| `gamma` | `U[1.0, 5.0]` | 每回合每环境独立抽样的峰增强因子；`3.3` 是常见参考值，不是当前默认常数 |
+| `f_min_hz` | `0.10` | 频带下限 |
+| `f_max_hz` | `1.60` | 频带上限 |
+| `spread_deg` | `30` | 总展布宽度，实际为平均波向两侧各 `15°` |
+| `n_components` | `30` | 频率分量数 |
+| `buoyancy_stations` | `6` | 船体浮力采样点数 |
+
+默认 `sampling_mode="uniform"` 时，`Hs`、`Tp`、`gamma` 分别在各自的闭区间
+`[min, max]` 上均匀抽样一次，且每个环境每次 reset 都重抽。认证包应改用
+`sampling_mode="levels"`，并显式填写 `hs_levels_m`、`tp_levels_s`、
+`gamma_levels`；训练包、插值包、外推包的具体 `Hs×Tp` 档位仍需双方确认，
+当前仓库不把任何一组未经确认的档位冻结成 baseline。
+
+`direction_deg=None` 时，平均传播方向在 `[0, 360°)` 上确定性伪随机采样；
+指定数值时所有环境固定为该方向。
+
+### 随机相位/方向种子协议（认证必需）
+
+相位、平均传播方向、每个分量的方向展布以及海况参数均由下面的纯函数决定：
+
+```text
+random_value = f(eval_seed, environment_index, episode_index, stream_index)
+```
+
+实现使用每个环境独立的 CPU `torch.Generator`，由上述整数元组派生 seed，
+不读取或推进全局 Torch RNG。HazardNav 在每个环境维护 `episode_index`：
+首次 reset 为 `0`，之后每次 reset 加 `1`；reset 时把该索引显式传给共享波场。
+因此，同一评测 seed、环境编号和回合编号会得到完全相同的 `Hs/Tp/gamma`、
+相位和方向；每回合的波面时间也从该回合 reset 时的局部 `t=0` 开始，不受
+前一回合实际结束时刻影响。即使 reset 的环境子集顺序不同，也不会改变结果。障碍布局使用
+同一 `(eval_seed, environment_index, episode_index)` 协议，保证配对策略看到同一
+回合流。
+
+### 零剂量恒等
+
+当 `mode="calm"`，或 Airy 的 `height_m=0`、JONSWAP 的 `hs_max_m=0` 时，
+工厂直接返回 `CalmWater`。这条路径不采样浮力站、不施加轨道流或波面速度，
+因此与静水路径逐位一致；它不是“计算了零波幅后的近似相等”。
 
 ## 波场离散方式
 
@@ -55,12 +94,38 @@ Tp = 1 / fp
 
 ```text
 eta(x, y, t) = sum_n a_n cos(k_n (dx_n x + dy_n y) - omega_n t + phi_n)
-a_n = sqrt(2 S(f_n) df)
+a_n = sqrt(2 S(f_n) Delta_f_n)
 ```
 
-波数采用深水色散关系 `k_n = omega_n^2 / g`。
+波数采用深水色散关系 `k_n = omega_n^2 / g`。频点不是严格等间距：在名义
+`df=(f_max-f_min)/30` 的中点网格上加入固定的小抖动，并用相邻频点中点定义
+每个 `Delta_f_n`。因此不存在 `1/df` 的精确短周期重复；旧均匀网格的诊断周期
+在当前默认频带中是 `1/0.05 = 20 s`，已经短于 120 s 回合，不能作为现行实现
+的重复周期。非均匀频点同时在谱归一化中使用各自的 `Delta_f_n`，所以
+`4 sqrt(m0) = Hs` 不变。
 
-这里的 30 个点是频谱的**频率分量数**，不是船体上的浮力采样点数。
+### 展布形状
+
+`spread_deg` 表示总宽度，而不是单侧角度。当前实现对每个分量独立地从
+`[-spread_deg/2, +spread_deg/2]` 均匀抽样，再加到平均波向上；它不是
+cosine-power（`cos^s`）方向分布。因而 `spread_deg=30°` 明确表示 `±15°`。
+
+### 有效域与深水假设
+
+HazardNav 默认要求所有可能的组合满足：
+
+```text
+lambda_p = g Tp^2 / (2 pi)
+Hs / lambda_p <= 0.05
+```
+
+这是线性深水模型的陡度上限；超出时配置会在建场阶段报错。色散关系仍是
+深水关系，未加入有限水深修正；若水深 `h` 不再明显大于 `lambda_p/2`，应先
+另行确认适用性，不能把当前结果称为浅水认证结果。
+
+这里的 30 个点是频谱的**频率分量数**，不是船体上的浮力采样点数。默认频率
+抖动幅度为名义 `df` 的 `0.22` 倍；它是固定的频点设计参数，不是每回合重新
+抽样的随机量。
 
 ## 船体波浪耦合
 
@@ -102,10 +167,17 @@ T = Tp
 
 ```text
 model=JONSWAP
+eval_seed=<integer>
+environment_index=<integer>
+episode_index=<integer>
 Hs=<value or range> m
 Tp=<value or range> s
 gamma=<value or range>
+sampling_mode=<uniform or levels>
+Hs_levels=<explicit list when levels>
+Tp_levels=<explicit list when levels>
 f_band=[f_min_hz, f_max_hz] Hz
+max_steepness=0.05
 n_components=30
 spread=<value> deg
 direction=<value or random>

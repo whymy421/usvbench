@@ -22,7 +22,7 @@ from isaaclab.envs import DirectRLEnv
 from .._shared.obs_superset import SPEED_SCALE_MPS
 from .._shared.restoring import restoring_torque_body
 from .._shared.vehicles import get_vehicle
-from .._shared.waves import make_wave_field
+from .._shared.waves import CalmWater, make_wave_field
 from .curriculum import HazardNavCurriculum
 from .hazard_geometry import analytic_min_clearance, ray_circle_ranges, sample_layout
 from .hazard_nav_env_cfg import HazardNavEnvCfg
@@ -31,6 +31,19 @@ from .hazard_nav_env_cfg import HazardNavEnvCfg
 def _space_dim(space: object) -> int:
     shape = getattr(space, "shape", None)
     return int(shape[0]) if shape else int(space)
+
+
+def _episode_seed(base_seed: int, env_id: int, episode_index: int) -> int:
+    """Stable per-env/per-episode seed for layouts and wave pairing."""
+
+    mask = (1 << 63) - 1
+    value = int(base_seed) & mask
+    value = (value + (int(env_id) + 1) * 6364136223846793005) & mask
+    value = (value + (int(episode_index) + 1) * 1442695040888963407) & mask
+    value ^= value >> 30
+    value = (value * 3202034522624059733) & mask
+    value ^= value >> 27
+    return int(value & mask)
 
 
 class HazardNavEnv(DirectRLEnv):
@@ -49,15 +62,20 @@ class HazardNavEnv(DirectRLEnv):
             success_threshold=cfg.curriculum_success_threshold,
         )
         isaac_seed = getattr(cfg, "seed", None)
-        layout_seed = cfg.layout_seed if isaac_seed is None else int(isaac_seed)
-        self._layout_rng = np.random.default_rng(layout_seed)
+        self._eval_seed = cfg.layout_seed if isaac_seed is None else int(isaac_seed)
         super().__init__(cfg, render_mode, **kwargs)
 
         self.control_step_s = self.cfg.sim.dt * self.cfg.decimation
         self.wave_field = make_wave_field(
-            self.cfg.wave, self.num_envs, self.device
+            self.cfg.wave, self.num_envs, self.device, seed=self._eval_seed
         )
-        self._wave_active = str(self.cfg.wave.mode).lower() != "calm"
+        # A zero-height Airy/JONSWAP configuration is represented by the exact
+        # CalmWater no-op, so its buoyancy/drag/restoring path is bit-identical
+        # to the calm task rather than merely receiving zero wave amplitudes.
+        self._wave_active = not isinstance(self.wave_field, CalmWater)
+        self._episode_index = torch.zeros(
+            self.num_envs, dtype=torch.long, device=self.device
+        )
         self.wave_elevation = torch.zeros(self.num_envs, device=self.device)
         self.wave_vertical_velocity = torch.zeros(self.num_envs, device=self.device)
         self.wave_orbital_velocity = torch.zeros(
@@ -203,8 +221,17 @@ class HazardNavEnv(DirectRLEnv):
                 # Rebuilding it costs thousands of vertices per frame, which is
                 # wasted during 64-env training where nobody is watching, so it
                 # is reserved for the handful-of-envs playback runs.
+                mode = str(self.cfg.wave.mode).lower()
+                configured_wave_height = (
+                    float(self.cfg.wave.airy_height_m)
+                    if mode == "airy"
+                    else float(self.cfg.wave.hs_max_m)
+                    if mode == "jonswap"
+                    else 0.0
+                )
                 animate = (
-                    str(self.cfg.wave.mode).lower() != "calm"
+                    mode != "calm"
+                    and configured_wave_height > 0.0
                     and int(self.cfg.scene.num_envs) <= 4
                 )
                 if animate:
@@ -1151,9 +1178,15 @@ class HazardNavEnv(DirectRLEnv):
 
         # A fresh episode gets a fresh sea state, so a seed's difficulty is not
         # decided once at startup and then frozen for the whole run.
+        episode_indices = self._episode_index[env_ids].clone()
         if self._wave_active:
-            self.wave_field.randomize(env_ids)
+            # The same (eval seed, env id, episode index) always yields the
+            # same Hs/Tp/gamma, phases, and directions.  Passing the indices
+            # explicitly makes reset order irrelevant for paired evaluation.
+            self.wave_field.randomize(env_ids, episode_indices=episode_indices)
+            self.wave_field.set_time_origin(env_ids, self._sim_time_s())
             self.wave_elevation[env_ids] = 0.0
+        self._episode_index[env_ids] += 1
 
         completed_ids = env_ids[self._episode_finished[env_ids]]
         if len(completed_ids) > 0:
@@ -1234,12 +1267,17 @@ class HazardNavEnv(DirectRLEnv):
         counts_np = np.zeros(num_resets, dtype=np.int64)
         level = self.current_level
         for row in range(num_resets):
+            env_id = int(env_ids[row].item())
+            episode_index = int(episode_indices[row].item())
+            layout_rng = np.random.default_rng(
+                _episode_seed(self._eval_seed, env_id, episode_index)
+            )
             layout = sample_layout(
                 level,
-                rng=self._layout_rng,
+                rng=layout_rng,
                 max_attempts=self.cfg.layout_max_attempts,
             )
-            goal_angle = float(self._layout_rng.uniform(0.0, 2.0 * math.pi))
+            goal_angle = float(layout_rng.uniform(0.0, 2.0 * math.pi))
             cosine, sine = math.cos(goal_angle), math.sin(goal_angle)
             rotation = np.array(((cosine, -sine), (sine, cosine)))
             rotated_goal = layout.goal @ rotation.T
