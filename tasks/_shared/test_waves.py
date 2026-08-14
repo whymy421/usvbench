@@ -160,6 +160,98 @@ def test_randomize_only_touches_requested_envs() -> None:
     print("randomize: untouched envs keep their sea state")
 
 
+def test_randomization_is_stateless_and_order_independent() -> None:
+    """Same seed/env/episode tuple must reproduce phases and headings exactly."""
+    kwargs = dict(
+        num_envs=8,
+        device=DEVICE,
+        hs_range=(0.06, 0.18),
+        tp_range=(2.0, 4.0),
+        gamma_range=(1.0, 5.0),
+        seed=1234,
+    )
+    first = JONSWAPWaveField(**kwargs)
+    torch.manual_seed(999)
+    second = JONSWAPWaveField(**kwargs)
+    ids_a = torch.tensor([1, 3, 6])
+    eps = torch.tensor([0, 4, 2])
+    first.randomize(ids_a, episode_indices=eps)
+    second.randomize(
+        torch.tensor([6, 1, 3]), episode_indices=torch.tensor([2, 0, 4])
+    )
+    for lhs, rhs in (
+        (first.hs, second.hs),
+        (first.tp, second.tp),
+        (first.gamma, second.gamma),
+        (first.direction, second.direction),
+        (first.phases, second.phases),
+        (first.comp_dir_x, second.comp_dir_x),
+        (first.comp_dir_y, second.comp_dir_y),
+    ):
+        assert torch.equal(lhs, rhs), (lhs, rhs)
+    first.set_time_origin(torch.arange(8), 10.0)
+    second.set_time_origin(torch.arange(8), 20.0)
+    x, y = _positions(8)
+    assert torch.equal(first.elevation(10.0, x, y), second.elevation(20.0, x, y))
+    print("randomization: seed/env/episode replay is exact and reset-order independent")
+
+
+def test_level_sampling_and_zero_wave_factory() -> None:
+    field = JONSWAPWaveField(
+        num_envs=16,
+        device=DEVICE,
+        hs_range=(0.06, 0.18),
+        tp_range=(2.0, 4.0),
+        gamma_range=(1.0, 5.0),
+        sampling_mode="levels",
+        hs_levels=(0.06, 0.12, 0.18),
+        tp_levels=(2.0, 3.0, 4.0),
+        gamma_levels=(3.3,),
+        seed=77,
+    )
+    assert set(field.hs.tolist()) <= {0.06, 0.12, 0.18}
+    assert set(field.tp.tolist()) <= {2.0, 3.0, 4.0}
+    assert torch.equal(field.gamma, torch.full_like(field.gamma, 3.3))
+    cfg = SimpleNamespace(
+        mode="jonswap",
+        hs_max_m=0.0,
+        hs_min_m=0.0,
+        tp_min_s=2.0,
+        tp_max_s=4.0,
+        gamma_min=1.0,
+        gamma_max=5.0,
+        n_components=30,
+        f_min_hz=0.10,
+        f_max_hz=1.60,
+        spread_deg=30.0,
+        direction_deg=None,
+    )
+    calm = make_wave_field(cfg, 4, DEVICE)
+    assert isinstance(calm, CalmWater)
+    x, y = _positions(4)
+    assert torch.equal(calm.elevation(3.0, x, y), torch.zeros(4))
+    print("sampling: frozen levels are explicit and Hs=0 returns exact CalmWater")
+
+
+def test_frequency_grid_has_no_uniform_repeat_period() -> None:
+    field = JONSWAPWaveField(
+        num_envs=1,
+        device=DEVICE,
+        hs_range=(0.12, 0.12),
+        tp_range=(3.0, 3.0),
+        gamma_range=(3.3, 3.3),
+        f_min=0.10,
+        f_max=1.60,
+    )
+    assert torch.all(field.bin_widths > 0.0)
+    assert not torch.allclose(
+        field.freqs[1:] - field.freqs[:-1],
+        torch.full((field.n_components - 1,), field.df),
+    )
+    print(f"frequency grid: nominal repeat diagnostic is {field.nominal_repeat_period_s:.1f} s, "
+          "but the realised grid is nonuniform")
+
+
 def test_station_sampling_separates_roll_from_pitch() -> None:
     """The whole point of sampling across the hull rather than at a point.
 
@@ -286,6 +378,9 @@ if __name__ == "__main__":
     test_slope_matches_numerical_gradient()
     test_pinned_direction_is_shared_by_all_envs()
     test_randomize_only_touches_requested_envs()
+    test_randomization_is_stateless_and_order_independent()
+    test_level_sampling_and_zero_wave_factory()
+    test_frequency_grid_has_no_uniform_repeat_period()
     test_station_sampling_separates_roll_from_pitch()
     test_blueboat_uses_six_equivalent_buoyancy_stations()
     test_orbital_velocity_matches_airy_kinematics()

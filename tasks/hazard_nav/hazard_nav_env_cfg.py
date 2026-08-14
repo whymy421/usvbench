@@ -154,6 +154,14 @@ class WaveCfg:
     tp_max_s: float = 4.0
     gamma_min: float = 1.0
     gamma_max: float = 5.0
+    # ``uniform`` is retained for exploratory training.  Certification runs
+    # should use ``levels`` with an explicitly recorded frozen Hs x Tp grid;
+    # the official training/interpolation/extrapolation grids are deliberately
+    # left for the two teams to agree rather than silently becoming a baseline.
+    sampling_mode: str = "uniform"  # uniform | levels
+    hs_levels_m: tuple[float, ...] = ()
+    tp_levels_s: tuple[float, ...] = ()
+    gamma_levels: tuple[float, ...] = ()
     n_components: int = 30
     # Band follows Tp: at Tp = 2-4 s the peak sits at 0.25-0.5 Hz, so the
     # ocean-scale 0.04-0.5 Hz band used by the calm tasks would clip the whole
@@ -161,6 +169,10 @@ class WaveCfg:
     f_min_hz: float = 0.10
     f_max_hz: float = 1.60
     spread_deg: float = 30.0
+    # Deep-water linear theory is guarded by Hs/lambda_p <= 0.05, where
+    # lambda_p = g Tp^2 / (2 pi).  The implementation still uses the deep-water
+    # dispersion relation; shallow-water depth corrections are out of scope.
+    max_steepness: float = 0.05
 
     # Plant v2 carries no wave-specific gains. Lift, roll and pitch come out of
     # buoyancy sampled across the hull, and the horizontal push comes out of
@@ -363,6 +375,10 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             raise ValueError("reward_reverse_action_scale must be non-negative")
         if self.reward_reverse_velocity_scale < 0.0:
             raise ValueError("reward_reverse_velocity_scale must be non-negative")
+        if self.wave.sampling_mode not in {"uniform", "levels"}:
+            raise ValueError("wave.sampling_mode must be 'uniform' or 'levels'")
+        if self.wave.max_steepness <= 0.0:
+            raise ValueError("wave.max_steepness must be positive")
 
 
 @configclass

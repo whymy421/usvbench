@@ -100,11 +100,44 @@ Pin it to a number for a controlled beam-sea or following-sea sweep. `mode`
 accepts `calm`, `airy`, `jonswap`; an unknown value raises rather than quietly
 falling back to calm.
 
+The shipped JONSWAP defaults are `Hs=U[0.06, 0.18] m`, `Tp=U[2, 4] s`,
+`gamma=U[1, 5]`, `f_min_hz=0.10`, `f_max_hz=1.60`, `spread_deg=30` (uniform
+`±15°` around the mean direction), and `n_components=30`. `gamma=3.3` is a
+common reference value, not the current default. `sampling_mode="uniform"`
+means one independent draw per environment and reset; certification should use
+`sampling_mode="levels"` with an explicitly recorded frozen grid. The
+training/interpolation/extrapolation `Hs×Tp` levels remain a joint decision and
+are not silently frozen here.
+
+For paired evaluation, wave randomness is stateless:
+`f(eval_seed, environment_index, episode_index, stream_index)`. The first reset
+of each environment uses episode index 0 and every later reset increments it.
+The same protocol also seeds the hazard layout, so changing the order of a
+partial reset cannot change another environment's sea state or obstacle route.
+The process-wide Torch RNG is not used for wave phases, directions, or sea-state
+draws. Each reset also anchors that environment's wave clock at local `t=0`, so
+the same episode does not inherit a different phase merely because the previous
+episode ended at a different global simulation time.
+
+`Hs=0` is a strict no-op. A calm mode, an Airy height of zero, or a JONSWAP
+configuration with `hs_max_m=0` is constructed as `CalmWater`, and the resulting
+forces, torques, observations, and reset path are bit-identical to flat water.
+
 The JONSWAP spectrum is normalised numerically over its own discrete band, so
 `4√m₀ = Hs` holds exactly for any Tp, gamma, or frequency band. The usual
 `(1 − 0.287 ln γ)` closed form is derived for a continuous unbounded spectrum
 and drifts about 8% low at Tp = 4 s with gamma = 5, which is inside the range
 shipped here.
+
+The 30 frequencies use a fixed, small nonuniform jitter around the nominal
+`df=(f_max-f_min)/30=0.05 Hz` grid. A uniform 30-point sum would repeat every
+20 s, shorter than the 120 s episode; the jitter removes that exact repeat.
+Each component uses its own bin width `Delta_f_n` in both the spectrum moment and
+amplitude, preserving the Hs normalisation.
+
+The valid-domain guard enforces `Hs/lambda_p <= 0.05`, with
+`lambda_p=g Tp^2/(2 pi)`. This remains a deep-water linear model; finite-depth
+corrections are not included and require a separate validation before use.
 
 ## Recording video
 

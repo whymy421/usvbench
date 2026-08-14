@@ -20,6 +20,7 @@ existed.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 
 import torch
 
@@ -33,9 +34,32 @@ class WaveField:
     functions of ``(t, x, y)`` given that state.
     """
 
-    def randomize(self, env_ids: torch.Tensor) -> None:
-        """Draw a fresh sea state / phase set for ``env_ids``."""
+    def randomize(
+        self,
+        env_ids: torch.Tensor,
+        episode_indices: torch.Tensor | None = None,
+    ) -> None:
+        """Draw a fresh sea state / phase set for ``env_ids``.
+
+        ``episode_indices`` is part of the reproducibility contract.  When it
+        is supplied, every random quantity is a pure function of
+        ``(seed, env_id, episode_index)`` and therefore does not depend on
+        reset order or the process-wide Torch RNG.  Omitting it is retained as
+        a convenience for older callers; those calls consume a per-environment
+        deterministic counter rather than global randomness.
+        """
         raise NotImplementedError
+
+    def set_time_origin(self, env_ids: torch.Tensor, time_s: float) -> None:
+        """Anchor the sea-state clock at reset for episode-local replay.
+
+        The public wave equations take a scalar simulation time for efficient
+        vectorised evaluation.  Implementations store this per-environment
+        origin so a reset at a different wall-clock instant still starts the
+        same seeded episode at local time zero.
+        """
+
+        return
 
     def elevation(self, t: float, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         """Surface elevation in metres, shape ``(num_envs,)``."""
@@ -115,7 +139,14 @@ class CalmWater(WaveField):
         self._zeros = torch.zeros(num_envs, device=device)
         self._zeros2 = torch.zeros(num_envs, 2, device=device)
 
-    def randomize(self, env_ids: torch.Tensor) -> None:
+    def randomize(
+        self,
+        env_ids: torch.Tensor,
+        episode_indices: torch.Tensor | None = None,
+    ) -> None:
+        return
+
+    def set_time_origin(self, env_ids: torch.Tensor, time_s: float) -> None:
         return
 
     def elevation(self, t: float, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -158,6 +189,59 @@ class CalmWater(WaveField):
         return self._zeros
 
 
+def _seed_for(seed: int, env_id: int, episode_index: int, stream: int) -> int:
+    """Stable 63-bit seed mixer used by the stateless wave draws.
+
+    This is intentionally a small integer mixer rather than Python's hash or
+    Torch's global RNG.  Python hash randomisation, reset ordering, and other
+    workers can therefore never change a component's phase or heading.
+    """
+
+    mask = (1 << 63) - 1
+    value = int(seed) & mask
+    value = (value + (int(env_id) + 1) * 6364136223846793005) & mask
+    value = (value + (int(episode_index) + 1) * 1442695040888963407) & mask
+    value = (value + (int(stream) + 1) * 3202034522624059733) & mask
+    value ^= value >> 30
+    value = (value * 3202034522624059733) & mask
+    value ^= value >> 27
+    return int(value & mask)
+
+
+def _cpu_uniform(
+    shape: Sequence[int], seed: int, env_id: int, episode_index: int, stream: int
+) -> torch.Tensor:
+    """Stateless CPU draw, returned as float32 for device-independent replay."""
+
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(_seed_for(seed, env_id, episode_index, stream))
+    return torch.rand(tuple(int(dim) for dim in shape), generator=generator)
+
+
+def _resolve_randomize_indices(
+    counter: torch.Tensor,
+    env_ids: torch.Tensor,
+    episode_indices: torch.Tensor | None,
+) -> tuple[list[int], list[int]]:
+    """Resolve env ids and episode indices without depending on tensor order."""
+
+    ids = [int(value) for value in env_ids.detach().cpu().reshape(-1).tolist()]
+    if episode_indices is None:
+        episodes = [int(value) for value in counter[ids].tolist()]
+        if ids:
+            counter[ids] += 1
+    else:
+        episodes = [
+            int(value)
+            for value in episode_indices.detach().cpu().reshape(-1).tolist()
+        ]
+        if len(episodes) != len(ids):
+            raise ValueError("episode_indices must have one value per env_id")
+        if ids:
+            counter[ids] = torch.as_tensor(episodes, dtype=counter.dtype) + 1
+    return ids, episodes
+
+
 class AiryWaveField(WaveField):
     """Single-frequency regular wave, deep-water dispersion.
 
@@ -176,12 +260,15 @@ class AiryWaveField(WaveField):
         period_s: float = 5.0,
         direction_deg: float | None = None,
         gravity: float = GRAVITY_M_S2,
+        seed: int = 0,
     ):
         self.num_envs = num_envs
         self.device = device
         self.height_m = float(height_m)
         self.period_s = float(period_s)
         self.direction_deg = direction_deg
+        self.seed = int(seed)
+        self._randomize_counter = torch.zeros(num_envs, dtype=torch.long)
 
         self.amplitude = torch.full(
             (num_envs,), self.height_m / 2.0, device=device
@@ -191,29 +278,47 @@ class AiryWaveField(WaveField):
 
         self.direction = torch.zeros(num_envs, 2, device=device)
         self.phase = torch.zeros(num_envs, device=device)
-        self.randomize(torch.arange(num_envs, device=device))
-
-    def randomize(self, env_ids: torch.Tensor) -> None:
-        num = len(env_ids)
-        if num == 0:
-            return
-        if self.direction_deg is None:
-            angles = torch.rand(num, device=self.device) * 2.0 * math.pi
-        else:
-            angles = torch.full(
-                (num,), math.radians(self.direction_deg), device=self.device
-            )
-        self.direction[env_ids, 0] = torch.cos(angles)
-        self.direction[env_ids, 1] = torch.sin(angles)
-        self.phase[env_ids] = (
-            torch.rand(num, device=self.device) * 2.0 * math.pi
+        self.time_origin = torch.zeros(num_envs, device=device)
+        self.randomize(
+            torch.arange(num_envs, device=device),
+            episode_indices=torch.zeros(num_envs, dtype=torch.long, device=device),
         )
+
+    def randomize(
+        self,
+        env_ids: torch.Tensor,
+        episode_indices: torch.Tensor | None = None,
+    ) -> None:
+        ids, episodes = _resolve_randomize_indices(
+            self._randomize_counter, env_ids, episode_indices
+        )
+        if not ids:
+            return
+        angles = []
+        phases = []
+        for env_id, episode_index in zip(ids, episodes):
+            if self.direction_deg is None:
+                angle = _cpu_uniform((1,), self.seed, env_id, episode_index, 1)[0]
+                angles.append(float(angle * (2.0 * math.pi)))
+            else:
+                angles.append(math.radians(self.direction_deg))
+            phase = _cpu_uniform((1,), self.seed, env_id, episode_index, 2)[0]
+            phases.append(float(phase * (2.0 * math.pi)))
+        index = torch.as_tensor(ids, device=self.device, dtype=torch.long)
+        angle_tensor = torch.as_tensor(angles, device=self.device)
+        self.direction[index, 0] = torch.cos(angle_tensor)
+        self.direction[index, 1] = torch.sin(angle_tensor)
+        self.phase[index] = torch.as_tensor(phases, device=self.device)
+
+    def set_time_origin(self, env_ids: torch.Tensor, time_s: float) -> None:
+        self.time_origin[env_ids] = float(time_s)
 
     def _total_phase(
         self, t: float, x: torch.Tensor, y: torch.Tensor
     ) -> torch.Tensor:
         projected = self.direction[:, 0] * x + self.direction[:, 1] * y
-        return self.wave_number * projected - self.omega * t + self.phase
+        local_time = t - self.time_origin
+        return self.wave_number * projected - self.omega * local_time + self.phase
 
     def elevation(self, t: float, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return self.amplitude * torch.cos(self._total_phase(t, x, y))
@@ -255,7 +360,9 @@ class AiryWaveField(WaveField):
             self.direction[env_index, 0] * xs + self.direction[env_index, 1] * ys
         )
         phase = (
-            self.wave_number * projected - self.omega * t + self.phase[env_index]
+            self.wave_number * projected
+            - self.omega * (t - self.time_origin[env_index])
+            + self.phase[env_index]
         )
         return self.amplitude[env_index] * torch.cos(phase)
 
@@ -267,7 +374,7 @@ class AiryWaveField(WaveField):
         )
         phase = (
             self.wave_number * projected
-            - self.omega * t
+            - self.omega * (t - self.time_origin).unsqueeze(1)
             + self.phase.unsqueeze(1)
         )
         return self.amplitude.unsqueeze(1) * torch.cos(phase)
@@ -317,6 +424,13 @@ class JONSWAPWaveField(WaveField):
         spread_deg: float = 30.0,
         direction_deg: float | None = None,
         gravity: float = GRAVITY_M_S2,
+        seed: int = 0,
+        sampling_mode: str = "uniform",
+        hs_levels: tuple[float, ...] | None = None,
+        tp_levels: tuple[float, ...] | None = None,
+        gamma_levels: tuple[float, ...] | None = None,
+        max_steepness: float | None = None,
+        frequency_jitter: float = 0.22,
     ):
         self.num_envs = num_envs
         self.device = device
@@ -324,18 +438,95 @@ class JONSWAPWaveField(WaveField):
         self.hs_range = hs_range
         self.tp_range = tp_range
         self.gamma_range = gamma_range
+        self.sampling_mode = str(sampling_mode).lower()
+        self.hs_levels = tuple(float(value) for value in (hs_levels or ()))
+        self.tp_levels = tuple(float(value) for value in (tp_levels or ()))
+        self.gamma_levels = tuple(float(value) for value in (gamma_levels or ()))
+        self.max_steepness = max_steepness
+        self.seed = int(seed)
         self.f_min = float(f_min)
         self.f_max = float(f_max)
-        self.spread_rad = math.radians(float(spread_deg))
+        self.spread_deg = float(spread_deg)
+        self.spread_rad = math.radians(self.spread_deg)
         self.direction_deg = direction_deg
 
+        if self.sampling_mode not in {"uniform", "levels"}:
+            raise ValueError("sampling_mode must be 'uniform' or 'levels'")
+        if self.n_components < 1 or not self.f_min < self.f_max:
+            raise ValueError("JONSWAP requires n_components >= 1 and f_min < f_max")
+        if (
+            self.f_min <= 0.0
+            or self.hs_range[0] < 0.0
+            or self.hs_range[0] > self.hs_range[1]
+            or self.tp_range[0] <= 0.0
+            or self.tp_range[0] > self.tp_range[1]
+            or self.gamma_range[0] > self.gamma_range[1]
+        ):
+            raise ValueError("JONSWAP frequencies, Tp, and Hs bounds must be valid")
+        if self.gamma_range[0] <= 0.0:
+            raise ValueError("JONSWAP gamma bounds must be positive")
+        if self.spread_deg < 0.0:
+            raise ValueError("spread_deg must be non-negative")
+        if not 0.0 <= float(frequency_jitter) < 0.5:
+            raise ValueError("frequency_jitter must be in [0, 0.5)")
+        if self.sampling_mode == "levels":
+            for name, values in (
+                ("hs_levels", self.hs_levels),
+                ("tp_levels", self.tp_levels),
+                ("gamma_levels", self.gamma_levels),
+            ):
+                if not values:
+                    raise ValueError(f"{name} must be non-empty when sampling_mode='levels'")
+        for name, values, bounds in (
+            ("hs_levels", self.hs_levels, self.hs_range),
+            ("tp_levels", self.tp_levels, self.tp_range),
+            ("gamma_levels", self.gamma_levels, self.gamma_range),
+        ):
+            if values and any(value < bounds[0] or value > bounds[1] for value in values):
+                raise ValueError(f"{name} must lie inside its corresponding range")
+        if self.max_steepness is not None:
+            hs_domain = self.hs_levels if self.sampling_mode == "levels" else (self.hs_range[1],)
+            tp_domain = self.tp_levels if self.sampling_mode == "levels" else (self.tp_range[0],)
+            worst_steepness = max(
+                float(hs) / (gravity * float(tp) ** 2 / (2.0 * math.pi))
+                for hs in hs_domain
+                for tp in tp_domain
+            )
+            if worst_steepness > float(self.max_steepness) + 1.0e-12:
+                raise ValueError(
+                    "Hs/Tp domain exceeds max_steepness: "
+                    f"worst Hs/lambda_p={worst_steepness:.4f} > "
+                    f"{float(self.max_steepness):.4f}"
+                )
+
         self.df = (self.f_max - self.f_min) / self.n_components
-        self.freqs = torch.linspace(
+        # A fixed, nonuniform frequency grid avoids the exact 1/df repetition
+        # of a uniformly binned finite Fourier sum.  The jitter is deliberately
+        # small enough to keep the centres ordered and inside the configured
+        # band; the individual bin widths below preserve m0 exactly.
+        base_freqs = torch.linspace(
             self.f_min + self.df / 2.0,
             self.f_max - self.df / 2.0,
             self.n_components,
             device=device,
         )
+        offsets = torch.as_tensor(
+            [
+                frequency_jitter * self.df * math.sin((index + 1) * math.sqrt(2.0) + 0.37)
+                for index in range(self.n_components)
+            ],
+            device=device,
+            dtype=base_freqs.dtype,
+        )
+        self.freqs = base_freqs + offsets
+        if self.n_components > 1 and bool(torch.any(self.freqs[1:] <= self.freqs[:-1])):
+            raise ValueError("frequency_jitter produced a non-increasing frequency grid")
+        edges = torch.empty(self.n_components + 1, device=device, dtype=base_freqs.dtype)
+        edges[0] = self.f_min
+        edges[-1] = self.f_max
+        if self.n_components > 1:
+            edges[1:-1] = 0.5 * (self.freqs[:-1] + self.freqs[1:])
+        self.bin_widths = edges[1:] - edges[:-1]
         self.omegas = 2.0 * math.pi * self.freqs
         self.wave_numbers = self.omegas ** 2 / gravity
 
@@ -343,13 +534,18 @@ class JONSWAPWaveField(WaveField):
         self.tp = torch.zeros(num_envs, device=device)
         self.gamma = torch.zeros(num_envs, device=device)
         self.direction = torch.zeros(num_envs, 2, device=device)
+        self.time_origin = torch.zeros(num_envs, device=device)
 
         self.amplitudes = torch.zeros(num_envs, self.n_components, device=device)
         self.phases = torch.zeros(num_envs, self.n_components, device=device)
         self.comp_dir_x = torch.zeros(num_envs, self.n_components, device=device)
         self.comp_dir_y = torch.zeros(num_envs, self.n_components, device=device)
+        self._randomize_counter = torch.zeros(num_envs, dtype=torch.long)
 
-        self.randomize(torch.arange(num_envs, device=device))
+        self.randomize(
+            torch.arange(num_envs, device=device),
+            episode_indices=torch.zeros(num_envs, dtype=torch.long, device=device),
+        )
 
     def _spectrum(
         self, hs: torch.Tensor, tp: torch.Tensor, gamma: torch.Tensor
@@ -375,45 +571,86 @@ class JONSWAPWaveField(WaveField):
         r = torch.exp(-0.5 * ((f_e - fp_e) / (sigma * fp_e)).pow(2))
         spectrum = torch.clamp(shape * gamma_e.pow(r), min=0.0)
 
-        m0 = (spectrum * self.df).sum(dim=1, keepdim=True).clamp(min=1e-12)
+        m0 = (spectrum * self.bin_widths.unsqueeze(0)).sum(dim=1, keepdim=True).clamp(min=1e-12)
         return spectrum * (hs_e / (4.0 * torch.sqrt(m0))) ** 2
 
-    def randomize(self, env_ids: torch.Tensor) -> None:
-        num = len(env_ids)
-        if num == 0:
+    def _sample_parameter(
+        self,
+        bounds: tuple[float, float],
+        levels: tuple[float, ...],
+        env_id: int,
+        episode_index: int,
+        stream: int,
+    ) -> float:
+        unit = float(_cpu_uniform((1,), self.seed, env_id, episode_index, stream)[0])
+        if self.sampling_mode == "levels":
+            values = levels
+            return values[min(int(unit * len(values)), len(values) - 1)]
+        low, high = bounds
+        return low + unit * (high - low)
+
+    def randomize(
+        self,
+        env_ids: torch.Tensor,
+        episode_indices: torch.Tensor | None = None,
+    ) -> None:
+        ids, episodes = _resolve_randomize_indices(
+            self._randomize_counter, env_ids, episode_indices
+        )
+        if not ids:
             return
-
-        def _uniform(bounds: tuple[float, float]) -> torch.Tensor:
-            low, high = bounds
-            return torch.rand(num, device=self.device) * (high - low) + low
-
-        self.hs[env_ids] = _uniform(self.hs_range)
-        self.tp[env_ids] = _uniform(self.tp_range)
-        self.gamma[env_ids] = _uniform(self.gamma_range)
-
-        if self.direction_deg is None:
-            base_angle = torch.rand(num, device=self.device) * 2.0 * math.pi
-        else:
-            base_angle = torch.full(
-                (num,), math.radians(self.direction_deg), device=self.device
+        hs_values, tp_values, gamma_values, base_angles = [], [], [], []
+        phase_values, spread_values = [], []
+        for env_id, episode_index in zip(ids, episodes):
+            hs_values.append(
+                self._sample_parameter(self.hs_range, self.hs_levels, env_id, episode_index, 1)
             )
-        self.direction[env_ids, 0] = torch.cos(base_angle)
-        self.direction[env_ids, 1] = torch.sin(base_angle)
+            tp_values.append(
+                self._sample_parameter(self.tp_range, self.tp_levels, env_id, episode_index, 2)
+            )
+            gamma_values.append(
+                self._sample_parameter(self.gamma_range, self.gamma_levels, env_id, episode_index, 3)
+            )
+            if self.direction_deg is None:
+                base = float(_cpu_uniform((1,), self.seed, env_id, episode_index, 4)[0])
+                base_angles.append(base * 2.0 * math.pi)
+            else:
+                base_angles.append(math.radians(self.direction_deg))
+            phase_values.append(
+                _cpu_uniform((self.n_components,), self.seed, env_id, episode_index, 5)
+                * (2.0 * math.pi)
+            )
+            spread_values.append(
+                (_cpu_uniform((self.n_components,), self.seed, env_id, episode_index, 6) - 0.5)
+                * self.spread_rad
+            )
 
-        self.phases[env_ids] = (
-            torch.rand(num, self.n_components, device=self.device) * 2.0 * math.pi
-        )
-        spread = (
-            torch.rand(num, self.n_components, device=self.device) - 0.5
-        ) * self.spread_rad
+        index = torch.as_tensor(ids, device=self.device, dtype=torch.long)
+        base_angle = torch.as_tensor(base_angles, device=self.device)
+        self.hs[index] = torch.as_tensor(hs_values, device=self.device)
+        self.tp[index] = torch.as_tensor(tp_values, device=self.device)
+        self.gamma[index] = torch.as_tensor(gamma_values, device=self.device)
+        self.direction[index, 0] = torch.cos(base_angle)
+        self.direction[index, 1] = torch.sin(base_angle)
+        self.phases[index] = torch.stack(phase_values).to(self.device)
+        spread = torch.stack(spread_values).to(self.device)
         comp_angles = base_angle.unsqueeze(1) + spread
-        self.comp_dir_x[env_ids] = torch.cos(comp_angles)
-        self.comp_dir_y[env_ids] = torch.sin(comp_angles)
+        self.comp_dir_x[index] = torch.cos(comp_angles)
+        self.comp_dir_y[index] = torch.sin(comp_angles)
 
-        spectrum = self._spectrum(
-            self.hs[env_ids], self.tp[env_ids], self.gamma[env_ids]
+        spectrum = self._spectrum(self.hs[index], self.tp[index], self.gamma[index])
+        self.amplitudes[index] = torch.sqrt(
+            2.0 * spectrum * self.bin_widths.unsqueeze(0)
         )
-        self.amplitudes[env_ids] = torch.sqrt(2.0 * spectrum * self.df)
+
+    def set_time_origin(self, env_ids: torch.Tensor, time_s: float) -> None:
+        self.time_origin[env_ids] = float(time_s)
+
+    @property
+    def nominal_repeat_period_s(self) -> float:
+        """The old uniform-grid period, retained as a diagnostic only."""
+
+        return 1.0 / self.df
 
     def _total_phase(
         self, t: float, x: torch.Tensor, y: torch.Tensor
@@ -422,7 +659,8 @@ class JONSWAPWaveField(WaveField):
             self.comp_dir_x * x.unsqueeze(1) + self.comp_dir_y * y.unsqueeze(1)
         )
         spatial = projected * self.wave_numbers.unsqueeze(0)
-        return spatial - self.omegas.unsqueeze(0) * t + self.phases
+        local_time = t - self.time_origin.unsqueeze(1)
+        return spatial - self.omegas.unsqueeze(0) * local_time + self.phases
 
     def elevation(self, t: float, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return (self.amplitudes * torch.cos(self._total_phase(t, x, y))).sum(dim=1)
@@ -478,7 +716,7 @@ class JONSWAPWaveField(WaveField):
         )
         phase = (
             projected * self.wave_numbers.unsqueeze(0)
-            - self.omegas.unsqueeze(0) * t
+            - self.omegas.unsqueeze(0) * (t - self.time_origin[env_index])
             + self.phases[env_index].unsqueeze(0)
         )
         return (self.amplitudes[env_index].unsqueeze(0) * torch.cos(phase)).sum(dim=1)
@@ -494,7 +732,8 @@ class JONSWAPWaveField(WaveField):
         )
         phase = (
             projected * self.wave_numbers.view(1, 1, -1)
-            - self.omegas.view(1, 1, -1) * t
+            - self.omegas.view(1, 1, -1)
+            * (t - self.time_origin).view(-1, 1, 1)
             + self.phases.unsqueeze(1)
         )
         return (self.amplitudes.unsqueeze(1) * torch.cos(phase)).sum(dim=2)
@@ -518,7 +757,9 @@ class JONSWAPWaveField(WaveField):
         return self.hs
 
 
-def make_wave_field(cfg, num_envs: int, device: torch.device) -> WaveField:
+def make_wave_field(
+    cfg, num_envs: int, device: torch.device, seed: int = 0
+) -> WaveField:
     """Build the wave field named by ``cfg.mode`` ("calm" / "airy" / "jonswap").
 
     ``cfg`` is any object carrying the attributes below -- an Isaac Lab
@@ -528,14 +769,19 @@ def make_wave_field(cfg, num_envs: int, device: torch.device) -> WaveField:
     if mode == "calm":
         return CalmWater(num_envs, device)
     if mode == "airy":
+        if float(cfg.airy_height_m) <= 0.0:
+            return CalmWater(num_envs, device)
         return AiryWaveField(
             num_envs=num_envs,
             device=device,
             height_m=cfg.airy_height_m,
             period_s=cfg.airy_period_s,
             direction_deg=cfg.direction_deg,
+            seed=seed,
         )
     if mode == "jonswap":
+        if float(cfg.hs_max_m) <= 0.0:
+            return CalmWater(num_envs, device)
         return JONSWAPWaveField(
             num_envs=num_envs,
             device=device,
@@ -547,6 +793,12 @@ def make_wave_field(cfg, num_envs: int, device: torch.device) -> WaveField:
             f_max=cfg.f_max_hz,
             spread_deg=cfg.spread_deg,
             direction_deg=cfg.direction_deg,
+            seed=seed,
+            sampling_mode=getattr(cfg, "sampling_mode", "uniform"),
+            hs_levels=getattr(cfg, "hs_levels_m", None),
+            tp_levels=getattr(cfg, "tp_levels_s", None),
+            gamma_levels=getattr(cfg, "gamma_levels", None),
+            max_steepness=getattr(cfg, "max_steepness", None),
         )
     raise ValueError(
         f"unknown wave mode {mode!r}; expected 'calm', 'airy' or 'jonswap'"
