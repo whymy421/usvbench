@@ -69,6 +69,12 @@ HazardNav 当前共享实现的默认值如下；这些是代码默认值，不�
 random_value = f(eval_seed, environment_index, episode_index, stream_index)
 ```
 
+认证评测的参考种子为 `eval_seed=42`，与 `scripts/eval_hazard_nav.py` 的
+`--seed` 默认值一致；正式报告应把实际使用的 seed 写入结果记录，不能依赖
+未记录的进程默认状态。`environment_index` 是从 `0` 开始的环境编号，
+`episode_index` 是每个环境独立维护的回合编号，首次 reset 固定为 `0`，
+此后依次为 `1, 2, ...`；它不是需要另行抽样的海况参数。
+
 实现使用每个环境独立的 CPU `torch.Generator`，由上述整数元组派生 seed，
 不读取或推进全局 Torch RNG。HazardNav 在每个环境维护 `episode_index`：
 首次 reset 为 `0`，之后每次 reset 加 `1`；reset 时把该索引显式传给共享波场。

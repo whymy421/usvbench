@@ -112,6 +112,11 @@ are not silently frozen here.
 For paired evaluation, wave randomness is stateless:
 `f(eval_seed, environment_index, episode_index, stream_index)`. The first reset
 of each environment uses episode index 0 and every later reset increments it.
+The reference certification command uses `eval_seed=42`, matching the default
+`--seed 42` in `scripts/eval_hazard_nav.py`; record the actual seed in every
+reported result. Environment and episode indices are zero-based, and
+`episode_index` is a per-environment counter rather than another random
+parameter.
 The same protocol also seeds the hazard layout, so changing the order of a
 partial reset cannot change another environment's sea state or obstacle route.
 The process-wide Torch RNG is not used for wave phases, directions, or sea-state
