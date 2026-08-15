@@ -45,17 +45,17 @@ HazardNav 当前共享实现的默认值如下；这些是代码默认值，不�
 
 | 参数 | 默认值 | 含义 |
 |---|---:|---|
-| `gamma` | `U[1.0, 5.0]` | 每回合每环境独立抽样的峰增强因子；`3.3` 是常见参考值，不是当前默认常数 |
+| `gamma` | `3.3` | 认证协议的固定峰增强因子；探索性实验仍可显式改用范围 |
 | `f_min_hz` | `0.10` | 频带下限 |
 | `f_max_hz` | `1.60` | 频带上限 |
 | `spread_deg` | `30` | 总展布宽度，实际为平均波向两侧各 `15°` |
 | `n_components` | `30` | 频率分量数 |
 | `buoyancy_stations` | `6` | 船体浮力采样点数 |
 
-默认 `sampling_mode="uniform"` 时，`Hs`、`Tp`、`gamma` 分别在各自的闭区间
-`[min, max]` 上均匀抽样一次，且每个环境每次 reset 都重抽。认证包应改用
-`sampling_mode="levels"`，并显式填写 `hs_levels_m`、`tp_levels_s`、
-`gamma_levels`；训练包、插值包、外推包的具体 `Hs×Tp` 档位仍需双方确认，
+认证默认固定 `gamma=3.3`。`Hs` 和 `Tp` 的训练/评测抽样仍应使用
+`sampling_mode="levels"`，并显式填写 `hs_levels_m`、`tp_levels_s`；
+认证配置可将 `gamma_levels` 写成 `(3.3,)`。探索性实验若要在范围内均匀抽样，
+必须显式记录该选择。训练包、插值包、外推包的具体 `Hs×Tp` 档位仍需双方确认，
 当前仓库不把任何一组未经确认的档位冻结成 baseline。
 
 `direction_deg=None` 时，平均传播方向在 `[0, 360°)` 上确定性伪随机采样；

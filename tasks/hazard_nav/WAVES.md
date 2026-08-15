@@ -100,12 +100,12 @@ Pin it to a number for a controlled beam-sea or following-sea sweep. `mode`
 accepts `calm`, `airy`, `jonswap`; an unknown value raises rather than quietly
 falling back to calm.
 
-The shipped JONSWAP defaults are `Hs=U[0.06, 0.18] m`, `Tp=U[2, 4] s`,
-`gamma=U[1, 5]`, `f_min_hz=0.10`, `f_max_hz=1.60`, `spread_deg=30` (uniform
-`±15°` around the mean direction), and `n_components=30`. `gamma=3.3` is a
-common reference value, not the current default. `sampling_mode="uniform"`
-means one independent draw per environment and reset; certification should use
-`sampling_mode="levels"` with an explicitly recorded frozen grid. The
+The certification protocol defaults to `Hs=U[0.06, 0.18] m`, `Tp=U[2, 4] s`,
+fixed `gamma=3.3`, `f_min_hz=0.10`, `f_max_hz=1.60`, `spread_deg=30` (uniform
+`±15°` around the mean direction), and `n_components=30`. `gamma=3.3` is the
+agreed protocol default; exploratory runs may explicitly choose another range.
+Certification should use `sampling_mode="levels"` with an explicitly recorded
+frozen Hs/Tp grid and `gamma_levels=(3.3,)`. The
 training/interpolation/extrapolation `Hs×Tp` levels remain a joint decision and
 are not silently frozen here.
 
@@ -126,8 +126,8 @@ forces, torques, observations, and reset path are bit-identical to flat water.
 The JONSWAP spectrum is normalised numerically over its own discrete band, so
 `4√m₀ = Hs` holds exactly for any Tp, gamma, or frequency band. The usual
 `(1 − 0.287 ln γ)` closed form is derived for a continuous unbounded spectrum
-and drifts about 8% low at Tp = 4 s with gamma = 5, which is inside the range
-shipped here.
+and drifts about 8% low at Tp = 4 s with gamma = 5; that value is only relevant
+to an explicitly requested exploratory range, not the certification default.
 
 The 30 frequencies use a fixed, small nonuniform jitter around the nominal
 `df=(f_max-f_min)/30=0.05 Hz` grid. A uniform 30-point sum would repeat every
