@@ -82,3 +82,19 @@ gym.register(
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },
 )
+
+# C2 x ramping current: speed climbs linearly within each episode
+# (current_ramp_start_mps -> current_ramp_end_mps, direction fixed per
+# episode). Append-only: certified Current ids untouched.
+gym.register(
+    id="Isaac-USV-StationKeep-BlueBoat-RampCurrent-Direct-v1",
+    entry_point=f"{__name__}.station_keeping_env:StationKeepingEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.station_keeping_env_cfg:"
+            "StationKeepingBlueBoatRampCurrentEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)

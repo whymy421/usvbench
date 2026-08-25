@@ -123,6 +123,22 @@ NATIVE_LAYOUTS: dict[str, list[int] | UnsupportedNativeLayout] = {
     "Isaac-USV-HazardFortress2-Direct-v1": list(_HAZARD_V3),
     "Isaac-USV-HazardBandFort-Direct-v1": list(_HAZARD_V3),
     "Isaac-USV-HazardBandFortSoft-Direct-v1": list(_HAZARD_V3),
+    # Same 42-D slot layout. Caveat carried from the env: the Geo/Way variants
+    # re-aim the nav slots at the geodesic route (waypoint bearing/distance)
+    # rather than the final goal, so projections keep slot POSITIONS but the
+    # nav semantics differ; embed_checkpoint across that boundary is a
+    # deliberate act, not a free lunch.
+    "Isaac-USV-HazardBandFortGeo-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-HazardBandFortWay-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-HazardBandFortWayTax-Direct-v1": list(_HAZARD_V3),
+    # Suite D dynamics carriers and the discount-coupling control pair: all
+    # plain forced-crossing observations; only rewards/dynamics differ.
+    "Isaac-USV-HazardCrossMass-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-HazardCrossDrag-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-HazardCrossThrust-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-HazardCrossTau-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-HazardPbrsGamma-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-HazardPbrsNoGamma-Direct-v1": list(_HAZARD_V3),
     # Contract-mode observations are already in v2 superset order, including
     # the zero-filled task-specific and reserved slices.
     "Isaac-USV-HazardNavC64-Direct-v1": list(range(SUPERSET_DIM_V2)),
@@ -134,6 +150,8 @@ NATIVE_LAYOUTS: dict[str, list[int] | UnsupportedNativeLayout] = {
     "Isaac-USV-HarborStage2Warm-Direct-v1": list(_HARBOR_KIN),
     "Isaac-USV-HarborStage2AllRew-Direct-v1": list(_HARBOR_KIN),
     "Isaac-USV-HarborMissionKin-Direct-v1": list(_HARBOR_KIN),
+    # Dock phase in isolation: same 49-D staged contract, only the spawn moves.
+    "Isaac-USV-HarborDockPhase-Direct-v1": list(_HARBOR_KIN),
     "Isaac-USV-PathHazard-Direct-v2": list(_PATH_HAZARD_KIN),
     # Kinematic and solid-wall docking registrations.
     "Isaac-USV-Dock-BlueBoat-Kin-Direct-v1": list(_DOCK_KIN),
@@ -144,6 +162,18 @@ NATIVE_LAYOUTS: dict[str, list[int] | UnsupportedNativeLayout] = {
     "Isaac-USV-StationKeep-BlueBoat-Kin-Direct-v1": list(_STATION_KIN),
     "Isaac-USV-StationKeep-BlueBoat-Current-Kin-Direct-v1": list(_STATION_KIN),
     "Isaac-USV-StationKeep-BlueBoat-Wave-Direct-v1": list(_STATION_WAVE),
+    # PENDING gym registration (tasks/hazard_nav/PENDING_REGISTRATIONS.md):
+    # ramping-current station variant; same 3-D nav observation as the other
+    # non-Kin station ids. The drift tests stay green meanwhile because
+    # docking's broad f-string pattern shadows orphans of this id shape.
+    "Isaac-USV-StationKeep-BlueBoat-RampCurrent-Direct-v1": list(_NAV),
+    # Suite S structural-generalization ids: plain v3 hazard observations on
+    # frozen layouts; only the reset-time layout source differs.
+    "Isaac-USV-SuiteS-SingleRow-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-SuiteS-StaggeredRows-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-SuiteS-DiagonalRow-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-SuiteS-Clusters-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-SuiteS-GapWall-Direct-v1": list(_HAZARD_V3),
 }
 
 

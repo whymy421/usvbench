@@ -1739,6 +1739,7 @@ def sample_band_fortress_layout(
     rng: np.random.Generator | None = None,
     *,
     max_attempts: int = 80,
+    aperture_override_m: float | None = None,
 ) -> HazardLayout:
     """Sample two constructive brick-wall bands around an origin goal."""
     if max_attempts < 1:
@@ -1750,6 +1751,11 @@ def sample_band_fortress_layout(
         raise ValueError(
             f"Unknown band-fortress level {level!r}; expected one of {valid}."
         ) from None
+    # Tier-regrade probes: the frozen table has a measured cliff (32.8% at
+    # 6.0 m straight to 0% at 4.5 m), so intermediate apertures must be
+    # measurable without touching tier semantics. None/0 keeps the table.
+    if aperture_override_m is not None and aperture_override_m > 0.0:
+        aperture = float(aperture_override_m)
     rng = np.random.default_rng() if rng is None else rng
     goal = np.zeros(2, dtype=np.float64)
 
@@ -2087,6 +2093,7 @@ def sample_forced_crossing_layout(
     rng: np.random.Generator | None = None,
     *,
     max_attempts: int = 60,
+    gate_width_override_m: float | None = None,
 ) -> tuple[HazardLayout, GateSpec]:
     """Sample a closed basin whose only route to the goal is through the gate.
 
@@ -2107,6 +2114,10 @@ def sample_forced_crossing_layout(
         raise ValueError("max_attempts must be at least one")
     difficulty = difficulty_for_level(level)
     gate_width = float(FORCED_GATE_BEAMS[difficulty.level] * HULL_BEAM_M)
+    # Tier-regrade probes (e.g. a 1.5x-beam T5 candidate) pin the gate in
+    # physical metres; the hull-fit guard below still applies to overrides.
+    if gate_width_override_m is not None and gate_width_override_m > 0.0:
+        gate_width = float(gate_width_override_m)
     if gate_width < HULL_BEAM_M + FORCED_GATE_FIT_MARGIN_M:
         raise ValueError(f"level {level} gate {gate_width:.3f} m cannot fit the hull")
     rng = np.random.default_rng() if rng is None else rng

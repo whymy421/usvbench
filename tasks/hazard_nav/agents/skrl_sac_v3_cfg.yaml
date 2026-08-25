@@ -1,0 +1,97 @@
+# SAC v3: the measured fix. Probe evidence: policy.log_prob min -9.8e15 while
+# every other TD-target term stayed bounded -- skrl's GaussianMixin mean is
+# UNBOUNDED and clip_actions clips samples without correcting probability, so
+# boundary actions under a runaway mean poison targets via -alpha*log_pi.
+# Fix: (1) tanh(ACTIONS) bounds the mean itself (syntax verified end-to-end on
+# this box via return_source), (2) min_log_std -2 floors sigma at 0.135 so the
+# worst boundary log-prob is ~-110/dim instead of astronomical, (3) gamma 0.99
+# + reward scale 0.01 keep Q in a preprocessor-free critic's healthy range.
+
+
+models:
+  separate: True
+  policy:
+    class: GaussianMixin
+    clip_actions: True
+    clip_log_std: True
+    min_log_std: -2.0
+    max_log_std: 2.0
+    initial_log_std: 0.0
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: tanh(ACTIONS)
+  critic_1:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+  critic_2:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+  target_critic_1:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+  target_critic_2:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+
+
+memory:
+  class: RandomMemory
+  memory_size: 32768
+
+
+agent:
+  class: SAC
+  gradient_steps: 1
+  batch_size: 4096
+  discount_factor: 0.99
+  rewards_shaper_scale: 0.01
+  polyak: 0.005
+  actor_learning_rate: 5.0e-04
+  critic_learning_rate: 5.0e-04
+  random_timesteps: 800
+  learning_starts: 800
+  grad_norm_clip: 1.0
+  learn_entropy: True
+  entropy_learning_rate: 5.0e-04
+  initial_entropy_value: 1.0
+  state_preprocessor: RunningStandardScaler
+  state_preprocessor_kwargs: null
+  experiment:
+    directory: "usvbench"
+    experiment_name: "sac_pathfinder"
+    write_interval: auto
+    checkpoint_interval: 256
+    wandb: false
+
+
+trainer:
+  class: SequentialTrainer
+  timesteps: 48000
+  environment_info: log

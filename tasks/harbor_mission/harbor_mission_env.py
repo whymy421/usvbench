@@ -20,6 +20,13 @@ from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
 
 from .._shared.restoring import restoring_torque_body
+from .._shared.scenario_draws import make_scenario_rng, stamp_scenario
+from .._shared.scenario_draws_hazard import (
+    GROUP_LAYOUT,
+    GROUP_SPAWN,
+    episode_layout_rng,
+    spawn_jitter_offsets,
+)
 from .._shared.vehicles import get_vehicle
 from ..hazard_nav.hazard_geometry import analytic_min_clearance, ray_circle_ranges
 from .harbor_geometry import (
@@ -46,6 +53,13 @@ class HarborMissionEnv(DirectRLEnv):
     ):
         self.vehicle_spec = get_vehicle(cfg.vehicle)
         self.physics_cfg = cfg.underwater_physics_cfg
+        # UNSEEDED BEHAVIOUR, UNCHANGED AND DOCUMENTED RATHER THAN FIXED: with
+        # cfg.seed None this falls back to cfg.layout_seed, which defaults to
+        # the CONSTANT 0 (harbor_mission_env_cfg.py:181), so an unseeded run
+        # replays one fixed route sequence instead of drawing fresh entropy.
+        # This generator remains the whole scenario source on that path; the
+        # migration below changes only the SEEDED path, which is the one every
+        # evaluator takes (scripts/eval_v6_frozen.py:104 sets env_cfg.seed).
         isaac_seed = getattr(cfg, "seed", None)
         layout_seed = cfg.layout_seed if isaac_seed is None else int(isaac_seed)
         self._layout_rng = np.random.default_rng(layout_seed)
@@ -185,6 +199,33 @@ class HarborMissionEnv(DirectRLEnv):
         self._stage_goal_entry_this_step = torch.zeros(
             self.num_envs, dtype=torch.bool, device=self.device
         )
+
+        # --- Controller-independent episode scenarios -----------------------
+        # The route and the staged-spawn jitter both came off self._layout_rng
+        # (:65): ONE generator, advanced once per reset for whatever batch
+        # happened to be resetting. That is seed-derived and still not
+        # reproducible across controllers, because this family terminates EARLY
+        # -- on a milestone and on contact (_get_dones at :1133 and :1140; the
+        # certified HarborStage/HarborDockPhase cfgs set both,
+        # harbor_mission_env_cfg.py:294-295 and :338-339). Two controllers therefore arrive at reset k at
+        # different times and in different groupings, consume a different number
+        # of rejection-sampler draws inside sample_harbor_route, and are handed
+        # DIFFERENT routes for the same (eval seed, env, episode). The sibling
+        # family measured this directly: three controllers agreed on only
+        # 53.8% / 56.9% / 55.6% of shared (env, episode) slots on fields that
+        # depend on the layout alone. Both primitives now ride a stream keyed by
+        # (protocol version, cfg.seed, env index, per-env episode index, group).
+        #
+        # cfg.seed None -> None -> the historical single self._layout_rng
+        # sequence, unchanged (see the comment at :56-62 for what it is).
+        self._scenario = make_scenario_rng(self.cfg, self.num_envs, self.device)
+        # _scenario_* is the RUNNING episode; episode_scenario_* is latched at
+        # reset for the episode that just ENDED, matching episode_min_clearance,
+        # which is where scripts/eval_v6_frozen.py:213-215 reads it.
+        self._scenario_params = [{} for _ in range(self.num_envs)]
+        self._scenario_hashes = [{} for _ in range(self.num_envs)]
+        self.episode_scenario = [{} for _ in range(self.num_envs)]
+        self.episode_scenario_hashes = [{} for _ in range(self.num_envs)]
 
     def _setup_scene(self) -> None:
         if self.vehicle_spec.asset_kind == "articulation":
@@ -1123,6 +1164,14 @@ class HarborMissionEnv(DirectRLEnv):
             self.m1[completed_ids] = completed_m1
             self.m2[completed_ids] = completed_m2
             self.m3[completed_ids] = completed_m3
+            # Same latch, same moment, as episode_min_clearance above: the
+            # evaluator reads the FINISHED episode's scenario alongside the
+            # finished episode's metrics.
+            for completed in completed_ids.tolist():
+                self.episode_scenario[completed] = self._scenario_params[completed]
+                self.episode_scenario_hashes[completed] = self._scenario_hashes[
+                    completed
+                ]
 
             self.extras.setdefault("log", {})
             self.extras["log"]["Episode/success"] = success.float().mean()
@@ -1157,11 +1206,18 @@ class HarborMissionEnv(DirectRLEnv):
 
         super()._reset_idx(env_ids)
 
+        # New episode for these envs: advance their per-env episode counter and
+        # reseed their primitive streams. MUST precede every draw below.
+        if self._scenario is not None:
+            self._scenario.reset_idx(env_ids)
+
         num_resets = len(env_ids)
+        reset_env_indices = env_ids.tolist()
         max_obstacles = self.cfg.max_obstacles
         local_gates_np = np.zeros((num_resets, 3, 2), dtype=np.float32)
         gate_normals_np = np.zeros((num_resets, 3, 2), dtype=np.float32)
         local_berths_np = np.zeros((num_resets, 2), dtype=np.float32)
+        local_exits_np = np.zeros((num_resets, 2), dtype=np.float32)
         local_centers_np = np.zeros(
             (num_resets, max_obstacles, 2), dtype=np.float32
         )
@@ -1172,8 +1228,15 @@ class HarborMissionEnv(DirectRLEnv):
         stage_starts_np = np.zeros((num_resets, 3), dtype=np.float32)
         stage_ends_np = np.zeros((num_resets, 3), dtype=np.float32)
         for row in range(num_resets):
+            # One generator per (env, episode) instead of one shared generator
+            # advanced per reset. sample_harbor_route itself -- its rejection
+            # loop, both attempt budgets, every range it samples, the BFS
+            # feasibility oracle -- is untouched; only the Generator handed to it
+            # changes, and only when the env is seeded. See episode_layout_rng.
             route = sample_harbor_route(
-                self._layout_rng,
+                episode_layout_rng(
+                    self._scenario, self._layout_rng, reset_env_indices[row]
+                ),
                 max_attempts=self.cfg.layout_max_attempts,
                 hazard_max_attempts=self.cfg.hazard_layout_max_attempts,
             )
@@ -1181,6 +1244,7 @@ class HarborMissionEnv(DirectRLEnv):
             local_gates_np[row] = route.gate_midpoints
             gate_normals_np[row] = route.gate_normals
             local_berths_np[row] = route.berth_point
+            local_exits_np[row] = route.field_exit
             local_centers_np[row, :count] = route.obstacle_centers
             radii_np[row, :count] = route.obstacle_radii
             active_np[row, :count] = True
@@ -1218,6 +1282,33 @@ class HarborMissionEnv(DirectRLEnv):
             stage_ends_np, device=self.device
         )
 
+        # spawn_phase > 0 drops the boat straight into a later stage. The dock
+        # specialist trained from the harbor mouth never reached the dock phase
+        # in 128 certification episodes, so it was handed the dock with a policy
+        # that had never been in that state; spawning at the hand-off point puts
+        # training on the state distribution the composite actually produces.
+        start_phase = int(getattr(self.cfg, "spawn_phase", 0))
+        # Resolved spawn jitter for the certificate stamp, present only when a
+        # draw actually happened: the default cfg has spawn_phase 0 and
+        # spawn_phase_jitter_m 0.0 (harbor_mission_env_cfg.py:187-188), draws no
+        # randomness here, and so contributes no spawn_pose hash.
+        spawn_scenario: dict[str, dict[str, object]] = {}
+        if start_phase >= 2:
+            jitter_m = float(getattr(self.cfg, "spawn_phase_jitter_m", 0.0))
+            # Uniform over the disc of radius jitter_m exactly as before -- the
+            # angle, then the sqrt-scaled radius that keeps it area-uniform, and
+            # no draw at all when the jitter is zero. Only the stream changed.
+            offsets = spawn_jitter_offsets(
+                self._scenario, self._layout_rng, reset_env_indices, jitter_m
+            )
+            if jitter_m > 0.0:
+                spawn_scenario[GROUP_SPAWN] = {"jitter_offset_m": offsets.tolist()}
+            spawn_xy = origins_xy + torch.as_tensor(
+                local_exits_np + offsets, device=self.device
+            )
+        else:
+            spawn_xy = origins_xy
+
         root_state = self.robot.data.default_root_state[env_ids].clone()
         root_state[:, :3] += self.scene.env_origins[env_ids]
         body_yaws = torch.full(
@@ -1228,15 +1319,17 @@ class HarborMissionEnv(DirectRLEnv):
         ).reshape(num_resets, 4)
         com_offset_body = self.robot.data.com_pos_b[env_ids].reshape(num_resets, 3)
         com_offset_world = math_utils.quat_apply(spawn_quats, com_offset_body)
-        root_state[:, :2] = origins_xy - com_offset_world[:, :2]
+        root_state[:, :2] = spawn_xy - com_offset_world[:, :2]
         root_state[:, 3:7] = spawn_quats
         root_state[:, 7:] = 0.0
         self.robot.write_root_state_to_sim(root_state, env_ids)
 
-        self.phase[env_ids] = 0
-        self._exit_gate_progress[env_ids] = 0
-        self._m1[env_ids] = False
-        self._m2[env_ids] = False
+        self.phase[env_ids] = start_phase
+        # Both exit gates count as crossed, otherwise the gate machinery would
+        # re-arm behind a boat that starts past them.
+        self._exit_gate_progress[env_ids] = 2 if start_phase >= 1 else 0
+        self._m1[env_ids] = start_phase >= 1
+        self._m2[env_ids] = start_phase >= 2
         self._m3[env_ids] = False
         self._m1_at_step_start[env_ids] = False
         self._m2_at_step_start[env_ids] = False
@@ -1248,11 +1341,11 @@ class HarborMissionEnv(DirectRLEnv):
         self._hold_steps[env_ids] = 0
         self.hold_timer[env_ids] = 0.0
         self.path_length[env_ids] = 0.0
-        self._max_phase[env_ids] = 0
+        self._max_phase[env_ids] = start_phase
         self._phase_time_s[env_ids] = 0.0
-        self._previous_xy[env_ids] = origins_xy
-        self._phase_at_step_start[env_ids] = 0
-        self._exit_progress_at_step_start[env_ids] = 0
+        self._previous_xy[env_ids] = spawn_xy
+        self._phase_at_step_start[env_ids] = start_phase
+        self._exit_progress_at_step_start[env_ids] = 2 if start_phase >= 1 else 0
         self._potential_at_step_start[env_ids] = 0.0
         self._contact_prev[env_ids] = False
         self._contact_before_dock[env_ids] = False
@@ -1265,13 +1358,13 @@ class HarborMissionEnv(DirectRLEnv):
         normal1 = self.gate_normals[env_ids, 0]
         self._gate_armed[env_ids] = arm_gate_approach(
             torch.zeros(num_resets, dtype=torch.bool, device=self.device),
-            origins_xy,
+            spawn_xy,
             gate1,
             normal1,
             approach_distance_m=self.cfg.gate_approach_distance_m,
         )
         initial_clearance = analytic_min_clearance(
-            origins_xy,
+            spawn_xy,
             self.obstacle_centers[env_ids],
             self.obstacle_radii[env_ids],
             half_beam_m=self.cfg.half_beam_m,
@@ -1279,6 +1372,37 @@ class HarborMissionEnv(DirectRLEnv):
         )
         self._min_clearance[env_ids] = initial_clearance
         self._contact_before_dock[env_ids] = initial_clearance < 0.0
+
+        # Resolved scenario for the episode that starts now. Values only, never
+        # the key: a key-salted hash would make two eval seeds differ by
+        # construction and could never expose two runs that genuinely drew the
+        # same paper (tasks/_shared/scenario_draws.py:49-57).
+        #
+        # The layout entries are the ACCEPTED route, not the raw uniforms the
+        # rejection sampler burned to reach it -- sample_harbor_route draws an
+        # unbounded number of candidates and returns the first feasible one, so
+        # the accepted geometry IS the scenario. field_geodesic_m is carried
+        # because it is the harbor analogue of the layout-only fields a
+        # cross-controller audit compares
+        # (scripts/check_scenario_independence.py:175).
+        for env_index, resolved, hashes in stamp_scenario(
+            env_ids,
+            {
+                GROUP_LAYOUT: {
+                    "gate_midpoints_m": local_gates,
+                    "gate_normals": gate_normals,
+                    "berth_point_m": local_berths,
+                    "field_exit_m": local_exits_np.tolist(),
+                    "obstacle_centers_m": local_centers,
+                    "obstacle_radii_m": radii,
+                    "obstacle_count": count_np.tolist(),
+                    "field_geodesic_m": geodesic_np.tolist(),
+                },
+                **spawn_scenario,
+            },
+        ):
+            self._scenario_params[env_index] = resolved
+            self._scenario_hashes[env_index] = hashes
 
         self._update_render_only_markers(
             env_ids, local_gates, local_centers, radii, active, local_berths

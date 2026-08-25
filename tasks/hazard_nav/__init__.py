@@ -133,6 +133,47 @@ gym.register(
             f"{__name__}.hazard_nav_env_cfg:HazardForcedCrossingEnvCfg"
         ),
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+        # Baseline-matrix off-policy arms. Isaac Lab's train.py only accepts
+        # PPO-family algorithms, so scripts/sac_train.py drives these via
+        # --cfg-entry-point; the env itself is byte-identical across arms.
+        "skrl_sac_cfg_entry_point": f"{agents.__name__}:skrl_sac_cfg.yaml",
+        "skrl_td3_cfg_entry_point": f"{agents.__name__}:skrl_td3_cfg.yaml",
+        # v2: fixes the SAC entropy bomb (min_log_std -20 -> -5). a = that fix
+        # alone; b = fix + reward scale 0.01 + gamma 0.99. v1 keys stay so the
+        # failed runs remain reproducible exactly as they were trained.
+        "skrl_sac_v2a_cfg_entry_point": f"{agents.__name__}:skrl_sac_v2a_cfg.yaml",
+        "skrl_sac_v2b_cfg_entry_point": f"{agents.__name__}:skrl_sac_v2b_cfg.yaml",
+        # v3: the measured fixes. SAC = tanh-bounded mean (log-prob bomb
+        # defused at the source) + sigma floor + scaled returns; TD3 = tanh
+        # actor mean, budget raised at launch (undertraining diagnosis).
+        "skrl_sac_v3_cfg_entry_point": f"{agents.__name__}:skrl_sac_v3_cfg.yaml",
+        "skrl_td3_v3_cfg_entry_point": f"{agents.__name__}:skrl_td3_v3_cfg.yaml",
+        # v4: the code-level fix for the same defect v3 patches from the yaml.
+        # Generated from the v3 yaml by swapping two strings in the policy
+        # block (GaussianMixin -> SquashedGaussianMixin, tanh(ACTIONS) ->
+        # ACTIONS); net, critics, memory and the entire agent block are
+        # character-identical, so v3-vs-v4 isolates the policy
+        # parameterisation. v3's tanh output only bounds the MEAN -- samples
+        # are still clipped and the log-prob still omits the change-of-
+        # variables Jacobian; v4 squashes inside the model and corrects it.
+        # Needs scripts/sac_train.py's SquashedRunner: skrl's Runner._component
+        # is a closed whitelist, so yaml alone cannot select the class.
+        "skrl_sac_v4_cfg_entry_point": f"{agents.__name__}:skrl_sac_v4_cfg.yaml",
+    },
+)
+
+# BandFortWay + loiter tax: the measured fix for the fortress training
+# collapse (zero-cost absorbing region outside the walls). New id as always;
+# the taxless bfway keeps meaning exactly what it meant.
+gym.register(
+    id="Isaac-USV-HazardBandFortWayTax-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardBandFortWayTaxEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },
 )
 
@@ -147,6 +188,10 @@ gym.register(
             f"{__name__}.hazard_nav_env_cfg:HazardOpenWaterTaxEnvCfg"
         ),
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+        # Second task of the baseline matrix: same off-policy configs as the
+        # crossing arm, so an algorithm difference cannot be a config artefact.
+        "skrl_sac_cfg_entry_point": f"{agents.__name__}:skrl_sac_cfg.yaml",
+        "skrl_td3_cfg_entry_point": f"{agents.__name__}:skrl_td3_cfg.yaml",
     },
 )
 
@@ -400,6 +445,70 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": (
             f"{__name__}.hazard_nav_env_cfg:HazardPbrsNoGammaEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+# Suite S: structural generalization on frozen, checksum-verified layouts.
+# One id per structure class, all on the certified v3 observation/reward
+# contract, so crossing / v9 / v12 champions load and run here zero-shot.
+# Append-only as always: the scatter ids and their certificates are untouched.
+gym.register(
+    id="Isaac-USV-SuiteS-SingleRow-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardSuiteSEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+gym.register(
+    id="Isaac-USV-SuiteS-StaggeredRows-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardSuiteSStaggeredRowsEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+gym.register(
+    id="Isaac-USV-SuiteS-DiagonalRow-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardSuiteSDiagonalRowEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+gym.register(
+    id="Isaac-USV-SuiteS-Clusters-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardSuiteSClustersEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+gym.register(
+    id="Isaac-USV-SuiteS-GapWall-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardSuiteSGapWallEnvCfg"
         ),
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },

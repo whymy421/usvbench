@@ -167,6 +167,10 @@ class PathHazardEnvCfg(DirectRLEnvCfg):
 
     obstacle_count: int = 6
     required_on_line_blockers: int = 3
+    # Tier-regrade probe: pins 1..4 on-line blockers at evaluation time
+    # (0 = the frozen v1 value of three, byte-identical). A separate knob so
+    # the v1 validator below keeps protecting the certified field itself.
+    on_line_blockers_override: int = 0
     obstacle_radius_min_m: float = 0.8
     obstacle_radius_max_m: float = 1.5
     half_beam_m: float = 0.45

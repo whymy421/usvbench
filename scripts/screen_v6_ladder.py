@@ -20,6 +20,12 @@ parser.add_argument("--only", default=None,
                     help="comma-separated step numbers; overrides --every")
 parser.add_argument("--level", type=int, default=0)
 parser.add_argument("--eval-seed", type=int, default=42)
+# Off-policy checkpoints (SAC/TD3) carry different model roles than the
+# PPO SharedModel, so the runner must be built from THEIR config or the
+# state_dict load fails on missing policy_layer/value_layer keys.
+parser.add_argument("--cfg-entry-point", default="skrl_cfg_entry_point",
+                    help="registry key for the skrl config, e.g. "
+                         "skrl_sac_cfg_entry_point")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
 sys.argv = [sys.argv[0]] + hydra_args
@@ -35,6 +41,30 @@ from skrl.utils.runner.torch import Runner
 from isaaclab_rl.skrl import SkrlVecEnvWrapper
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg
+
+# ---- squashed-policy hook (mirrors scripts/sac_train.py) -------------------
+# skrl's Runner._component is a closed whitelist, so the v4 squashed-Gaussian
+# policy class (skrl_sac_v4_cfg.yaml) can never be resolved by the stock
+# Runner. Without this hook, screening/certifying a v4 checkpoint dies at
+# model construction -- which is exactly how the first v4 queue produced a
+# bogus "below gate" verdict from an SR=-1 crash.
+import os as _os
+_REPO_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.append(_REPO_ROOT)
+try:
+    from tasks._shared.squashed_gaussian import squashed_gaussian_model
+except ImportError:
+    from isaaclab_tasks.direct._shared.squashed_gaussian import squashed_gaussian_model
+
+
+class SquashedRunner(Runner):
+    def _component(self, name: str):
+        if name.lower() == "squashedgaussianmixin":
+            return squashed_gaussian_model
+        return super()._component(name)
+# ---------------------------------------------------------------------------
+
 
 ckpt_dir = os.path.join(args_cli.run_dir, "checkpoints")
 cks = sorted(
@@ -56,14 +86,14 @@ env_cfg.seed = args_cli.eval_seed
 if hasattr(env_cfg, "curriculum_frozen"):
     env_cfg.curriculum_frozen = True
     env_cfg.eval_level = args_cli.level
-experiment_cfg = load_cfg_from_registry(TASK, "skrl_cfg_entry_point")
+experiment_cfg = load_cfg_from_registry(TASK, args_cli.cfg_entry_point)
 env = gym.make(TASK, cfg=env_cfg, render_mode=None)
 wrapped = SkrlVecEnvWrapper(env, ml_framework="torch")
 experiment_cfg["trainer"]["close_environment_at_exit"] = False
 experiment_cfg["agent"]["experiment"]["write_interval"] = 0
 experiment_cfg["agent"]["experiment"]["checkpoint_interval"] = 0
 experiment_cfg["agent"]["experiment"]["wandb"] = False
-runner = Runner(wrapped, experiment_cfg)
+runner = SquashedRunner(wrapped, experiment_cfg)
 base = env.unwrapped
 
 results = []

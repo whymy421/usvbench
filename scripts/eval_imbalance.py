@@ -24,6 +24,10 @@ parser.add_argument("--axis", default=None,
                          "thrust_cap_scale, motor_tau_s, thrust_imbalance")
 parser.add_argument("--value", type=float, default=None)
 parser.add_argument("--out", default=None, help="JSON per-episode records")
+parser.add_argument("--set", dest="extra_sets", action="append", default=[],
+                    metavar="FIELD=VALUE",
+                    help="extra top-level cfg overrides (repeatable), e.g. "
+                         "--set layout_max_attempts=150")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
 sys.argv = [sys.argv[0]] + hydra_args
@@ -39,6 +43,25 @@ from skrl.utils.runner.torch import Runner
 from isaaclab_rl.skrl import SkrlVecEnvWrapper
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg
+
+# Scenario-protocol stamping, on the same dual import scripts/
+# eval_v6_frozen.py:74-80 uses so the script keeps working from the repo and
+# from the deployed task tree.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.append(_REPO_ROOT)
+try:
+    from tasks._shared.scenario_draws import (
+        episode_scenario_hashes_for,
+        scenario_protocol_notice,
+        scenario_protocol_stamp,
+    )
+except ImportError:
+    from isaaclab_tasks.direct._shared.scenario_draws import (
+        episode_scenario_hashes_for,
+        scenario_protocol_notice,
+        scenario_protocol_stamp,
+    )
 
 TASK = args_cli.task
 env_cfg = parse_env_cfg(TASK, device="cuda:0", num_envs=64)
@@ -61,6 +84,15 @@ for choices in ("thrust_imbalance_choices", "mass_scale_choices",
                 "motor_tau_s_choices"):
     if hasattr(env_cfg, choices):
         setattr(env_cfg, choices, ())
+for assignment in args_cli.extra_sets:
+    field, _, raw = assignment.partition("=")
+    if not _ or not hasattr(env_cfg, field):
+        raise SystemExit(f"--set target {field!r} is not a cfg field")
+    current = getattr(env_cfg, field)
+    caster = type(current) if isinstance(current, (int, float, bool)) else str
+    setattr(env_cfg, field, caster(raw) if caster is not bool
+            else raw.lower() in ("1", "true", "yes"))
+    print(f"set {field}={getattr(env_cfg, field)}", flush=True)
 print(f"axis={axis} value={value}", flush=True)
 if hasattr(env_cfg, "curriculum_frozen"):
     env_cfg.curriculum_frozen = True
@@ -77,6 +109,13 @@ runner.agent.load(os.path.abspath(args_cli.checkpoint))
 runner.agent.set_running_mode("eval")
 
 base = env.unwrapped
+# Does THIS env carry the scenario protocol?  Same guard, same marker and same
+# warning as scripts/eval_v6_frozen.py:148-162, so this certificate and a
+# frozen-eval certificate at the same --eval-seed can be scenario-paired.
+scenario_protocol = scenario_protocol_stamp(base)
+_notice = scenario_protocol_notice(TASK, scenario_protocol)
+if _notice:
+    print(_notice, flush=True)
 obs, _ = wrapped.reset()
 records = []
 ep_counter = torch.zeros(base.num_envs, dtype=torch.long)
@@ -103,9 +142,21 @@ while len(records) < args_cli.episodes and step < max_steps:
             "success": bool(base.episode_success[i]),
             "tts_s": (None if math.isnan(float(base.time_to_success[i]))
                       else float(base.time_to_success[i])),
-            "min_clearance_m": float(base.episode_min_clearance[i]),
+            **(
+                {"min_clearance_m": float(base.episode_min_clearance[i])}
+                if hasattr(base, "episode_min_clearance")
+                else {}
+            ),
             "path_length_m": float(base.episode_path_length[i]),
         }
+        # Per-primitive digests of the scenario the FINISHED episode ran,
+        # latched at reset exactly like episode_min_clearance.  Absent on
+        # families not yet on the scenario protocol, and empty until an env has
+        # completed its first episode; both cases are guarded inside the
+        # helper, which returns None for "write no field".
+        scenario_hashes = episode_scenario_hashes_for(base, i)
+        if scenario_hashes is not None:
+            rec["scenario_hashes"] = scenario_hashes
         if hasattr(base, "episode_gates_passed"):
             rec["gates"] = int(base.episode_gates_passed[i])
         if d0_prev is not None:
@@ -117,8 +168,8 @@ records = records[: args_cli.episodes]
 n = len(records)
 succ = [r for r in records if r["success"]]
 tts = sorted(r["tts_s"] for r in succ if r["tts_s"] is not None)
-collided = sum(1 for r in records if r["min_clearance_m"] < 0.0)
-clr = sorted(r["min_clearance_m"] for r in records)
+clr = sorted(r["min_clearance_m"] for r in records if "min_clearance_m" in r)
+collided = sum(1 for c in clr if c < 0.0)
 
 
 def pct(sorted_vals, q):
@@ -152,6 +203,10 @@ if args_cli.out:
     with open(args_cli.out, "w", encoding="utf-8") as f:
         json.dump({"task": TASK, "level": args_cli.level,
                    "seed": args_cli.eval_seed,
+                   # The header block when the env carries the protocol
+                   # object, the off-protocol literal when it does not --
+                   # never unconditionally the header.
+                   "scenario_protocol": scenario_protocol,
                    "imbalance": args_cli.imbalance,
                    "checkpoint": os.path.abspath(args_cli.checkpoint),
                    "records": records}, f, indent=1)

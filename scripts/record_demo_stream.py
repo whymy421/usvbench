@@ -28,6 +28,12 @@ parser.add_argument("--axis", default=None,
                     help="Suite D cfg field to override for the recording, "
                          "e.g. thrust_imbalance / mass_scale / motor_tau_s")
 parser.add_argument("--value", type=float, default=None)
+# Tier demos: --level picks an in-table curriculum rung (same semantics as
+# eval_v6_frozen), --set covers fields --axis cannot (ints, non-Suite-D),
+# e.g. --set on_line_blockers_override=4 --set layout_max_attempts=150.
+parser.add_argument("--level", type=int, default=None)
+parser.add_argument("--set", dest="cfg_sets", action="append", default=[],
+                    metavar="FIELD=VALUE")
 parser.add_argument("--render-width", type=int, default=1280)
 parser.add_argument("--render-height", type=int, default=720)
 parser.add_argument("--visual-usd", default=None,
@@ -63,6 +69,17 @@ if args_cli.axis is not None:
         if hasattr(env_cfg, choices):
             setattr(env_cfg, choices, ())
     print(f"axis override: {args_cli.axis}={args_cli.value}", flush=True)
+if args_cli.level is not None and hasattr(env_cfg, "curriculum_frozen"):
+    env_cfg.curriculum_frozen = True
+    env_cfg.eval_level = args_cli.level
+    print(f"frozen at level {args_cli.level}", flush=True)
+for assignment in args_cli.cfg_sets:
+    field, _, raw = assignment.partition("=")
+    if not _:
+        raise SystemExit(f"--set needs FIELD=VALUE, got {assignment!r}")
+    value = float(raw) if "." in raw else int(raw)
+    setattr(env_cfg, field, value)
+    print(f"cfg override {field}={value}", flush=True)
 experiment_cfg = load_cfg_from_registry(args_cli.task, "skrl_cfg_entry_point")
 env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array")
 wrapped = SkrlVecEnvWrapper(env, ml_framework="torch")

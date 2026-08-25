@@ -180,6 +180,11 @@ class DockingEnvCfg(DirectRLEnvCfg):
     eval_level: int = 0
     # Spawn distance used at each frozen level, in metres.
     eval_level_distances: tuple = (25.0, 15.0, 8.0, 2.0)
+    # Tier-regrade probe: pins the frozen-eval spawn distance directly, in
+    # metres (0.0 = use the level table above, byte-identical). The level
+    # sweep of 2026-08-13 measured 100/23/12/6 percent from 2 m out to 25 m,
+    # so a T1-T5 regrade needs intermediate distances to be measurable.
+    spawn_distance_override_m: float = 0.0
 
     # V5 spawns on the approach lane behind the berth, with positions and bow
     # headings sampled relative to each environment's dock_heading rather than
