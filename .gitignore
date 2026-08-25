@@ -52,3 +52,24 @@ tasks/*/videos/
 # local diagnostic outputs (per-episode telemetry, regenerable)
 diagnostics/
 run_diag.ps1
+
+# --- Evaluation outputs and demo media (post-2026-08-21) ---
+# Certificates, curves and rendered demos are reproducible artefacts, not source.
+# demos/ alone is 235 MB; the certificate corpus is another ~7 MB and grows daily.
+demos/
+curves/
+queue12/
+backups/
+gcerts/
+gcerts_cache/
+gcerts_pid/
+gcerts_cache_list_*.txt
+outputs/
+cert_*.json
+gcert_*.json
+
+# Machine-local queue drivers generated per run on the GPU boxes
+run_tiers.ps1
+run_queue12b.ps1
+stop_after_current.ps1
+*.bat
