@@ -186,6 +186,12 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     layout_max_attempts: int = 20
     layout_seed: int = 0
 
+    # Tier-regrade probe knobs (evaluation only; 0.0 = the frozen tier tables,
+    # byte-identical). Set via eval_imbalance --axis so intermediate fortress
+    # apertures and gate widths are measurable without minting tier semantics.
+    fortress_aperture_override_m: float = 0.0
+    gate_width_override_m: float = 0.0
+
     curriculum_start_level: float = 0.0
     curriculum_level_increment: float = 1.0
     curriculum_max_level: float = 3.0  # v4: ultimate tier = 2x-beam gaps
@@ -338,6 +344,25 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # the legacy instantaneous-thrust trajectory bit for bit.
     motor_tau_s: float = 0.0
     motor_tau_s_choices: tuple = ()
+
+    # --- Observation-channel degradation (eval-time OOD hooks) ---------------
+    # Physical-unit corruption of the IDEAL measurements (goal vector, body-
+    # frame velocities, ray returns) before feature construction, inside
+    # _get_observations only; reward/termination/success keep reading clean
+    # state. All zero => no degrader object is built and every certified id
+    # runs its frozen observation path byte-identical. Eval-time knobs (set
+    # via eval_v6_frozen --set); no gym id may ship nonzero defaults without
+    # its own registration. Yaw-rate sigma rides the vel knob scaled by
+    # yaw_rate_obs_scale_rad_s / SPEED_SCALE_MPS (same fraction of full
+    # scale as the linear channels).
+    obs_noise_sigma_pos: float = 0.0  # m, white noise on the goal vector
+    obs_noise_sigma_vel: float = 0.0  # m/s, white noise on surge/sway (+ yaw)
+    obs_noise_sigma_ray: float = 0.0  # m, white noise per ray return
+    obs_bias_sigma_pos: float = 0.0   # m, per-episode constant offset draw
+    obs_bias_sigma_vel: float = 0.0   # m/s, per-episode constant offset draw
+    obs_bias_sigma_ray: float = 0.0   # m, per-episode per-ray offset draw
+    obs_delay_steps: int = 0          # control steps of measurement latency
+    obs_dropout_p: float = 0.0        # per-step frame loss (sample-and-hold)
 
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
@@ -837,3 +862,86 @@ class HazardPbrsGammaEnvCfg(HazardPbrsNoGammaEnvCfg):
     """Forced crossing with gamma*Phi(s') - Phi(s)."""
 
     pbrs_correct: bool = True
+
+
+@configclass
+class HazardBandFortWayTaxEnvCfg(HazardBandFortWayEnvCfg):
+    """BandFortWay + the open-water loiter tax.
+
+    The 08-21 forensics identified the fortress collapse mechanism: the water
+    OUTSIDE the fortress is a zero-gradient, zero-cost absorbing region, so
+    retreating and loitering dodges the -25 contact penalty for free and every
+    from-scratch seed converges to it. This variant prices the loiter with the
+    settings the healthy open-water-tax family already measured; everything
+    else is inherited unchanged, so bfway-vs-bfwaytax isolates the tax.
+    """
+
+    reward_open_water_scale: float = 2.0
+    open_water_radius_m: float = 12.0
+
+
+# --- Suite S: frozen structural-generalization layouts (append-only) --------
+@configclass
+class HazardSuiteSEnvCfg(HazardNavV3EnvCfg):
+    """Frozen Suite S structural layouts under the certified scatter contract.
+
+    Same hull, sensors, reward, and tier semantics as the HazardNavV3EnvCfg
+    family the certified crossing / v9 / v12 champions trained on (42-D
+    native obs: nav 3 + kinematics 3 + 36 rays), so any of those checkpoints
+    loads here unchanged. Only the reset-time layout source differs: instead
+    of an i.i.d. scatter draw, each episode places one of the ten frozen,
+    checksum-verified public layouts of ``suite_s_class`` from
+    ``assets/suite_s`` (admission-audited at generation; the JSON is ground
+    truth). ``route_geodesic_length`` is latched from the asset's audited
+    ``geodesic_length_m``, so USV-10K route scoring runs on basis=geo.
+
+    ``suite_s_index_rotation`` staggers layout indices by env and advances by
+    one per completed episode -- ``(env + episode) % 10`` -- so ten
+    consecutive episodes of one env cover all ten layouts and a 128-episode
+    certification at 64 envs spreads 12-14 episodes onto every layout; off
+    pins each env to ``env % 10``. The layout index is a pure function of
+    ``(env, per-env episode count)``, giving exact episode-for-episode layout
+    pairing across checkpoints certified at the same env count.
+    """
+
+    # Which frozen class this id serves; the four subclasses below override
+    # it. Validated against SUITE_S_CLASSES when the layouts are loaded.
+    suite_s_class: str = "single_row"
+    suite_s_index_rotation: bool = True
+    # Suite S assets are frozen at the level-2 gap width (3.0 hull beams);
+    # other levels have no committed assets and fail loudly at load time.
+    suite_s_level: int = 2
+    # Empty resolves to the committed in-repo assets/suite_s directory.
+    suite_s_asset_dir: str = ""
+    # gap_wall's worst frozen instance uses 17 cylinders (measured over the
+    # 50 assets; scatter's base cap of 14 would truncate it). 24 leaves seven
+    # reset-buffer slots of headroom without touching any base cfg.
+    max_obstacles: int = 24
+
+
+@configclass
+class HazardSuiteSStaggeredRowsEnvCfg(HazardSuiteSEnvCfg):
+    """Suite S: two brick-staggered rows; every visible gap is backed."""
+
+    suite_s_class: str = "staggered_rows"
+
+
+@configclass
+class HazardSuiteSDiagonalRowEnvCfg(HazardSuiteSEnvCfg):
+    """Suite S: picket line tilted 25-35 degrees off route-perpendicular."""
+
+    suite_s_class: str = "diagonal_row"
+
+
+@configclass
+class HazardSuiteSClustersEnvCfg(HazardSuiteSEnvCfg):
+    """Suite S: three lumpy merged super-obstacles with channels between."""
+
+    suite_s_class: str = "clusters"
+
+
+@configclass
+class HazardSuiteSGapWallEnvCfg(HazardSuiteSEnvCfg):
+    """Suite S: overlap-sealed wall with one off-axis tier-width gate."""
+
+    suite_s_class: str = "gap_wall"

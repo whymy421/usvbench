@@ -82,6 +82,21 @@ EXPECTED_V2_DIMS = {
     "Isaac-USV-HazardFortress2-Direct-v1": 42,  # hazard_nav_env_cfg.py:439
     "Isaac-USV-HazardBandFort-Direct-v1": 42,  # hazard_nav_env_cfg.py:439
     "Isaac-USV-HazardBandFortSoft-Direct-v1": 42,  # hazard_nav_env_cfg.py:439
+    "Isaac-USV-HazardBandFortGeo-Direct-v1": 42,  # inherits the v3 declaration
+    "Isaac-USV-HazardBandFortWay-Direct-v1": 42,  # inherits the v3 declaration
+    "Isaac-USV-HazardBandFortWayTax-Direct-v1": 42,  # inherits the v3 declaration
+    "Isaac-USV-SuiteS-SingleRow-Direct-v1": 42,  # frozen-layout carrier, v3 obs
+    "Isaac-USV-SuiteS-StaggeredRows-Direct-v1": 42,
+    "Isaac-USV-SuiteS-DiagonalRow-Direct-v1": 42,
+    "Isaac-USV-SuiteS-Clusters-Direct-v1": 42,
+    "Isaac-USV-SuiteS-GapWall-Direct-v1": 42,
+    "Isaac-USV-HazardCrossMass-Direct-v1": 42,  # inherits the v3 declaration
+    "Isaac-USV-HazardCrossDrag-Direct-v1": 42,  # inherits the v3 declaration
+    "Isaac-USV-HazardCrossThrust-Direct-v1": 42,  # inherits the v3 declaration
+    "Isaac-USV-HazardCrossTau-Direct-v1": 42,  # inherits the v3 declaration
+    "Isaac-USV-HazardPbrsGamma-Direct-v1": 42,  # inherits the v3 declaration
+    "Isaac-USV-HazardPbrsNoGamma-Direct-v1": 42,  # inherits the v3 declaration
+    "Isaac-USV-HarborDockPhase-Direct-v1": 49,  # harbor_mission_env_cfg.py
     "Isaac-USV-HarborStage1-Direct-v1": 49,  # harbor_mission_env_cfg.py:286
     "Isaac-USV-HarborStage2-Direct-v1": 49,  # harbor_mission_env_cfg.py:298
     "Isaac-USV-HarborStage3-Direct-v1": 49,  # harbor_mission_env_cfg.py:309
@@ -95,6 +110,7 @@ EXPECTED_V2_DIMS = {
     "Isaac-USV-DockWall-BlueBoat-Kin-Direct-v1": 45,  # docking_env_cfg.py:315
     "Isaac-USV-StationKeep-BlueBoat-Kin-Direct-v1": 6,  # station_keeping_env_cfg.py:250
     "Isaac-USV-StationKeep-BlueBoat-Current-Kin-Direct-v1": 6,  # station_keeping_env_cfg.py:258
+    "Isaac-USV-StationKeep-BlueBoat-RampCurrent-Direct-v1": 3,  # station_keeping_env_cfg.py:288
     "Isaac-USV-StationKeep-BlueBoat-Wave-Direct-v1": 9,  # station_keeping_env_cfg.py:273
 }
 

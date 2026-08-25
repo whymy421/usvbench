@@ -16,7 +16,14 @@ from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
 
 from .._shared.restoring import restoring_torque_body
+from .._shared.scenario_draws import (
+    make_scenario_rng,
+    stamp_scenario,
+    station_keeping_current,
+    station_keeping_spawn,
+)
 from .._shared.vehicles import get_vehicle
+from .current_ramp import ramped_current_vec
 from .station_keeping_env_cfg import StationKeepingEnvCfg
 
 
@@ -28,6 +35,30 @@ class StationKeepingEnv(DirectRLEnv):
     def __init__(self, cfg: StationKeepingEnvCfg, render_mode: str | None = None, **kwargs):
         self.vehicle_spec = get_vehicle(cfg.vehicle)
         self.physics_cfg = cfg.underwater_physics_cfg
+        override = float(getattr(cfg, "current_speed_override_mps", 0.0))
+        if override > 0.0:
+            # Tier-regrade probe: one pinned current speed, force-enabled.
+            self.physics_cfg.enable_current = True
+            self.physics_cfg.current_speed_min = override
+            self.physics_cfg.current_speed_max = override
+        # Within-episode current-speed ramp (RampCurrent variant). Every cfg
+        # that does not declare BOTH fields resolves to None here, and the
+        # certified current path then runs byte-identical.
+        ramp_start = getattr(cfg, "current_ramp_start_mps", None)
+        ramp_end = getattr(cfg, "current_ramp_end_mps", None)
+        if (ramp_start is None) != (ramp_end is None):
+            raise ValueError(
+                "current_ramp_start_mps and current_ramp_end_mps must be "
+                "declared together"
+            )
+        self._current_ramp: tuple[float, float] | None = None
+        if ramp_start is not None:
+            if not self.physics_cfg.enable_current:
+                raise ValueError(
+                    "a current ramp requires enable_current=True (the ramp "
+                    "modulates the sampled current, it does not create one)"
+                )
+            self._current_ramp = (float(ramp_start), float(ramp_end))
         super().__init__(cfg, render_mode, **kwargs)
 
         self.control_step_s = self.cfg.sim.dt * self.cfg.decimation
@@ -58,6 +89,24 @@ class StationKeepingEnv(DirectRLEnv):
         self._episode_finished = torch.zeros(
             self.num_envs, dtype=torch.bool, device=self.device
         )
+        # --- Controller-independent episode scenarios -----------------------
+        # Spawn pose, current and wave used to come off the GLOBAL torch RNG,
+        # which skrl's Runner reseeds to the agent YAML's constant AFTER the
+        # env is built -- so --eval-seed 42 and --eval-seed 123 drew the same
+        # episodes. They now come off a stream keyed by (protocol version,
+        # cfg.seed, env index, per-env episode index, primitive group). With
+        # cfg.seed None (an unseeded smoke run) make_scenario_rng returns None
+        # and every draw falls back to the historical global-RNG line.
+        self._scenario = make_scenario_rng(self.cfg, self.num_envs, self.device)
+        # _scenario_* describe the RUNNING episode; episode_scenario_* are
+        # latched from them at reset for the episode that just ENDED, the same
+        # discipline as episode_path_length -- the evaluator reads these after
+        # _reset_idx has already started the next episode.
+        self._scenario_params = [{} for _ in range(self.num_envs)]
+        self._scenario_hashes = [{} for _ in range(self.num_envs)]
+        self.episode_scenario = [{} for _ in range(self.num_envs)]
+        self.episode_scenario_hashes = [{} for _ in range(self.num_envs)]
+
         self._sea = None
         if getattr(self.cfg, "sea_state", None) is not None and self.cfg.sea_state.enable:
             from .._shared.sea_state import SeaState
@@ -65,6 +114,60 @@ class StationKeepingEnv(DirectRLEnv):
             self._sea = SeaState(self.cfg.sea_state, self.num_envs, self.device)
         self._previous_xy = self.robot.data.root_pos_w[:, :2].clone()
         self.actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
+
+        # --- Eval-time observation-channel degradation (OOD hooks) ----------
+        # Every knob defaults to zero, in which case NO degrader object is
+        # built and the guarded hooks in _get_observations never fire: the
+        # frozen observation path stays byte-identical. Doses are meant to be
+        # set per run via scripts/eval_v6_frozen.py --set, never on a
+        # registered training id. Station keeping carries the goal-vector and
+        # kinematics groups (no rays); the sea-state block stays clean.
+        noise_pos = float(getattr(self.cfg, "obs_noise_sigma_pos", 0.0) or 0.0)
+        noise_vel = float(getattr(self.cfg, "obs_noise_sigma_vel", 0.0) or 0.0)
+        bias_pos = float(getattr(self.cfg, "obs_bias_sigma_pos", 0.0) or 0.0)
+        bias_vel = float(getattr(self.cfg, "obs_bias_sigma_vel", 0.0) or 0.0)
+        delay_steps = int(getattr(self.cfg, "obs_delay_steps", 0) or 0)
+        dropout_p = float(getattr(self.cfg, "obs_dropout_p", 0.0) or 0.0)
+        self._obs_degrader = None
+        if any((noise_pos, noise_vel, bias_pos, bias_vel, delay_steps,
+                dropout_p)):
+            from .._shared.obs_degradation import (
+                ObsChannelGroup,
+                build_obs_degrader,
+            )
+            from .._shared.obs_superset import SPEED_SCALE_MPS
+
+            # The yaw-rate channel rides the vel knob at the same fraction of
+            # its full observation scale as the linear channels: sigma_yaw =
+            # sigma_vel * (yaw_rate_obs_scale_rad_s / SPEED_SCALE_MPS).
+            yaw_ratio = (
+                float(getattr(self.cfg, "yaw_rate_obs_scale_rad_s", 1.0))
+                / SPEED_SCALE_MPS
+            )
+            seed = getattr(self.cfg, "seed", None)
+            self._obs_degrader = build_obs_degrader(
+                num_envs=self.num_envs,
+                device=self.device,
+                base_seed=0 if seed is None else int(seed),
+                groups={
+                    "pos": ObsChannelGroup(
+                        dim=2,
+                        noise_sigma=(noise_pos,) * 2,
+                        bias_sigma=(bias_pos,) * 2,
+                    ),
+                    "vel": ObsChannelGroup(
+                        dim=3,
+                        noise_sigma=(
+                            noise_vel, noise_vel, noise_vel * yaw_ratio
+                        ),
+                        bias_sigma=(
+                            bias_vel, bias_vel, bias_vel * yaw_ratio
+                        ),
+                    ),
+                },
+                delay_steps=delay_steps,
+                dropout_p=dropout_p,
+            )
 
     def _setup_scene(self):
         if self.vehicle_spec.asset_kind == "articulation":
@@ -283,23 +386,52 @@ class StationKeepingEnv(DirectRLEnv):
 
         return buoyancy_force_world, buoyancy_torque
 
-    def _resample_current(self, env_ids: torch.Tensor) -> None:
-        """Sample one constant world-frame current vector per reset environment."""
-        speeds = self.physics_cfg.current_speed_min + torch.rand(
-            len(env_ids), device=self.device
-        ) * (
-            self.physics_cfg.current_speed_max
-            - self.physics_cfg.current_speed_min
+    def _resample_current(
+        self, env_ids: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Sample one constant world-frame current vector per reset environment.
+
+        Same uniform speed on [current_speed_min, current_speed_max) and same
+        uniform direction on [0, 2*pi) as before; only the stream the two
+        uniforms come from changed (see station_keeping_current).
+
+        Returns the RAW ``(speeds, directions)`` it drew, before the sine and
+        cosine, so the caller can stamp the draw itself rather than the vector
+        derived from it. current_vec is written exactly as before, so the
+        physics path is untouched.
+        """
+        speeds, directions = station_keeping_current(
+            self._scenario,
+            env_ids,
+            self.device,
+            self.physics_cfg.current_speed_min,
+            self.physics_cfg.current_speed_max,
         )
-        directions = torch.rand(len(env_ids), device=self.device) * 2.0 * torch.pi
         self.current_vec[env_ids, 0] = speeds * torch.cos(directions)
         self.current_vec[env_ids, 1] = speeds * torch.sin(directions)
+        return speeds, directions
 
     def _compute_current_forces(self) -> torch.Tensor:
         """Compute quadratic relative-velocity drag in the world frame."""
         vel_w = self.robot.data.root_com_vel_w
         boat_vel_xy = vel_w[:, :2]
-        v_rel = boat_vel_xy - self.current_vec
+        current_vec = self.current_vec
+        if self._current_ramp is not None:
+            # RampCurrent variant: keep the per-episode direction, override
+            # the magnitude with a linear within-episode ramp that reaches
+            # ramp_end on the final control step. self.current_vec stays the
+            # sampled base vector (the direction carrier), so the reset-time
+            # Episode/current_speed log reports the SAMPLED base magnitude,
+            # not the instantaneous ramped speed.
+            ramp_start_mps, ramp_end_mps = self._current_ramp
+            current_vec = ramped_current_vec(
+                current_vec,
+                self.episode_length_buf,
+                max(int(self.max_episode_length) - 1, 1),
+                ramp_start_mps,
+                ramp_end_mps,
+            )
+        v_rel = boat_vel_xy - current_vec
         v_rel_mag = torch.norm(v_rel, dim=1, keepdim=True)
         drag_force_xy = -self.physics_cfg.current_drag_coeff * v_rel * v_rel_mag
 
@@ -432,6 +564,11 @@ class StationKeepingEnv(DirectRLEnv):
         )
 
         rpos = self.hold_point - self.robot.data.root_pos_w[:, :2]
+        if self._obs_degrader is not None and self._obs_degrader.wants("pos"):
+            # OOD hook: corrupt the assembled hold-point vector (ideal
+            # relative-position measurement, meters) before distance and
+            # bearing features are derived from it.
+            rpos = self._obs_degrader.apply("pos", rpos)
         distance = torch.norm(rpos, dim=-1, keepdim=True).clamp(min=1.0e-6)
         direction = rpos / distance
 
@@ -461,17 +598,47 @@ class StationKeepingEnv(DirectRLEnv):
             # sideways" from "still spinning"; station keeping needs all three.
             from .._shared.kinematics import body_planar_kinematics
 
-            observation = torch.hstack(
-                (
-                    observation,
-                    body_planar_kinematics(
-                        forwards_2d,
-                        self.robot.data.root_com_vel_w[:, :3],
-                        self.robot.data.root_ang_vel_w[:, 2],
-                        yaw_rate_scale_rad_s=self.cfg.yaw_rate_obs_scale_rad_s,
-                    ),
+            if self._obs_degrader is not None and self._obs_degrader.wants(
+                "vel"
+            ):
+                # OOD hook: corrupt the raw body-frame rates (m/s, rad/s)
+                # between measurement and normalization; applied exactly once
+                # per step because delay/dropout are stateful.
+                from .._shared.kinematics import (
+                    body_planar_rates,
+                    normalize_planar_rates,
                 )
-            )
+
+                observation = torch.hstack(
+                    (
+                        observation,
+                        normalize_planar_rates(
+                            self._obs_degrader.apply(
+                                "vel",
+                                body_planar_rates(
+                                    forwards_2d,
+                                    self.robot.data.root_com_vel_w[:, :3],
+                                    self.robot.data.root_ang_vel_w[:, 2],
+                                ),
+                            ),
+                            yaw_rate_scale_rad_s=(
+                                self.cfg.yaw_rate_obs_scale_rad_s
+                            ),
+                        ),
+                    )
+                )
+            else:
+                observation = torch.hstack(
+                    (
+                        observation,
+                        body_planar_kinematics(
+                            forwards_2d,
+                            self.robot.data.root_com_vel_w[:, :3],
+                            self.robot.data.root_ang_vel_w[:, 2],
+                            yaw_rate_scale_rad_s=self.cfg.yaw_rate_obs_scale_rad_s,
+                        ),
+                    )
+                )
         return {"policy": observation}
 
     def _get_rewards(self) -> torch.Tensor:
@@ -527,6 +694,11 @@ class StationKeepingEnv(DirectRLEnv):
             self.time_to_success[completed_ids] = time_to_success
             self.episode_path_length[completed_ids] = self.path_length[completed_ids]
             self.final_hold_timer[completed_ids] = self.hold_timer[completed_ids]
+            for completed in completed_ids.tolist():
+                self.episode_scenario[completed] = self._scenario_params[completed]
+                self.episode_scenario_hashes[completed] = self._scenario_hashes[
+                    completed
+                ]
 
             self.extras.setdefault("log", {})
             self.extras["log"]["Episode/success"] = success.float().mean()
@@ -547,15 +719,29 @@ class StationKeepingEnv(DirectRLEnv):
 
         super()._reset_idx(env_ids)
 
+        # A new episode for these envs: advance their per-env episode counter
+        # and reseed every primitive stream from the new key. This MUST run
+        # before the first draw below.
+        if self._scenario is not None:
+            self._scenario.reset_idx(env_ids)
+
+        # Keep the RAW (speed, direction) pair, not just the vector it becomes:
+        # the certificate stamps the DRAW (see the scenario_groups block below).
+        current_speeds = None
+        current_directions = None
         if self.physics_cfg.enable_current:
-            self._resample_current(env_ids)
+            current_speeds, current_directions = self._resample_current(env_ids)
 
         num_resets = len(env_ids)
-        distances = self.cfg.min_spawn_distance + torch.rand(
-            num_resets, device=self.device
-        ) * (self.cfg.max_spawn_distance - self.cfg.min_spawn_distance)
-        spawn_angles = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
-        headings = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
+        # Same uniform distance on [min_spawn_distance, max_spawn_distance) and
+        # same uniform angle/heading on [0, 2*pi); only the stream changed.
+        distances, spawn_angles, headings = station_keeping_spawn(
+            self._scenario,
+            env_ids,
+            self.device,
+            self.cfg.min_spawn_distance,
+            self.cfg.max_spawn_distance,
+        )
 
         root_state = self.robot.data.default_root_state[env_ids].clone()
         root_state[:, :3] += self.scene.env_origins[env_ids]
@@ -577,4 +763,85 @@ class StationKeepingEnv(DirectRLEnv):
         self._episode_finished[env_ids] = False
         self._previous_xy[env_ids] = root_state[:, :2]
         if self._sea is not None:
-            self._sea.resample(env_ids)
+            self._sea.resample(env_ids, scenario=self._scenario)
+        if self._obs_degrader is not None:
+            # New episode: bump the (env, episode) RNG stream, resample the
+            # per-episode bias, and clear delay/dropout buffers. The clean
+            # initial frame is captured on the next _get_observations call.
+            self._obs_degrader.reset(env_ids)
+
+        # Resolved scenario for the episode that starts now, plus a hash per
+        # primitive group for the certificate. Values only -- never the key --
+        # so two eval seeds that drew the same numbers still hash the same and
+        # stay detectable by scripts/check_scenario_independence.py.
+        #
+        # Every entry is a RAW DRAW, never a kernel-derived quantity. The
+        # current used to be stamped as current_vec[env_ids], which is the draw
+        # AFTER the trigonometry (:410-411). Two reasons that is the wrong
+        # thing to hash:
+        #
+        #   * It is not injective, and not only in a corner case. At speed zero
+        #     -- nothing in the cfg schema forbids current_speed_min = 0.0 --
+        #     EVERY direction collapses onto the same (0, 0) vector. The
+        #     collision is LIVE inside the shipped range as well: at speed
+        #     0.2 m/s the directions 0.5000017285346985 and 0.5000017881393433
+        #     (adjacent float32 values, each reachable from a float32 unit draw
+        #     through the *2*pi of station_keeping_current) give a
+        #     byte-identical float32 current_vec. Sweeping the real chain --
+        #     unit speed and unit direction drawn as here, scaled to [0.2, 0.3)
+        #     and [0, 2*pi) -- 8.4e6 neighbouring draw pairs whose RECORDED
+        #     direction differs produced the same float32 vector in 1.09% of
+        #     cases, at speeds spread across the whole range.
+        #     An earlier revision of this comment reported that 4e6 randomly
+        #     sampled (speed, direction) pairs gave 4e6 distinct vectors and
+        #     concluded "a robustness argument rather than a live collision".
+        #     That measurement was sound but answered the wrong question: far
+        #     apart draws almost never collide (a birthday bound), which says
+        #     nothing about whether the map is injective. It is not, and the
+        #     old conclusion was false.
+        #     What the 1.09% is NOT: the chance that two episodes of one
+        #     certificate share a hash. Two independent episodes draw
+        #     directions nowhere near each other, so that stays vanishingly
+        #     rare. The point is only that injectivity is not available as an
+        #     argument, so the certificate must not rest on it.
+        #   * It welds the certificate to the kernel. current_vec is also the
+        #     direction carrier the RampCurrent variant modulates (:419-427);
+        #     any future change to how the vector is formed from the draw would
+        #     move every episode hash while the drawn numbers stayed identical,
+        #     which reads as "these two runs saw different scenarios" when they
+        #     did not.
+        #
+        # Speed and direction are what the stream produced, and current_vec is
+        # recoverable from them, so nothing is lost.
+        scenario_groups = {
+            "spawn_pose": {
+                "distance_m": distances,
+                "angle_rad": spawn_angles,
+                "heading_rad": headings,
+            }
+        }
+        if self.physics_cfg.enable_current:
+            scenario_groups["current"] = {
+                "speed_mps": current_speeds,
+                "direction_rad": current_directions,
+            }
+        if self._sea is not None:
+            # H_s, T_p, gamma, the mean direction and the phases are each an
+            # affine image of one unit draw (tasks/_shared/sea_state.py:133-137)
+            # and so ARE the draw. direction_rad is mean_direction + spread
+            # (:138-141), but mean_direction_rad is stamped beside it, so the
+            # per-component spread draw is recoverable by subtraction and the
+            # pair still identifies the draw uniquely. amplitude is omitted on
+            # purpose: it is a pure function of (hs, tp, gamma), which are
+            # already here, so stamping it would add no information.
+            scenario_groups["wave"] = {
+                "hs_m": self._sea.hs[env_ids],
+                "tp_s": self._sea.tp[env_ids],
+                "gamma": self._sea.gamma[env_ids],
+                "mean_direction_rad": self._sea.mean_direction[env_ids],
+                "phase_rad": self._sea.phase[env_ids],
+                "direction_rad": self._sea.direction[env_ids],
+            }
+        for env_index, resolved, hashes in stamp_scenario(env_ids, scenario_groups):
+            self._scenario_params[env_index] = resolved
+            self._scenario_hashes[env_index] = hashes

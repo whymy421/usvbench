@@ -97,24 +97,45 @@ class SeaState:
         r = torch.exp(-0.5 * ((f - fp) / (sigma * fp)).pow(2))
         return torch.clamp(pm * gamma_e.pow(r), min=0.0)
 
-    def resample(self, env_ids: torch.Tensor) -> None:
-        """Draw a fresh sea state (H_s, T_p, gamma, heading, phases) per env."""
+    def resample(self, env_ids: torch.Tensor, scenario=None) -> None:
+        """Draw a fresh sea state (H_s, T_p, gamma, heading, phases) per env.
+
+        ``scenario`` is an optional ``.._shared.scenario_rng.ScenarioRNG``.
+        With ``None`` -- the default, and what ``__init__`` below passes --
+        every draw comes from the GLOBAL torch RNG exactly as it always did.
+        That is the historical evaluation defect: skrl's ``Runner.__init__``
+        reseeds the global RNG to the constant in the agent YAML after the env
+        has been built, so two ``--eval-seed`` values drew the SAME wave field.
+        With a ScenarioRNG the same six draws, in the same order and with the
+        same arithmetic, come off the per-(env, episode) ``wave`` stream.
+
+        ``__init__`` deliberately passes no scenario: at construction time no
+        episode has begun, and every value written here is overwritten by the
+        first ``_reset_idx``, which resets all envs.
+        """
+        # Same try/except idiom test_sea_state.py uses at its own import: this
+        # module is loaded both as a package member (by the envs) and as a bare
+        # top-level module (by the standalone CPU tests).
+        try:
+            from .scenario_draws import GROUP_WAVE, unit_uniform
+        except ImportError:  # direct execution
+            from scenario_draws import GROUP_WAVE, unit_uniform
+
         n = self.freqs.numel()
-        count = len(env_ids)
+
+        def unit(size: tuple = ()) -> torch.Tensor:
+            """U[0, 1) of exactly the shape the replaced torch.rand produced."""
+            return unit_uniform(scenario, GROUP_WAVE, env_ids, self.device, size)
 
         def uniform(rng: tuple) -> torch.Tensor:
-            return torch.rand(count, device=self.device) * (rng[1] - rng[0]) + rng[0]
+            return unit() * (rng[1] - rng[0]) + rng[0]
 
         self.hs[env_ids] = uniform(self.cfg.hs_range)
         self.tp[env_ids] = uniform(self.cfg.tp_range)
         self.gamma[env_ids] = uniform(self.cfg.gamma_range)
-        self.mean_direction[env_ids] = (
-            torch.rand(count, device=self.device) * 2.0 * math.pi
-        )
-        self.phase[env_ids] = torch.rand((count, n), device=self.device) * (
-            2.0 * math.pi
-        )
-        spread = (torch.rand((count, n), device=self.device) - 0.5) * (
+        self.mean_direction[env_ids] = unit() * 2.0 * math.pi
+        self.phase[env_ids] = unit((n,)) * (2.0 * math.pi)
+        spread = (unit((n,)) - 0.5) * (
             2.0 * self.cfg.direction_spread_rad
         )
         self.direction[env_ids] = self.mean_direction[env_ids].unsqueeze(1) + spread

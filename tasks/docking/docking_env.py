@@ -78,6 +78,10 @@ class DockingEnv(DirectRLEnv):
             levels = self.cfg.eval_level_distances
             index = min(max(int(self.cfg.eval_level), 0), len(levels) - 1)
             self.curriculum.spawn_distance = float(levels[index])
+            override = float(getattr(self.cfg, "spawn_distance_override_m", 0.0))
+            if override > 0.0:
+                # Tier-regrade probe distance; 0.0 keeps the level table.
+                self.curriculum.spawn_distance = override
         self.curriculum_spawn_distance = torch.tensor(
             self.curriculum.spawn_distance, device=self.device
         )

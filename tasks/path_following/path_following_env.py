@@ -16,6 +16,12 @@ from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
 
 from .._shared.restoring import restoring_torque_body
+from .._shared.scenario_draws import (
+    make_scenario_rng,
+    path_following_route,
+    spawn_heading,
+    stamp_scenario,
+)
 from .._shared.vehicles import get_vehicle
 from .path_following_env_cfg import PathFollowingEnvCfg
 
@@ -86,6 +92,24 @@ class PathFollowingEnv(DirectRLEnv):
         self.actions = torch.zeros(
             (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
         )
+
+        # --- Controller-independent episode scenarios -----------------------
+        # The waypoint chain and the spawn heading used to come off the GLOBAL
+        # torch RNG, which skrl's Runner reseeds to a constant AFTER the env is
+        # built, so two --eval-seed values drew the same routes. This family is
+        # the worst-affected of the three: _get_dones returns self._success as
+        # `terminated`, so episodes end at DIFFERENT steps under different
+        # policies and the global stream is consumed in a controller-dependent
+        # order. The keyed per-(env, episode) streams remove both problems.
+        # cfg.seed None -> None -> the historical global-RNG lines, unchanged.
+        self._scenario = make_scenario_rng(self.cfg, self.num_envs, self.device)
+        # _scenario_* is the RUNNING episode; episode_scenario_* is latched at
+        # reset for the episode that just ENDED (same discipline as
+        # episode_xte_rms), because the evaluator reads them after the reset.
+        self._scenario_params = [{} for _ in range(self.num_envs)]
+        self._scenario_hashes = [{} for _ in range(self.num_envs)]
+        self.episode_scenario = [{} for _ in range(self.num_envs)]
+        self.episode_scenario_hashes = [{} for _ in range(self.num_envs)]
 
     def _setup_scene(self):
         if self.vehicle_spec.asset_kind == "articulation":
@@ -618,6 +642,11 @@ class PathFollowingEnv(DirectRLEnv):
             self.episode_gates_passed[completed_ids] = self.gates_passed[completed_ids]
             self.episode_xte_rms[completed_ids] = self.xte_rms[completed_ids]
             self.episode_route_length[completed_ids] = self.route_length[completed_ids]
+            for completed in completed_ids.tolist():
+                self.episode_scenario[completed] = self._scenario_params[completed]
+                self.episode_scenario_hashes[completed] = self._scenario_hashes[
+                    completed
+                ]
 
             self.extras.setdefault("log", {})
             self.extras["log"]["Episode/success"] = success.float().mean()
@@ -637,25 +666,34 @@ class PathFollowingEnv(DirectRLEnv):
 
         super()._reset_idx(env_ids)
 
+        # New episode for these envs: advance their per-env episode counter and
+        # reseed every primitive stream. MUST precede the first draw below.
+        if self._scenario is not None:
+            self._scenario.reset_idx(env_ids)
+
         num_resets = len(env_ids)
-        self.segment_lengths[env_ids] = self.cfg.segment_length_min + torch.rand(
-            (num_resets, self.cfg.num_waypoints), device=self.device
-        ) * (self.cfg.segment_length_max - self.cfg.segment_length_min)
+        max_change = torch.deg2rad(
+            torch.tensor(self.cfg.heading_change_max_deg, device=self.device)
+        )
+        # Identical ranges to before -- segment length uniform on
+        # [segment_length_min, segment_length_max), first heading uniform on
+        # [0, 2*pi), each heading change uniform on [-max_change, +max_change).
+        # Only the stream the three uniforms come from changed.
+        segment_lengths, first_headings, heading_changes = path_following_route(
+            self._scenario,
+            env_ids,
+            self.device,
+            self.cfg.num_waypoints,
+            self.cfg.segment_length_min,
+            self.cfg.segment_length_max,
+            max_change,
+        )
+        self.segment_lengths[env_ids] = segment_lengths
 
         headings = torch.empty(
             (num_resets, self.cfg.num_waypoints), device=self.device
         )
-        headings[:, 0] = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
-        max_change = torch.deg2rad(
-            torch.tensor(self.cfg.heading_change_max_deg, device=self.device)
-        )
-        heading_changes = (
-            torch.rand(
-                (num_resets, self.cfg.num_waypoints - 1), device=self.device
-            )
-            * 2.0
-            - 1.0
-        ) * max_change
+        headings[:, 0] = first_headings
         headings[:, 1:] = headings[:, 0:1] + torch.cumsum(heading_changes, dim=1)
 
         segment_vectors = torch.stack(
@@ -668,7 +706,8 @@ class PathFollowingEnv(DirectRLEnv):
         self.waypoints[env_ids] = torch.cumsum(segment_vectors, dim=1)
         self.route_length[env_ids] = self.segment_lengths[env_ids].sum(dim=1)
 
-        spawn_headings = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
+        # Uniform on [0, 2*pi) exactly as before; only the stream changed.
+        spawn_headings = spawn_heading(self._scenario, env_ids, self.device)
         root_state = self.robot.data.default_root_state[env_ids].clone()
         root_state[:, :3] += self.scene.env_origins[env_ids]
         body_yaws = spawn_headings + self._body_yaw_from_bow_offset
@@ -692,6 +731,51 @@ class PathFollowingEnv(DirectRLEnv):
         first_target_distance = torch.norm(first_rpos, dim=-1)
         self._prev_target_distance[env_ids] = first_target_distance
         self._pre_transition_target_distance[env_ids] = first_target_distance
+
+        # Resolved scenario for the episode that starts now, plus a hash per
+        # primitive group for the certificate. Values only -- never the key --
+        # so two eval seeds that happened to draw the same route still hash the
+        # same and stay visible to scripts/check_scenario_independence.py.
+        #
+        # Every entry is a RAW DRAW. The route used to stamp headings_rad, the
+        # per-waypoint ABSOLUTE heading, which is the running sum of the draws
+        # (:696-697) and not one of them. In exact arithmetic that sum is
+        # invertible, but it is computed in float32 and the accumulation is
+        # lossy: a heading change small against the ulp of the running total
+        # vanishes into it. Two checks, both reproducible:
+        #   * the hand case -- first heading 1.234 rad with changes
+        #     (0.7, 1e-9) and (0.7, 4e-9), values inside
+        #     [-heading_change_max, +heading_change_max) -- stamps the
+        #     byte-identical headings [1.234, 1.934, 1.934]. Honest caveat:
+        #     those two tails are inside the RANGE but below what this chain
+        #     can actually draw. heading_changes are (u*2 - 1) * max_change
+        #     with u a float32 unit draw, so the smallest nonzero magnitude
+        #     available is 6.2e-8 rad, not 1e-9.
+        #   * the achievable case, which is the one that decides it: perturbing
+        #     one real unit draw by a single ulp over 4e6 four-waypoint routes
+        #     changed the stamped heading_change in 3.0e6 of them, and of THOSE
+        #     25.5% still stamped byte-identical absolute headings.
+        # Two different exam papers, one hash -- at a quarter of the
+        # neighbouring draws, not as a curiosity.
+        #
+        # first_heading_rad plus heading_change_rad are what the stream actually
+        # produced, and they still reconstruct the absolute headings exactly
+        # (headings[:, 0] = first_heading; headings[:, 1:] = first_heading +
+        # cumsum(heading_change)), so recording the draw costs the certificate
+        # nothing and closes the collision.
+        for env_index, resolved, hashes in stamp_scenario(
+            env_ids,
+            {
+                "route": {
+                    "segment_lengths_m": self.segment_lengths[env_ids],
+                    "first_heading_rad": first_headings,
+                    "heading_change_rad": heading_changes,
+                },
+                "spawn_pose": {"heading_rad": spawn_headings},
+            },
+        ):
+            self._scenario_params[env_index] = resolved
+            self._scenario_hashes[env_index] = hashes
 
         # This is reset-only USD authoring and has no disabled-mode or per-step cost.
         if self.cfg.visual.enable_waypoint_markers and bool((env_ids == 0).any().item()):

@@ -180,6 +180,13 @@ class HarborMissionEnvCfg(DirectRLEnvCfg):
     hazard_layout_max_attempts: int = 20
     layout_seed: int = 0
 
+    # Stage the boat starts in. 0 = the harbor mouth, i.e. every certified
+    # number to date. 2 spawns at the field exit with M1/M2 already latched,
+    # which is the state a phase-2 hand-off actually produces; training a dock
+    # specialist from the harbor mouth never reached the dock at all.
+    spawn_phase: int = 0
+    spawn_phase_jitter_m: float = 0.0
+
     reward_progress_scale: float = 20.0
     # v6.1: quadratic tax RESTORED for harbor. The v6.0 log field (w=4.1,
     # band 1.35 m) chronically taxed the dense transit zone: s43 found the
@@ -264,6 +271,10 @@ class HarborMissionEnvCfg(DirectRLEnvCfg):
             )
         if self.mission_depth not in (1, 2, 3):
             raise ValueError("mission_depth must be 1, 2, or 3")
+        if self.spawn_phase not in (0, 2):
+            raise ValueError("spawn_phase must be 0 (harbor mouth) or 2 (field exit)")
+        if self.spawn_phase_jitter_m < 0.0:
+            raise ValueError("spawn_phase_jitter_m must be non-negative")
         if self.reward_stage_goal_bonus < 0.0 or self.reward_stage_time_bonus < 0.0:
             raise ValueError("stage bonus scales must be non-negative")
         if self.ray_count != 36:
@@ -303,6 +314,27 @@ class HarborStage3EnvCfg(HarborMissionEnvCfg):
     """Stage 3: full ordered mission (M3), warm-started from Stage 2."""
 
     mission_depth: int = 3
+    terminate_on_milestone: bool = True
+    terminate_on_contact: bool = True
+    obs_kinematic: bool = True
+    observation_space = 49
+
+
+@configclass
+class HarborDockPhaseEnvCfg(HarborMissionEnvCfg):
+    """Dock phase in isolation: spawn at the field exit with M1/M2 latched.
+
+    Exists because the "stage 3 specialist" of 2026-08-06 was in fact trained on
+    the full ordered mission (HarborStage3 is only mission_depth=3), so it hit
+    the departure wall and its certification recorded max_phase=0 on 128/128
+    episodes. Handing the dock to that policy is what the composite evaluation
+    measured, which is why its 0/89 conversion says nothing about skill routing.
+    """
+
+    mission_depth: int = 3
+    spawn_phase: int = 2
+    spawn_phase_jitter_m: float = 2.0
+    episode_length_s = 60.0
     terminate_on_milestone: bool = True
     terminate_on_contact: bool = True
     obs_kinematic: bool = True

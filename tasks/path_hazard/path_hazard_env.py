@@ -20,6 +20,11 @@ from isaaclab.envs import DirectRLEnv
 
 from .._shared.obs_superset import SPEED_SCALE_MPS
 from .._shared.restoring import restoring_torque_body
+from .._shared.scenario_draws import (
+    make_scenario_rng,
+    spawn_heading,
+    stamp_scenario,
+)
 from .._shared.vehicles import get_vehicle
 from .path_hazard_env_cfg import PathHazardEnvCfg
 from .path_hazard_geometry import (
@@ -27,6 +32,17 @@ from .path_hazard_geometry import (
     ray_circle_ranges,
     sample_layout,
 )
+
+
+# Primitive group for the numpy layout stream. Kept distinct from
+# scenario_draws.GROUP_ROUTE ("route", the torch stream path_following draws its
+# waypoint chain from) because this family samples its route AND its obstacle
+# field together, by rejection, from one numpy Generator -- and because the
+# certificate already records the two together under "layout" (see the
+# stamp_scenario call in _reset_idx). Group names are hashed as TEXT, not as a
+# positional index (tasks/_shared/scenario_rng.py:56-63), so introducing this
+# name cannot disturb any stream that already exists.
+GROUP_LAYOUT = "layout"
 
 
 def _space_dim(space: object) -> int:
@@ -131,6 +147,36 @@ class PathHazardEnv(DirectRLEnv):
         self.actions = torch.zeros(
             (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
         )
+
+        # --- Controller-independent episode scenarios -----------------------
+        # Two separate defects, both fixed by the same stream.
+        #
+        # SPAWN HEADING was a bare torch.rand on the GLOBAL torch RNG, which
+        # skrl's Runner reseeds to the constant in the agent YAML after the env
+        # is built -- so it did not follow --eval-seed at all.
+        #
+        # THE LAYOUT (route + obstacle field) did follow cfg.seed, because
+        # self._layout_rng is seeded from it (:61-63), but it was ONE generator
+        # advanced once per reset for the whole batch. That is seed-derived and
+        # still not reproducible: this task terminates early on success or on a
+        # prefix contact (see _get_dones), so two controllers reach reset k at
+        # different times and in different groupings, consume a different number
+        # of rejection-sampler draws, and are handed DIFFERENT layouts for the
+        # same (eval seed, env, episode). Both primitives now ride a stream
+        # keyed by (protocol version, cfg.seed, env index, per-env episode
+        # index, group), which is keyed rather than sequential and therefore
+        # cannot drift with consumption order.
+        #
+        # cfg.seed None -> None -> the historical lines, unchanged: the global
+        # torch RNG for the heading and the single self._layout_rng sequence for
+        # the layout.
+        self._scenario = make_scenario_rng(self.cfg, self.num_envs, self.device)
+        # _scenario_* is the RUNNING episode; episode_scenario_* is latched at
+        # reset for the episode that just ENDED, matching episode_min_clearance.
+        self._scenario_params = [{} for _ in range(self.num_envs)]
+        self._scenario_hashes = [{} for _ in range(self.num_envs)]
+        self.episode_scenario = [{} for _ in range(self.num_envs)]
+        self.episode_scenario_hashes = [{} for _ in range(self.num_envs)]
 
         # Diagnostics only -- none of these feed back into the reward.
         self._fee_steps = torch.zeros(self.num_envs, device=self.device)
@@ -854,7 +900,6 @@ class PathHazardEnv(DirectRLEnv):
         self._clean_last_gate_this_step.copy_(success_now)
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        self._episode_finished.copy_(time_out)
         if self.cfg.terminate_on_outcome:
             # v11 semantics: the episode ends on the outcome, and the terminal
             # bonus above is what keeps that from being a reward for stalling.
@@ -862,7 +907,52 @@ class PathHazardEnv(DirectRLEnv):
         else:
             # Fixed-horizon trajectory scoring: nothing terminates early.
             terminated = torch.zeros_like(time_out)
+        # "Finished" has to mean "Isaac Lab is about to reset this env", which
+        # is terminated OR timed out. The latch read time_out ALONE, so on the
+        # v2 gym id -- terminate_on_outcome=True at
+        # path_hazard_env_cfg.py:308 -- an episode that ended on its outcome
+        # never entered the per-episode stats block of _reset_idx (:962). Two
+        # consequences, both silent:
+        #   * every latch that block writes (episode_success, time_to_success,
+        #     episode_gates_passed, episode_path_length, episode_min_clearance,
+        #     episode_xte_rms, episode_route_length) kept the value of whatever
+        #     episode this env last TIMED OUT on, and under this cfg a success
+        #     terminates by construction, so a successful episode could never
+        #     latch its own success;
+        #   * episode_scenario_hashes[env], latched in the same block (:977),
+        #     therefore named a DIFFERENT episode than the record the evaluator
+        #     wrote it into (scripts/eval_v6_frozen.py:213-215) -- a certificate
+        #     row for episode k carrying episode j's digests, which is exactly
+        #     the confusion the digests exist to rule out.
+        # Nothing about the OUTCOME moves here: success_now, _success and the
+        # (terminated, time_out) pair returned below are untouched, so which
+        # episodes count as successes and how every statistic is computed are
+        # unchanged; only which episodes reach the recording block changes. On
+        # every cfg with terminate_on_outcome=False (v1 and the certified
+        # champion) `terminated` is all-False, so `time_out | terminated` is
+        # bit-identical to the line it replaces.
+        self._episode_finished.copy_(time_out | terminated)
         return terminated, time_out
+
+    def _layout_generator(self, env_index: int) -> np.random.Generator:
+        """The numpy stream this env's CURRENT episode layout is drawn from.
+
+        Seeded env: a fresh ``np.random.Generator`` keyed by (protocol version,
+        cfg.seed, env index, this env's episode counter, "layout"), built by
+        ``ScenarioRNG.numpy_rng`` off the same blake2b key algebra as the torch
+        streams. ``_reset_idx`` calls ``reset_idx`` before this, so the counter
+        already names the episode about to start. Because the key -- not the
+        number of draws taken so far -- decides the stream, the layout for a
+        given (eval seed, env, episode) is the same whether the previous
+        episode ran to the horizon or ended on step three, and the same whether
+        this env reset alone or with sixty-three others.
+
+        Unseeded env (cfg.seed None, so make_scenario_rng returned None): the
+        historical single advancing generator, byte for byte.
+        """
+        if self._scenario is None:
+            return self._layout_rng
+        return self._scenario.numpy_rng(GROUP_LAYOUT, int(env_index))
 
     def _reset_idx(self, env_ids: Sequence[int] | None) -> None:
         if env_ids is None:
@@ -882,6 +972,11 @@ class PathHazardEnv(DirectRLEnv):
             ]
             self.episode_xte_rms[completed_ids] = self.xte_rms[completed_ids]
             self.episode_route_length[completed_ids] = self.route_length[completed_ids]
+            for completed in completed_ids.tolist():
+                self.episode_scenario[completed] = self._scenario_params[completed]
+                self.episode_scenario_hashes[completed] = self._scenario_hashes[
+                    completed
+                ]
 
             self.extras.setdefault("log", {})
             self.extras["log"]["Episode/success"] = success.float().mean()
@@ -920,6 +1015,11 @@ class PathHazardEnv(DirectRLEnv):
 
         super()._reset_idx(env_ids)
 
+        # New episode for these envs: advance their per-env episode counter and
+        # reseed their primitive streams. MUST precede the spawn-heading draw.
+        if self._scenario is not None:
+            self._scenario.reset_idx(env_ids)
+
         num_resets = len(env_ids)
         max_obstacles = self.cfg.obstacle_count
         waypoints_np = np.zeros(
@@ -933,11 +1033,23 @@ class PathHazardEnv(DirectRLEnv):
         radii_np = np.zeros((num_resets, max_obstacles), dtype=np.float32)
         active_np = np.zeros((num_resets, max_obstacles), dtype=np.bool_)
         counts_np = np.zeros(num_resets, dtype=np.int64)
+        _ob = getattr(self.cfg, "on_line_blockers_override", 0)
+        # <0 = force ZERO on-line blockers (line-avoid tier-0 probe);
+        # 0 = frozen v1 default of three; 1..4 = pinned count. Non-negative
+        # values behave bit-identically to the pre-sentinel plumbing.
+        _blockers_override = 0 if _ob < 0 else (int(_ob) or None)
+        # One generator per (env, episode) instead of one shared generator
+        # advanced per reset. Everything below -- the rejection sampler, its
+        # attempt budget, its K-reduction ladder, every range it samples -- is
+        # untouched; only the Generator handed to it changes, and only when the
+        # env is seeded. See _layout_generator.
+        reset_env_indices = env_ids.tolist()
         for row in range(num_resets):
             layout = sample_layout(
-                rng=self._layout_rng,
+                rng=self._layout_generator(reset_env_indices[row]),
                 max_attempts=self.cfg.layout_max_attempts,
                 obstacle_count=self.cfg.obstacle_count,
+                blockers_override=_blockers_override,
             )
             count = layout.obstacle_count
             waypoints_np[row] = layout.waypoints
@@ -972,7 +1084,8 @@ class PathHazardEnv(DirectRLEnv):
             counts_np, device=self.device
         )
 
-        spawn_headings = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
+        # Uniform on [0, 2*pi) exactly as before; only the stream changed.
+        spawn_headings = spawn_heading(self._scenario, env_ids, self.device)
         body_yaws = spawn_headings + self._body_yaw_from_bow_offset
         spawn_quats = math_utils.quat_from_angle_axis(
             body_yaws.unsqueeze(-1), self.up_dir
@@ -1016,6 +1129,32 @@ class PathHazardEnv(DirectRLEnv):
         self._min_clearance[env_ids] = initial_clearance
         self._contact_before_last_gate[env_ids] = initial_clearance < 0.0
         self.actions[env_ids] = 0.0
+
+        # Resolved scenario for the episode that starts now. Both primitives
+        # are on the protocol: "spawn_pose" off the torch stream, "layout" off
+        # the per-(env, episode) numpy stream of _layout_generator. Values
+        # only, never the key.
+        #
+        # The layout entries are the ACCEPTED sample, not the raw uniforms the
+        # rejection sampler burned to reach it -- unlike the current or the
+        # heading chain there is no shorter raw form to record, because
+        # sample_layout draws an unbounded number of candidates and returns the
+        # first feasible one. The accepted geometry IS the scenario, and it is
+        # what the certificate has to be able to compare episode by episode.
+        for env_index, resolved, hashes in stamp_scenario(
+            env_ids,
+            {
+                "spawn_pose": {"heading_rad": spawn_headings},
+                "layout": {
+                    "waypoints_m": waypoints,
+                    "obstacle_centers_m": local_centers,
+                    "obstacle_radii_m": radii,
+                    "obstacle_count": self.obstacle_count[env_ids],
+                },
+            },
+        ):
+            self._scenario_params[env_index] = resolved
+            self._scenario_hashes[env_index] = hashes
 
         self._update_render_only_obstacle_markers(
             env_ids, local_centers, radii, active

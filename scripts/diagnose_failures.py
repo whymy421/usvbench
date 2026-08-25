@@ -59,6 +59,25 @@ from isaaclab_rl.skrl import SkrlVecEnvWrapper  # noqa: E402
 import isaaclab_tasks  # noqa: F401,E402
 from isaaclab_tasks.utils import load_cfg_from_registry, parse_env_cfg  # noqa: E402
 
+# Scenario-protocol stamping, on the same dual import scripts/
+# eval_v6_frozen.py:74-80 uses so the script keeps working from the repo and
+# from the deployed task tree.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.append(_REPO_ROOT)
+try:
+    from tasks._shared.scenario_draws import (
+        episode_scenario_hashes_for,
+        scenario_protocol_notice,
+        scenario_protocol_stamp,
+    )
+except ImportError:
+    from isaaclab_tasks.direct._shared.scenario_draws import (
+        episode_scenario_hashes_for,
+        scenario_protocol_notice,
+        scenario_protocol_stamp,
+    )
+
 BAND_M = 1.35          # proximity band cap, the env's "engaged with obstacles" line
 HULL_LEN_M = 1.2
 STALL_PATH_M = 3.0 * HULL_LEN_M
@@ -81,6 +100,15 @@ runner.agent.load(os.path.abspath(args_cli.checkpoint))
 runner.agent.set_running_mode("eval")
 
 base = env.unwrapped
+# Does THIS env carry the scenario protocol?  Same guard, same marker and same
+# warning as scripts/eval_v6_frozen.py:148-162.  NOTE: this autopsy's records
+# carry no (env, ep) key, so scripts/check_scenario_independence.py cannot
+# align them; the stamp is here so a verdict table can still name the scenario
+# an episode ran, not so this file becomes a certificate.
+scenario_protocol = scenario_protocol_stamp(base)
+_notice = scenario_protocol_notice(TASK, scenario_protocol)
+if _notice:
+    print(_notice, flush=True)
 n_envs = base.num_envs
 dev = base.device
 goal_radius = float(getattr(base.cfg, "goal_radius", 2.0))
@@ -156,6 +184,14 @@ while len(records) < args_cli.episodes and step < max_steps:
             "mean_speed_mps": float(acc_speed[i]) / steps_i,
             "episode_steps": int(steps_i),
         }
+        # Per-primitive digests of the scenario the FINISHED episode ran,
+        # latched at reset exactly like episode_min_clearance.  Absent on
+        # families not yet on the scenario protocol, and empty until an env has
+        # completed its first episode; both cases are guarded inside the
+        # helper, which returns None for "write no field".
+        scenario_hashes = episode_scenario_hashes_for(base, i)
+        if scenario_hashes is not None:
+            rec["scenario_hashes"] = scenario_hashes
         records.append(rec)
     if len(ids):
         reset_acc(ids)
@@ -194,6 +230,10 @@ if args_cli.out:
     with open(args_cli.out, "w", encoding="utf-8") as f:
         json.dump({"task": TASK, "level": args_cli.level,
                    "seed": args_cli.eval_seed,
+                   # The header block when the env carries the protocol
+                   # object, the off-protocol literal when it does not --
+                   # never unconditionally the header.
+                   "scenario_protocol": scenario_protocol,
                    "checkpoint": os.path.abspath(args_cli.checkpoint),
                    "counts": counts, "records": records}, f, indent=1)
 

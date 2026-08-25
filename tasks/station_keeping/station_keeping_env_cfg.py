@@ -175,6 +175,22 @@ class StationKeepingEnvCfg(DirectRLEnvCfg):
     sea_state: SeaStateCfg = SeaStateCfg()
     obs_sea_state: bool = False
 
+    # --- Observation-channel degradation (eval-time OOD hooks) ---------------
+    # Physical-unit corruption of the IDEAL measurements (hold-point vector,
+    # body-frame velocities) before feature construction, inside
+    # _get_observations only; reward/termination/success keep reading clean
+    # state. All zero => no degrader object is built and every certified id
+    # runs its frozen observation path byte-identical. Eval-time knobs (set
+    # via eval_v6_frozen --set); no gym id may ship nonzero defaults without
+    # its own registration. Yaw-rate sigma rides the vel knob scaled by
+    # yaw_rate_obs_scale_rad_s / SPEED_SCALE_MPS. No ray group here.
+    obs_noise_sigma_pos: float = 0.0  # m, white noise on the hold vector
+    obs_noise_sigma_vel: float = 0.0  # m/s, white noise on surge/sway (+ yaw)
+    obs_bias_sigma_pos: float = 0.0   # m, per-episode constant offset draw
+    obs_bias_sigma_vel: float = 0.0   # m/s, per-episode constant offset draw
+    obs_delay_steps: int = 0          # control steps of measurement latency
+    obs_dropout_p: float = 0.0        # per-step frame loss (sample-and-hold)
+
     hold_radius: float = 2.0
     required_hold_time_s: float = 60.0
     min_spawn_distance: float = 5.0
@@ -199,6 +215,11 @@ class StationKeepingEnvCfg(DirectRLEnvCfg):
     underwater_physics_cfg: UnderwaterPhysicsCfg = _build_underwater_physics_cfg(
         _DEFAULT_VEHICLE
     )
+    # Tier-regrade probe: pins the current to one speed (min = max = override)
+    # and force-enables it. 0.0 = untouched physics, byte-identical. Consumed
+    # by the env AFTER __post_init__ rebuilds underwater_physics_cfg, so the
+    # rebuild cannot silently erase an eval-time override.
+    current_speed_override_mps: float = 0.0
     wave_cfg: WavePhysicsCfg = WavePhysicsCfg()
     # Rendering only: this block must not affect physics, observations, reward,
     # termination, or success semantics.
@@ -277,3 +298,23 @@ class StationKeepingBlueBoatWaveEnvCfg(StationKeepingBlueBoatKinEnvCfg):
         self.sea_state.enable = True
         self.sea_state.hs_range = (0.30, 0.60)
         self.sea_state.tp_range = (1.5, 3.0)
+
+
+@configclass
+class StationKeepingBlueBoatRampCurrentEnvCfg(StationKeepingBlueBoatCurrentEnvCfg):
+    """C2 x ramping current: the speed climbs linearly within each episode.
+
+    Owner-proposed variant (meeting-approved design). The episode's current
+    DIRECTION is sampled exactly as in the Current variant; the SPEED is
+    overridden every control step with a linear ramp from
+    ``current_ramp_start_mps`` at the first step to ``current_ramp_end_mps``
+    at the final step (see current_ramp.py). The inherited
+    current_speed_min/max only seed the direction-carrying base vector.
+    Gym id registration is PENDING -- see
+    tasks/hazard_nav/PENDING_REGISTRATIONS.md -- so the certified Current ids
+    stay byte-identical (cfgs without both ramp fields never enter the ramp
+    path).
+    """
+
+    current_ramp_start_mps: float = 0.5
+    current_ramp_end_mps: float = 3.0

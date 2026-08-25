@@ -26,6 +26,20 @@ from .._shared.obs_superset import (
     SUPERSET_DIM_V2,
 )
 from .._shared.restoring import restoring_torque_body
+from .._shared.scenario_draws import make_scenario_rng, stamp_scenario
+from .._shared.scenario_draws_hazard import (
+    GROUP_DRAG_SCALE,
+    GROUP_LAYOUT,
+    GROUP_MASS_SCALE,
+    GROUP_MOTOR_TAU_S,
+    GROUP_ROTATION,
+    GROUP_THRUST_CAP_SCALE,
+    GROUP_THRUST_IMBALANCE,
+    actuator_choice_indices,
+    actuator_scenario_entry,
+    episode_layout_rng,
+    layout_rotation_angle,
+)
 from .._shared.vehicles import get_vehicle
 from ..docking.curriculum import DockingCurriculum
 from .hazard_geometry import (
@@ -91,6 +105,14 @@ class HazardNavEnv(DirectRLEnv):
             ema_decay=cfg.curriculum_ema_decay,
             success_threshold=cfg.curriculum_success_threshold,
         )
+        # UNSEEDED BEHAVIOUR, UNCHANGED AND DOCUMENTED RATHER THAN FIXED: with
+        # cfg.seed None this falls back to cfg.layout_seed, which defaults to
+        # the CONSTANT 0 (hazard_nav_env_cfg.py:187), so an unseeded run replays
+        # one fixed layout sequence instead of drawing fresh entropy. This
+        # generator remains the whole scenario source on that path (see
+        # episode_layout_rng and the scenario block below); the migration changes
+        # only the SEEDED path, which is the one every evaluator takes
+        # (scripts/eval_v6_frozen.py:104 sets env_cfg.seed).
         isaac_seed = getattr(cfg, "seed", None)
         layout_seed = cfg.layout_seed if isaac_seed is None else int(isaac_seed)
         self._layout_rng = np.random.default_rng(layout_seed)
@@ -240,6 +262,36 @@ class HazardNavEnv(DirectRLEnv):
         self._ep_goal_bonus = torch.zeros(self.num_envs, device=self.device)
         self._ep_reverse_cost = torch.zeros(self.num_envs, device=self.device)
 
+        # --- Controller-independent episode scenarios -----------------------
+        # The layout, the global rotation and the five actuator/dynamics knobs
+        # all came off self._layout_rng (:118): ONE generator, advanced once per
+        # reset for whatever batch happened to be resetting. That is
+        # seed-derived, and it is still not reproducible across controllers,
+        # because this family terminates EARLY -- on goal or on contact
+        # (_get_dones at :1453-1454, and contact_terminates defaults True at
+        # hazard_nav_env_cfg.py:232). Two controllers therefore arrive at reset
+        # k at different times and in different groupings, consume a different
+        # number of rejection-sampler draws, and are handed DIFFERENT layouts
+        # for the same (eval seed, env, episode).
+        #
+        # Measured, at one eval seed, on the crossing task: three controllers
+        # certified over 128 episodes each agreed on only 53.8% / 56.9% / 55.6%
+        # of shared (env, episode) slots when compared on route_geodesic_m and
+        # d0_m, two fields that depend on the layout ALONE. Every primitive now
+        # rides a stream keyed by (protocol version, cfg.seed, env index, per-env
+        # episode index, group), which cannot drift with consumption order.
+        #
+        # cfg.seed None -> None -> the historical single self._layout_rng
+        # sequence, unchanged (see the comment at :108-115 for what it is).
+        self._scenario = make_scenario_rng(self.cfg, self.num_envs, self.device)
+        # _scenario_* is the RUNNING episode; episode_scenario_* is latched at
+        # reset for the episode that just ENDED, matching episode_min_clearance,
+        # which is where scripts/eval_v6_frozen.py:213-215 reads it.
+        self._scenario_params = [{} for _ in range(self.num_envs)]
+        self._scenario_hashes = [{} for _ in range(self.num_envs)]
+        self.episode_scenario = [{} for _ in range(self.num_envs)]
+        self.episode_scenario_hashes = [{} for _ in range(self.num_envs)]
+
         # Owner's one-shot half-sine threading bonus. Off unless the amplitude
         # is positive, so every certified id keeps its exact reward.
         self._threading = None
@@ -249,6 +301,68 @@ class HazardNavEnv(DirectRLEnv):
             self._threading = ThreadingLatch(
                 self.num_envs, self.device,
                 amplitude=self.cfg.reward_threading_amplitude,
+            )
+
+        # --- Eval-time observation-channel degradation (OOD hooks) ----------
+        # Every knob defaults to zero, in which case NO degrader object is
+        # built and the guarded hooks in _get_observations never fire: the
+        # frozen observation path stays byte-identical. Doses are meant to be
+        # set per run via scripts/eval_v6_frozen.py --set, never on a
+        # registered training id. Groups carry PHYSICAL units and are applied
+        # to ideal measurements before normalization; reward/termination keep
+        # reading the clean state.
+        noise_pos = float(getattr(self.cfg, "obs_noise_sigma_pos", 0.0) or 0.0)
+        noise_vel = float(getattr(self.cfg, "obs_noise_sigma_vel", 0.0) or 0.0)
+        noise_ray = float(getattr(self.cfg, "obs_noise_sigma_ray", 0.0) or 0.0)
+        bias_pos = float(getattr(self.cfg, "obs_bias_sigma_pos", 0.0) or 0.0)
+        bias_vel = float(getattr(self.cfg, "obs_bias_sigma_vel", 0.0) or 0.0)
+        bias_ray = float(getattr(self.cfg, "obs_bias_sigma_ray", 0.0) or 0.0)
+        delay_steps = int(getattr(self.cfg, "obs_delay_steps", 0) or 0)
+        dropout_p = float(getattr(self.cfg, "obs_dropout_p", 0.0) or 0.0)
+        self._obs_degrader = None
+        if any((noise_pos, noise_vel, noise_ray, bias_pos, bias_vel,
+                bias_ray, delay_steps, dropout_p)):
+            from .._shared.obs_degradation import (
+                ObsChannelGroup,
+                build_obs_degrader,
+            )
+
+            # The yaw-rate channel rides the vel knob at the same fraction of
+            # its full observation scale as the linear channels: sigma_yaw =
+            # sigma_vel * (yaw_rate_obs_scale_rad_s / SPEED_SCALE_MPS).
+            yaw_ratio = (
+                float(self.cfg.yaw_rate_obs_scale_rad_s) / SPEED_SCALE_MPS
+            )
+            ray_count = int(self.cfg.ray_count)
+            self._obs_degrader = build_obs_degrader(
+                num_envs=self.num_envs,
+                device=self.device,
+                base_seed=layout_seed,
+                groups={
+                    "pos": ObsChannelGroup(
+                        dim=2,
+                        noise_sigma=(noise_pos,) * 2,
+                        bias_sigma=(bias_pos,) * 2,
+                    ),
+                    "vel": ObsChannelGroup(
+                        dim=3,
+                        noise_sigma=(
+                            noise_vel, noise_vel, noise_vel * yaw_ratio
+                        ),
+                        bias_sigma=(
+                            bias_vel, bias_vel, bias_vel * yaw_ratio
+                        ),
+                    ),
+                    "ray": ObsChannelGroup(
+                        dim=ray_count,
+                        noise_sigma=(noise_ray,) * ray_count,
+                        bias_sigma=(bias_ray,) * ray_count,
+                        clamp_min=0.0,
+                        clamp_max=float(self.cfg.ray_max_range_m),
+                    ),
+                },
+                delay_steps=delay_steps,
+                dropout_p=dropout_p,
             )
 
     @property
@@ -752,7 +866,12 @@ class HazardNavEnv(DirectRLEnv):
             forward_2d, dim=-1, keepdim=True
         ).clamp_min(1.0e-6)
 
-    def _body_motion_observation(self) -> tuple[torch.Tensor, ...]:
+    def _body_motion_measurement(self) -> torch.Tensor:
+        """Raw body-frame (N, 3) [surge m/s, sway m/s, yaw rate rad/s].
+
+        The ideal kinematic measurement BEFORE normalization -- the injection
+        point for the eval-time observation degradation hooks.
+        """
         velocity_world = self.robot.data.root_com_vel_w
         if velocity_world.shape[-1] == 6:
             linear_velocity = velocity_world[:, :3]
@@ -772,10 +891,25 @@ class HazardNavEnv(DirectRLEnv):
             linear_body[:, 0:1] * -self._fwd_y
             + linear_body[:, 1:2] * self._fwd_x
         )
-        surge_norm = torch.clamp(surge / SPEED_SCALE_MPS, min=-1.0, max=1.0)
-        sway_norm = torch.clamp(sway / SPEED_SCALE_MPS, min=-1.0, max=1.0)
+        return torch.hstack((surge, sway, angular_body[:, 2:3]))
+
+    def _body_motion_observation(
+        self, measurement: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, ...]:
+        # Split into measurement + normalization (bit-identical ops) so the
+        # degradation hook can corrupt the physical-unit triple in between.
+        # Callers that pass nothing -- the reward path and external
+        # diagnostics -- always read the CLEAN measurement.
+        if measurement is None:
+            measurement = self._body_motion_measurement()
+        surge_norm = torch.clamp(
+            measurement[:, 0:1] / SPEED_SCALE_MPS, min=-1.0, max=1.0
+        )
+        sway_norm = torch.clamp(
+            measurement[:, 1:2] / SPEED_SCALE_MPS, min=-1.0, max=1.0
+        )
         yaw_rate_norm = torch.clamp(
-            angular_body[:, 2:3] / self.cfg.yaw_rate_obs_scale_rad_s,
+            measurement[:, 2:3] / self.cfg.yaw_rate_obs_scale_rad_s,
             min=-1.0,
             max=1.0,
         )
@@ -813,6 +947,7 @@ class HazardNavEnv(DirectRLEnv):
         )
 
     def _get_observations(self) -> dict:
+        degrader = self._obs_degrader
         position_to_goal = self.target_pos - self._com_xy()
         distance = torch.norm(position_to_goal, dim=-1, keepdim=True)
         if self.cfg.nav_targets_waypoint:
@@ -825,6 +960,26 @@ class HazardNavEnv(DirectRLEnv):
             bearing_distance = torch.norm(position_to_goal, dim=-1, keepdim=True)
         else:
             bearing_distance = distance
+        if degrader is not None and degrader.wants("pos"):
+            # OOD hook: corrupt the assembled goal vector (ideal relative-
+            # position measurement, meters) and re-derive the norms from it.
+            # In waypoint mode the geodesic distance channel above stays
+            # clean (the carrot machinery reads true state); only the bearing
+            # vector is a sensor here.
+            position_to_goal = degrader.apply("pos", position_to_goal)
+            bearing_distance = torch.norm(
+                position_to_goal, dim=-1, keepdim=True
+            )
+            if not self.cfg.nav_targets_waypoint:
+                distance = bearing_distance
+        degraded_kin = None
+        if degrader is not None and degrader.wants("vel"):
+            # OOD hook: body-frame velocity measurement (surge m/s, sway m/s,
+            # yaw rad/s), degraded exactly once per step -- delay/dropout are
+            # stateful -- and reused by every kinematic feature below.
+            degraded_kin = degrader.apply(
+                "vel", self._body_motion_measurement()
+            )
         direction_to_goal = position_to_goal / bearing_distance.clamp_min(1.0e-6)
         forward = self._forward_2d()
         dot = torch.sum(forward * direction_to_goal, dim=-1, keepdim=True)
@@ -839,6 +994,12 @@ class HazardNavEnv(DirectRLEnv):
         )
 
         ranges = self._ray_ranges_m()
+        if degrader is not None and degrader.wants("ray"):
+            # OOD hook: rangefinder returns in METERS, before normalization
+            # and before feasibility pooling; the group spec clamps back to
+            # the physical [0, ray_max_range_m] envelope. The reward path
+            # recomputes its own clean rays.
+            ranges = degrader.apply("ray", ranges)
         ranges_norm = ranges / self.cfg.ray_max_range_m
 
         speed_norm = (
@@ -847,6 +1008,13 @@ class HazardNavEnv(DirectRLEnv):
             )
             / SPEED_SCALE_MPS
         )
+        if degraded_kin is not None:
+            # Speed is the same velocity sensor: derive it from the degraded
+            # planar measurement instead of the clean world-frame state.
+            speed_norm = (
+                torch.norm(degraded_kin[:, :2], dim=-1, keepdim=True)
+                / SPEED_SCALE_MPS
+            )
         # B1 (v2): the reached latch enters the obs (cross-task "stage
         # complete" slot), making latch-gated reward terms augmented-Markov.
         # v1 keeps its historical layouts bit-stable.
@@ -858,8 +1026,12 @@ class HazardNavEnv(DirectRLEnv):
             # instead of two threats.
             from .._shared.feasibility import feasibility_pool
 
+            # Same tensor as the ranges block above: at defaults this reuses
+            # the deterministic recompute bit for bit; under ray degradation
+            # the pooled sectors must see the SAME degraded returns (a second
+            # _ray_ranges_m() call here would silently bypass the hook).
             pooled = feasibility_pool(
-                self._ray_ranges_m(),
+                ranges,
                 n_sectors=self.cfg.feasibility_sectors,
                 vessel_width_m=2.0 * self.cfg.half_beam_m,
                 ray_spacing_rad=2.0 * torch.pi / self.cfg.ray_count,
@@ -868,7 +1040,9 @@ class HazardNavEnv(DirectRLEnv):
             ranges_norm = pooled / self.cfg.ray_max_range_m
 
         if self.cfg.obs_v3:
-            surge_norm, sway_norm, yaw_rate_norm = self._body_motion_observation()
+            surge_norm, sway_norm, yaw_rate_norm = self._body_motion_observation(
+                degraded_kin
+            )
             native_observation = torch.hstack(
                 (
                     dot,
@@ -917,7 +1091,7 @@ class HazardNavEnv(DirectRLEnv):
             )
             contract_observation[..., :SUPERSET_DIM] = superset_observation
             contract_observation[..., SLICES["kinematics"]] = torch.hstack(
-                self._body_motion_observation()
+                self._body_motion_observation(degraded_kin)
             )
             # Hazard navigation has no task-specific v2 channels.
             contract_observation[..., SLICES["task_specific"]] = 0.0
@@ -1310,6 +1484,14 @@ class HazardNavEnv(DirectRLEnv):
             self.route_geodesic_length[completed_ids] = (
                 self._route_geodesic_length[completed_ids]
             )
+            # Same latch, same moment, as episode_min_clearance above: the
+            # evaluator reads the FINISHED episode's scenario alongside the
+            # finished episode's metrics.
+            for completed in completed_ids.tolist():
+                self.episode_scenario[completed] = self._scenario_params[completed]
+                self.episode_scenario_hashes[completed] = self._scenario_hashes[
+                    completed
+                ]
 
             self.extras.setdefault("log", {})
             self.extras["log"]["Episode/success"] = success.float().mean()
@@ -1377,50 +1559,106 @@ class HazardNavEnv(DirectRLEnv):
 
         super()._reset_idx(env_ids)
 
+        # New episode for these envs: advance their per-env episode counter and
+        # reseed their primitive streams. MUST precede every draw below.
+        if self._scenario is not None:
+            self._scenario.reset_idx(env_ids)
+
         num_resets = len(env_ids)
+        reset_env_indices = env_ids.tolist()
+        # Resolved values of the knobs that were actually drawn, for the
+        # certificate stamp at the end of this method. A knob whose *_choices
+        # tuple is empty draws nothing and contributes nothing.
+        actuator_scenario: dict[str, dict[str, object]] = {}
+        # Each knob owns its OWN stream, so enabling one knob cannot re-draw
+        # another -- scripts/eval_imbalance.py sweeps these one at a time and a
+        # shared stream would confound exactly the attribution it exists to
+        # make. The five blocks below keep their original order, their original
+        # ranges and their original uniform-over-choices distribution; only the
+        # generator changed, and only when the env is seeded.
         if self.cfg.thrust_imbalance_choices:
-            choice_indices = self._layout_rng.integers(
-                len(self.cfg.thrust_imbalance_choices), size=num_resets
+            choice_indices = actuator_choice_indices(
+                self._scenario,
+                self._layout_rng,
+                GROUP_THRUST_IMBALANCE,
+                reset_env_indices,
+                len(self.cfg.thrust_imbalance_choices),
             )
             choices = np.asarray(
                 self.cfg.thrust_imbalance_choices, dtype=np.float32
             )
+            drawn = choices[choice_indices]
             self._thrust_imbalance_per_env[env_ids] = torch.as_tensor(
-                choices[choice_indices], device=self.device
+                drawn, device=self.device
+            )
+            actuator_scenario.update(
+                actuator_scenario_entry(GROUP_THRUST_IMBALANCE, drawn.tolist())
             )
         if self.cfg.mass_scale_choices:
-            choice_indices = self._layout_rng.integers(
-                len(self.cfg.mass_scale_choices), size=num_resets
+            choice_indices = actuator_choice_indices(
+                self._scenario,
+                self._layout_rng,
+                GROUP_MASS_SCALE,
+                reset_env_indices,
+                len(self.cfg.mass_scale_choices),
             )
             choices = np.asarray(self.cfg.mass_scale_choices, dtype=np.float32)
+            drawn = choices[choice_indices]
             self._mass_scale_per_env[env_ids] = torch.as_tensor(
-                choices[choice_indices], device=self.device
+                drawn, device=self.device
+            )
+            actuator_scenario.update(
+                actuator_scenario_entry(GROUP_MASS_SCALE, drawn.tolist())
             )
         if self.cfg.drag_scale_choices:
-            choice_indices = self._layout_rng.integers(
-                len(self.cfg.drag_scale_choices), size=num_resets
+            choice_indices = actuator_choice_indices(
+                self._scenario,
+                self._layout_rng,
+                GROUP_DRAG_SCALE,
+                reset_env_indices,
+                len(self.cfg.drag_scale_choices),
             )
             choices = np.asarray(self.cfg.drag_scale_choices, dtype=np.float32)
+            drawn = choices[choice_indices]
             self._drag_scale_per_env[env_ids] = torch.as_tensor(
-                choices[choice_indices], device=self.device
+                drawn, device=self.device
+            )
+            actuator_scenario.update(
+                actuator_scenario_entry(GROUP_DRAG_SCALE, drawn.tolist())
             )
         if self.cfg.thrust_cap_scale_choices:
-            choice_indices = self._layout_rng.integers(
-                len(self.cfg.thrust_cap_scale_choices), size=num_resets
+            choice_indices = actuator_choice_indices(
+                self._scenario,
+                self._layout_rng,
+                GROUP_THRUST_CAP_SCALE,
+                reset_env_indices,
+                len(self.cfg.thrust_cap_scale_choices),
             )
             choices = np.asarray(
                 self.cfg.thrust_cap_scale_choices, dtype=np.float32
             )
+            drawn = choices[choice_indices]
             self._thrust_cap_scale_per_env[env_ids] = torch.as_tensor(
-                choices[choice_indices], device=self.device
+                drawn, device=self.device
+            )
+            actuator_scenario.update(
+                actuator_scenario_entry(GROUP_THRUST_CAP_SCALE, drawn.tolist())
             )
         if self.cfg.motor_tau_s_choices:
-            choice_indices = self._layout_rng.integers(
-                len(self.cfg.motor_tau_s_choices), size=num_resets
+            choice_indices = actuator_choice_indices(
+                self._scenario,
+                self._layout_rng,
+                GROUP_MOTOR_TAU_S,
+                reset_env_indices,
+                len(self.cfg.motor_tau_s_choices),
             )
             choices = np.asarray(self.cfg.motor_tau_s_choices, dtype=np.float32)
+            drawn = choices[choice_indices]
             self._motor_tau_s_per_env[env_ids] = torch.as_tensor(
-                choices[choice_indices], device=self.device
+                drawn, device=self.device
+            )
+            actuator_scenario.update(
+                actuator_scenario_entry(GROUP_MOTOR_TAU_S, drawn.tolist())
             )
         # Actuator memory is episode-local for both scalar and choice modes.
         self._applied_thrust_per_env[env_ids] = 0.0
@@ -1460,13 +1698,23 @@ class HazardNavEnv(DirectRLEnv):
                     dtype=np.int8,
                 )
         level = self.current_level
+        # Global rotations, one per resetting env, kept for the scenario stamp.
+        rotation_angles: list[float] = []
         for row in range(num_resets):
+            # One generator per (env, episode) instead of one shared generator
+            # advanced per reset. Every sampler below -- its rejection loop, its
+            # attempt budget, its tier ladder, every range it samples -- is
+            # untouched; only the Generator handed to it changes, and only when
+            # the env is seeded. See episode_layout_rng.
+            layout_rng = episode_layout_rng(
+                self._scenario, self._layout_rng, reset_env_indices[row]
+            )
             if self.cfg.layout_mode == "ring":
                 # Ring siege: spawn encircled, exactly one tier-width gap.
                 # Avoidance stops being optional -- escape requires threading.
                 layout = sample_ring_layout(
                     level,
-                    rng=self._layout_rng,
+                    rng=layout_rng,
                     max_attempts=max(40, self.cfg.layout_max_attempts),
                     neighbor_overlap_m=getattr(
                         self.cfg, "ring_neighbor_overlap_m", None
@@ -1477,7 +1725,7 @@ class HazardNavEnv(DirectRLEnv):
                 # least 90 degrees. Both have to be threaded in sequence.
                 layout, _gaps = sample_double_ring_layout(
                     level,
-                    rng=self._layout_rng,
+                    rng=layout_rng,
                     max_attempts=max(60, self.cfg.layout_max_attempts),
                 )
             elif self.cfg.layout_mode == "fortress":
@@ -1485,7 +1733,7 @@ class HazardNavEnv(DirectRLEnv):
                 # center and the sampled spawn is outside its only opening.
                 layout, _gap = sample_ring_fortress_layout(
                     level,
-                    rng=self._layout_rng,
+                    rng=layout_rng,
                     max_attempts=max(60, self.cfg.layout_max_attempts),
                 )
             elif self.cfg.layout_mode == "fortress2":
@@ -1493,7 +1741,7 @@ class HazardNavEnv(DirectRLEnv):
                 # success therefore requires threading both openings inward.
                 layout, _gaps = sample_double_ring_fortress_layout(
                     level,
-                    rng=self._layout_rng,
+                    rng=layout_rng,
                     max_attempts=max(80, self.cfg.layout_max_attempts),
                 )
             elif self.cfg.layout_mode == "bandfort":
@@ -1501,8 +1749,12 @@ class HazardNavEnv(DirectRLEnv):
                 # the tier aperture; the sampler supplies the outside spawn.
                 layout = sample_band_fortress_layout(
                     level,
-                    rng=self._layout_rng,
+                    rng=layout_rng,
                     max_attempts=max(80, self.cfg.layout_max_attempts),
+                    aperture_override_m=(
+                        getattr(self.cfg, "fortress_aperture_override_m", 0.0)
+                        or None
+                    ),
                 )
             elif self.cfg.layout_mode == "basin":
                 # Control for the crossing task: same walls, no bulkhead. The
@@ -1511,7 +1763,7 @@ class HazardNavEnv(DirectRLEnv):
                 # which of the two the failure belongs to.
                 layout = sample_open_basin_layout(
                     level,
-                    rng=self._layout_rng,
+                    rng=layout_rng,
                     max_attempts=max(60, self.cfg.layout_max_attempts),
                 )
             elif self.cfg.layout_mode == "iceberg":
@@ -1519,7 +1771,7 @@ class HazardNavEnv(DirectRLEnv):
                 # spawn because its direct route is constructively blocked.
                 layout = sample_iceberg_layout(
                     level,
-                    rng=self._layout_rng,
+                    rng=layout_rng,
                     max_attempts=max(60, self.cfg.layout_max_attempts),
                 )
             elif self.cfg.layout_mode == "forced":
@@ -1528,16 +1780,35 @@ class HazardNavEnv(DirectRLEnv):
                 # sealed, so unlike scatter there is no detour to prefer.
                 layout, _gate = sample_forced_crossing_layout(
                     level,
-                    rng=self._layout_rng,
+                    rng=layout_rng,
                     max_attempts=max(60, self.cfg.layout_max_attempts),
+                    gate_width_override_m=(
+                        getattr(self.cfg, "gate_width_override_m", 0.0) or None
+                    ),
                 )
             else:
-                layout = sample_layout(
-                    level,
-                    rng=self._layout_rng,
-                    max_attempts=self.cfg.layout_max_attempts,
-                )
-            goal_angle = float(self._layout_rng.uniform(0.0, 2.0 * math.pi))
+                if getattr(self.cfg, "suite_s_class", ""):
+                    # Suite S: a frozen, checksum-verified structural layout
+                    # replaces the scatter draw. Every pre-existing cfg lacks
+                    # the field, so this getattr guard keeps their reset path
+                    # byte-identical (see _suite_s_layout_for below).
+                    layout = self._suite_s_layout_for(int(env_ids[row]))
+                else:
+                    layout = sample_layout(
+                        level,
+                        rng=layout_rng,
+                        max_attempts=self.cfg.layout_max_attempts,
+                    )
+            # Uniform on [0, 2*pi) exactly as before; only the stream changed.
+            # It is its OWN group, not a further draw off the layout stream, so
+            # the angle cannot shift with how many candidates the rejection
+            # sampler burned -- which also means the Suite S branch above, which
+            # consumes no layout draws at all, gets its rotation from the same
+            # key algebra as every other layout_mode.
+            goal_angle = layout_rotation_angle(
+                self._scenario, self._layout_rng, reset_env_indices[row]
+            )
+            rotation_angles.append(goal_angle)
             cosine, sine = math.cos(goal_angle), math.sin(goal_angle)
             rotation = np.array(((cosine, -sine), (sine, cosine)))
             rotated_start = layout.start @ rotation.T
@@ -1690,6 +1961,11 @@ class HazardNavEnv(DirectRLEnv):
             # Clear the once-per-episode latch, or the bonus would pay on the
             # first episode of the run and never again.
             self._threading.reset(env_ids)
+        if self._obs_degrader is not None:
+            # New episode: bump the (env, episode) RNG stream, resample the
+            # per-episode bias, and clear delay/dropout buffers. The clean
+            # initial frame is captured on the next _get_observations call.
+            self._obs_degrader.reset(env_ids)
         self._first_success_time_s[env_ids] = torch.nan
         self._episode_finished[env_ids] = False
         initial_clearance = analytic_min_clearance(
@@ -1713,6 +1989,93 @@ class HazardNavEnv(DirectRLEnv):
         self._ep_goal_bonus[env_ids] = 0.0
         self._ep_reverse_cost[env_ids] = 0.0
 
+        # Resolved scenario for the episode that starts now. Values only, never
+        # the key: a key-salted hash would make two eval seeds differ by
+        # construction and could never expose two runs that genuinely drew the
+        # same paper (tasks/_shared/scenario_draws.py:49-57).
+        #
+        # The layout entries are the ACCEPTED, already-rotated sample rather
+        # than the raw uniforms the rejection sampler burned to reach it: like
+        # path_hazard (path_hazard_env.py:1114-1119) there is no shorter raw
+        # form, because the sampler draws an unbounded number of candidates and
+        # returns the first feasible one. route_geodesic_m and d0_m are carried
+        # explicitly because they are the two per-episode fields the certificate
+        # already writes that depend on the layout ALONE, and therefore the two
+        # a cross-controller audit compares
+        # (scripts/check_scenario_independence.py:175).
+        for env_index, resolved, hashes in stamp_scenario(
+            env_ids,
+            {
+                GROUP_LAYOUT: {
+                    "start_m": local_starts,
+                    "goal_m": local_goals,
+                    "obstacle_centers_m": local_centers,
+                    "obstacle_radii_m": radii,
+                    "obstacle_count": self.obstacle_count[env_ids],
+                    "route_geodesic_m": geodesic_np.tolist(),
+                    "d0_m": d0_np.tolist(),
+                },
+                GROUP_ROTATION: {"angle_rad": rotation_angles},
+                **actuator_scenario,
+            },
+        ):
+            self._scenario_params[env_index] = resolved
+            self._scenario_hashes[env_index] = hashes
+
         self._update_render_only_hazard_markers(
             env_ids, local_goals, local_centers, radii, active
         )
+
+    # --- Suite S: frozen structural-generalization layout injection ---------
+    def _suite_s_layout_for(self, env_index: int):
+        """Frozen Suite S layout for one resetting env.
+
+        Reached only when the cfg carries a non-empty ``suite_s_class`` (the
+        HazardSuiteSEnvCfg family). The ten public layouts of that class are
+        loaded once per process from the committed JSON assets --
+        ``load_public_layouts`` re-verifies each file's SHA-256 checksum, so
+        a corrupted or edited asset fails loudly here rather than silently
+        certifying on the wrong geometry. The returned ``SuiteSLayout`` then
+        flows through the standard scatter placement code (random global
+        rotation, obstacle buffers, ``geodesic_np`` latch), which is how
+        ``route_geodesic_length`` picks up the asset's audited
+        ``geodesic_length_m`` and USV-10K scoring gets basis=geo for free.
+
+        Layout choice is ``rotation_index``: a pure function of the env index
+        and that env's own completed-reset count, deliberately independent of
+        the shared layout RNG and of other envs' reset timing.  That is already
+        the controller-independence property the scenario protocol gives every
+        other primitive, by its own mechanism (``_suite_s_episode_counter``
+        counts this env's resets exactly as ``ScenarioRNG``'s per-env counter
+        does), so this branch is left on it rather than re-keyed -- re-keying
+        would change which frozen asset each slot draws and retire every Suite S
+        number for no gain.  The global rotation applied to the returned layout
+        does move onto the protocol, at the ``rotation`` group.
+        """
+        from .suite_s_layouts import load_public_layouts, rotation_index
+
+        if not hasattr(self, "_suite_s_layouts"):
+            layouts = load_public_layouts(
+                str(self.cfg.suite_s_class),
+                level=int(getattr(self.cfg, "suite_s_level", 2)),
+                asset_dir=str(getattr(self.cfg, "suite_s_asset_dir", "")),
+            )
+            worst = max(layout.obstacle_count for layout in layouts)
+            if worst > int(self.cfg.max_obstacles):
+                raise ValueError(
+                    f"Suite S class {self.cfg.suite_s_class!r} needs {worst} "
+                    f"obstacle slots but max_obstacles={self.cfg.max_obstacles};"
+                    " raise the cap in the Suite S cfg, never in a base cfg"
+                )
+            self._suite_s_layouts = layouts
+            self._suite_s_episode_counter = np.zeros(
+                self.num_envs, dtype=np.int64
+            )
+        index = rotation_index(
+            env_index,
+            int(self._suite_s_episode_counter[env_index]),
+            rotation=bool(getattr(self.cfg, "suite_s_index_rotation", True)),
+            layout_count=len(self._suite_s_layouts),
+        )
+        self._suite_s_episode_counter[env_index] += 1
+        return self._suite_s_layouts[index]

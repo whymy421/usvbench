@@ -1,0 +1,129 @@
+# SAC v4: the CODE-level fix, and a clean single-variable comparison against v3.
+#
+# Generated from skrl_sac_v3_cfg.yaml by substituting exactly two strings in
+# the policy block. Every other byte -- the [128, 128, 64] elu net, all four
+# critics, memory, and the whole agent block (gamma 0.99, rewards_shaper_scale
+# 0.01, batch 4096, lr 5e-4, RunningStandardScaler, 48000 timesteps) -- is
+# character-identical to v3, so a v3-vs-v4 delta can only be the policy
+# PARAMETERISATION.
+#
+#   class:  GaussianMixin      -> SquashedGaussianMixin
+#   output: tanh(ACTIONS)      -> ACTIONS
+#
+# Why. v3 bounds the MEAN with a tanh output layer and floors sigma at 0.135,
+# which caps the worst log-prob near -5.8 instead of the measured -9.8e15 that
+# blew SAC's -alpha*log_pi term to 1e21. But the distribution is still an
+# unsquashed Normal whose samples are CLIPPED, so ~53% of samples land exactly
+# on the action bound and the reported log-probability is the density of the
+# pre-squash variable -- the change-of-variables Jacobian is simply missing.
+# v4 replaces that with a real tanh-squashed Gaussian:
+#
+#     u ~ N(mu, sigma);  a = tanh(u)
+#     log p(a) = log p(u) - sum_i log(1 - tanh(u_i)^2)
+#
+# so actions are bounded BY CONSTRUCTION (no clipping, no boundary pile-up)
+# and the log-probability is the density of the action actually taken.
+# Implementation + 9 CPU tests: tasks/_shared/squashed_gaussian.py.
+#
+# Two things a reader should not trip over:
+#
+# 1. `output: ACTIONS` must stay BARE. SquashedGaussianPolicy squashes
+#    internally; a yaml `tanh(ACTIONS)` here would squash twice, and the
+#    factory raises rather than accepting it silently.
+# 2. `clip_actions: True` is carried over from v3 UNCHANGED and is INERT.
+#    SquashedGaussianPolicy hard-codes clip_actions=False into GaussianMixin
+#    (clipping the sample is precisely the defect being removed) and logs a
+#    warning saying so at construction. It is kept only so the v3->v4 diff
+#    stays at the two lines above.
+#
+# skrl's Runner._component is a closed if/elif whitelist of skrl's own model
+# classes, so this `class:` name cannot resolve on its own. It is selected by
+# the SquashedRunner subclass in scripts/sac_train.py.
+
+models:
+  separate: True
+  policy:
+    class: SquashedGaussianMixin
+    clip_actions: True
+    clip_log_std: True
+    min_log_std: -2.0
+    max_log_std: 2.0
+    initial_log_std: 0.0
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ACTIONS
+  critic_1:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+  critic_2:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+  target_critic_1:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+  target_critic_2:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+
+
+memory:
+  class: RandomMemory
+  memory_size: 32768
+
+
+agent:
+  class: SAC
+  gradient_steps: 1
+  batch_size: 4096
+  discount_factor: 0.99
+  rewards_shaper_scale: 0.01
+  polyak: 0.005
+  actor_learning_rate: 5.0e-04
+  critic_learning_rate: 5.0e-04
+  random_timesteps: 800
+  learning_starts: 800
+  grad_norm_clip: 1.0
+  learn_entropy: True
+  entropy_learning_rate: 5.0e-04
+  initial_entropy_value: 1.0
+  state_preprocessor: RunningStandardScaler
+  state_preprocessor_kwargs: null
+  experiment:
+    directory: "usvbench"
+    experiment_name: "sac_pathfinder"
+    write_interval: auto
+    checkpoint_interval: 256
+    wandb: false
+
+
+trainer:
+  class: SequentialTrainer
+  timesteps: 48000
+  environment_info: log
