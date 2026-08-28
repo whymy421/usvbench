@@ -28,15 +28,18 @@ from .._shared.obs_superset import (
 from .._shared.restoring import restoring_torque_body
 from .._shared.scenario_draws import make_scenario_rng, stamp_scenario
 from .._shared.scenario_draws_hazard import (
+    GROUP_APPEARANCE,
     GROUP_DRAG_SCALE,
     GROUP_LAYOUT,
     GROUP_MASS_SCALE,
     GROUP_MOTOR_TAU_S,
+    GROUP_PAYLOAD_MASS_KG,
     GROUP_ROTATION,
     GROUP_THRUST_CAP_SCALE,
     GROUP_THRUST_IMBALANCE,
     actuator_choice_indices,
     actuator_scenario_entry,
+    appearance_stream,
     episode_layout_rng,
     layout_rotation_angle,
 )
@@ -48,6 +51,7 @@ from .hazard_geometry import (
     analytic_min_clearance,
     geodesic_descent_directions,
     geodesic_distance_field,
+    plan_obstacle_appearance,
     ray_circle_ranges,
     sample_band_fortress_layout,
     sample_double_ring_fortress_layout,
@@ -133,6 +137,9 @@ class HazardNavEnv(DirectRLEnv):
         self._motor_tau_s_per_env = torch.zeros(
             self.num_envs, device=self.device
         )
+        self._payload_mass_kg_per_env = torch.zeros(
+            self.num_envs, device=self.device
+        )
         self._applied_thrust_per_env = torch.zeros(
             self.num_envs, device=self.device
         )
@@ -153,6 +160,60 @@ class HazardNavEnv(DirectRLEnv):
         self.obstacle_count = torch.zeros(
             self.num_envs, dtype=torch.long, device=self.device
         )
+
+        # --- Mid-episode obstacle appearance (sudden terrain change) --------
+        # The buffers exist on every variant so the record fields are always
+        # discoverable, but with appear_count == 0 (every certified id)
+        # nothing below is read or written after this constructor:
+        # _reset_appearance returns an empty stamp before touching a buffer
+        # or a stream, and _maybe_appear_obstacles returns on its first line.
+        # Both inert paths are tripwire-asserted in
+        # tasks/hazard_nav/test_mid_episode_appearance.py.
+        self._appear_count = int(getattr(self.cfg, "appear_count", 0) or 0)
+        self._appear_rngs: list = [None] * self.num_envs
+        self._appear_time_s = torch.full(
+            (self.num_envs,), torch.inf, device=self.device
+        )
+        self._appear_pending = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self._appear_happened = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self._appear_skipped = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self._appear_spawned = torch.zeros(
+            self.num_envs, dtype=torch.long, device=self.device
+        )
+        self._appear_azimuth_rad = torch.full(
+            (self.num_envs,), torch.nan, device=self.device
+        )
+        self._appear_distance_m = torch.full(
+            (self.num_envs,), torch.nan, device=self.device
+        )
+        # Last COMPLETED episode's appearance record, latched beside
+        # episode_min_clearance so the evaluator reads the finished episode's
+        # appearance next to the finished episode's metrics.
+        self.episode_appear_time_s = torch.full(
+            (self.num_envs,), torch.nan, device=self.device
+        )
+        self.episode_appear_happened = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.episode_appear_skipped = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.episode_appear_spawned = torch.zeros(
+            self.num_envs, dtype=torch.long, device=self.device
+        )
+        self.episode_appear_azimuth_rad = torch.full(
+            (self.num_envs,), torch.nan, device=self.device
+        )
+        self.episode_appear_distance_m = torch.full(
+            (self.num_envs,), torch.nan, device=self.device
+        )
+
         self.curriculum_level = torch.zeros(
             self.num_envs, dtype=torch.long, device=self.device
         )
@@ -291,6 +352,16 @@ class HazardNavEnv(DirectRLEnv):
         self._scenario_hashes = [{} for _ in range(self.num_envs)]
         self.episode_scenario = [{} for _ in range(self.num_envs)]
         self.episode_scenario_hashes = [{} for _ in range(self.num_envs)]
+
+        # Sea state (Wave variants only). Certified ids have no sea_state cfg
+        # field, so getattr returns None and nothing here runs for them. The
+        # field is a pure background force: it never touches the observation,
+        # reward, or termination paths of this env.
+        self._sea = None
+        if getattr(self.cfg, "sea_state", None) is not None and self.cfg.sea_state.enable:
+            from .._shared.sea_state import SeaState
+
+            self._sea = SeaState(self.cfg.sea_state, self.num_envs, self.device)
 
         # Owner's one-shot half-sine threading bonus. Off unless the amplitude
         # is positive, so every certified id keeps its exact reward.
@@ -820,8 +891,76 @@ class HazardNavEnv(DirectRLEnv):
                 self.physics_cfg.restoring_stiffness_pitch,
             )
 
+        if self._sea is not None:
+            # Same world-frame entry point as the buoyancy/drag wrench, before
+            # the shared world-to-body rotation and before the mass-scale
+            # division (a heavier hull accelerates less under the same sea,
+            # exactly as it does under the same drag).
+            # Mirrors station_keeping_env.py:541-551.
+            t = float(self.episode_length_buf[0]) * self.control_step_s
+            wave_f, wave_t = self._sea.forces(
+                self.robot.data.root_com_pos_w[:, :2],
+                self.robot.data.root_com_vel_w[:, :2],
+                t,
+            )
+            force_world += wave_f
+            torque_world += wave_t
+
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_world)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_world)
+        if self.cfg.payload_mass_kg_choices or self.cfg.payload_mass_kg != 0.0:
+            # Suite D axis: deck payload -- a point mass mp at body offset
+            # (dx, dy) from the authored COM. Model and non-redundancy
+            # argument live at the payload_* fields in hazard_nav_env_cfg.py.
+            # Three exact planar effects, in this order: the COM-shift arm
+            # moment on the TOTAL planar force (thrust + drag + rotated world
+            # wrench -- all applied at the hull reference point), then the
+            # linear-mass ratio on every force component, then the yaw-inertia
+            # ratio on the z torque alone (planar point mass: roll/pitch
+            # torques stay). Ratios are taken against the mass_scale-d hull so
+            # the two axes compose exactly: after the mass_scale block below
+            # also divides by s, the total linear divisor is (s*m + mp)/m and
+            # the total yaw divisor is (s*Iz + mu_s*|d|^2)/Iz with
+            # mu_s = s*m*mp/(s*m + mp). Drawn-zero envs keep the untouched
+            # tensors through torch.where; the all-scalar-zero default never
+            # enters this block at all.
+            if self.cfg.payload_mass_kg_choices:
+                payload_mass = self._payload_mass_kg_per_env
+            else:
+                payload_mass = torch.full(
+                    (self.num_envs,),
+                    float(self.cfg.payload_mass_kg),
+                    device=self.device,
+                )
+            if self.cfg.mass_scale_choices:
+                hull_scale = self._mass_scale_per_env
+            else:
+                hull_scale = torch.full(
+                    (self.num_envs,),
+                    float(self.cfg.mass_scale),
+                    device=self.device,
+                )
+            hull_mass = hull_scale * float(self.cfg.payload_ref_mass_kg)
+            hull_izz = hull_scale * float(self.cfg.payload_ref_izz_kgm2)
+            total_mass = hull_mass + payload_mass
+            offset_x = float(self.cfg.payload_offset_x_m)
+            offset_y = float(self.cfg.payload_offset_y_m)
+            delta_x = payload_mass * offset_x / total_mass
+            delta_y = payload_mass * offset_y / total_mass
+            reduced_mass = hull_mass * payload_mass / total_mass
+            offset_sq = offset_x * offset_x + offset_y * offset_y
+            mass_ratio = total_mass / hull_mass
+            izz_ratio = (hull_izz + reduced_mass * offset_sq) / hull_izz
+            arm_torque = delta_y * forces[:, 0, 0] - delta_x * forces[:, 0, 1]
+            loaded_torque_z = (torques[:, 0, 2] + arm_torque) / izz_ratio
+            loaded_forces = forces / mass_ratio.unsqueeze(-1).unsqueeze(-1)
+            identity = payload_mass == 0.0
+            torques[:, 0, 2] = torch.where(
+                identity, torques[:, 0, 2], loaded_torque_z
+            )
+            forces = torch.where(
+                identity.unsqueeze(-1).unsqueeze(-1), forces, loaded_forces
+            )
         if self.cfg.mass_scale_choices:
             # The rigid-body mass/inertia live in the USD. Dividing the full
             # external wrench gives the same free-body accelerations as a
@@ -1405,7 +1544,176 @@ class HazardNavEnv(DirectRLEnv):
             )
         )
 
+    def _reset_appearance(
+        self, env_ids: torch.Tensor, reset_env_indices: list
+    ) -> dict:
+        """Draw each resetting env's appearance time off its own stream.
+
+        Returns the ``stamp_scenario`` block for the ``appearance`` group, or
+        an empty dict when the axis is off (``appear_count == 0``), in which
+        case NOTHING is read or written -- no buffer, no RNG draw -- so every
+        certified id keeps reset-path bit-identity and its scenario hash keys
+        stay exactly the set it certified with.
+
+        The extra obstacle slots need no explicit writes here: the layout
+        block above already zeroed every slot past ``obstacle_count`` for the
+        resetting envs, which IS the reservation -- present in the buffers the
+        rays and the contact predicate read every step, but inactive.
+
+        The drawn generator is KEPT (``self._appear_rngs``) because the
+        azimuth-candidate permutation is drawn from the same per-(env,
+        episode) stream at the moment of appearance; see appearance_stream.
+        """
+        if self._appear_count <= 0:
+            return {}
+        # One helper call per env: calling appearance_stream twice for the
+        # same (env, episode) would restart the keyed stream, so the kept
+        # generator must be the SAME object the time was drawn from.
+        rngs = []
+        times = []
+        for env_index in reset_env_indices:
+            rng = appearance_stream(self._scenario, self._layout_rng, env_index)
+            times.append(
+                float(
+                    rng.uniform(
+                        float(self.cfg.appear_time_min_s),
+                        float(self.cfg.appear_time_max_s),
+                    )
+                )
+            )
+            rngs.append(rng)
+        for row, env_index in enumerate(reset_env_indices):
+            self._appear_rngs[int(env_index)] = rngs[row]
+        self._appear_time_s[env_ids] = torch.as_tensor(
+            times, dtype=torch.float32, device=self.device
+        )
+        self._appear_pending[env_ids] = True
+        self._appear_happened[env_ids] = False
+        self._appear_skipped[env_ids] = False
+        self._appear_spawned[env_ids] = 0
+        self._appear_azimuth_rad[env_ids] = torch.nan
+        self._appear_distance_m[env_ids] = torch.nan
+        return {GROUP_APPEARANCE: {"time_s": times}}
+
+    def _maybe_appear_obstacles(self) -> None:
+        """Flip the reserved extra cylinders active once the clock passes t0.
+
+        Runs first in ``_get_dones`` -- the head of the post-physics
+        callback chain (dones -> rewards -> obs all read the same pose) --
+        so the appeared cylinder is part of THIS step's contact predicate,
+        reward field and observation rays alike, and the ray the azimuth is
+        aligned to is exactly one of the rays the policy sees this step.
+
+        The decision itself (fairness clamp to [9.2, 25] m from the CURRENT
+        boat position, ray-aligned azimuth, sampler-grade BFS admission over
+        the post-appearance field, bounded azimuth resampling) lives in
+        ``hazard_geometry.plan_obstacle_appearance``; this method only
+        executes an accepted plan or records the skip.  With
+        ``appear_count == 0`` it returns before reading anything else.
+        """
+        if self._appear_count <= 0:
+            return
+        elapsed_s = self.episode_length_buf.float() * self.control_step_s
+        due = self._appear_pending & (elapsed_s >= self._appear_time_s)
+        if not bool(due.any()):
+            return
+        boat_xy = self._com_xy()
+        forward = self._forward_2d()
+        max_obstacles = int(self.cfg.max_obstacles)
+        for env_index in torch.nonzero(due, as_tuple=False).squeeze(-1).tolist():
+            self._appear_pending[env_index] = False
+            origin = self.scene.env_origins[env_index, :2]
+            boat_local = (
+                (boat_xy[env_index] - origin)
+                .detach().cpu().numpy().astype(np.float64)
+            )
+            forward_local = (
+                forward[env_index].detach().cpu().numpy().astype(np.float64)
+            )
+            goal_local = (
+                (self.target_pos[env_index] - origin)
+                .detach().cpu().numpy().astype(np.float64)
+            )
+            active = self.obstacle_active[env_index]
+            field_centers = (
+                (self.obstacle_centers[env_index][active] - origin)
+                .detach().cpu().numpy().astype(np.float64)
+            )
+            field_radii = (
+                self.obstacle_radii[env_index][active]
+                .detach().cpu().numpy().astype(np.float64)
+            )
+            rng = self._appear_rngs[env_index]
+            base_slot = int(self.obstacle_count[env_index])
+            spawned = 0
+            skipped = False
+            first_azimuth = math.nan
+            first_distance = math.nan
+            for _ in range(self._appear_count):
+                slot = base_slot + spawned
+                if slot >= max_obstacles:
+                    raise RuntimeError(
+                        f"appear_count={self._appear_count} needs obstacle "
+                        f"slot {slot} but max_obstacles={max_obstacles}; "
+                        "raise max_obstacles on the appearance cfg, never on "
+                        "a certified base cfg"
+                    )
+                candidate_order = rng.permutation(int(self.cfg.ray_count))[
+                    : int(self.cfg.appear_max_attempts)
+                ]
+                plan = plan_obstacle_appearance(
+                    boat_local,
+                    forward_local,
+                    goal_local,
+                    field_centers,
+                    field_radii,
+                    distance_m=float(self.cfg.appear_distance_m),
+                    radius_m=float(self.cfg.appear_radius_m),
+                    candidate_ray_indices=candidate_order,
+                    ray_count=int(self.cfg.ray_count),
+                    goal_radius_m=float(self.goal_radius),
+                    half_beam_m=float(self.cfg.half_beam_m),
+                    bfs_cell_m=float(self.cfg.appear_bfs_cell_m),
+                )
+                if plan is None:
+                    # Every candidate azimuth was inadmissible: skip the
+                    # appearance for this env and record it, rather than
+                    # forcing an unfair or task-breaking spawn.
+                    skipped = True
+                    break
+                self.obstacle_centers[env_index, slot] = origin + torch.as_tensor(
+                    plan.center, dtype=torch.float32, device=self.device
+                )
+                self.obstacle_radii[env_index, slot] = float(plan.radius_m)
+                self.obstacle_active[env_index, slot] = True
+                # Later cylinders of the same appearance are admitted against
+                # the field INCLUDING the ones just placed.
+                field_centers = (
+                    np.vstack((field_centers, plan.center[None, :]))
+                    if field_centers.size
+                    else plan.center[None, :].copy()
+                )
+                field_radii = np.concatenate(
+                    (field_radii, (float(plan.radius_m),))
+                )
+                if spawned == 0:
+                    first_azimuth = float(plan.azimuth_rad)
+                    first_distance = float(plan.distance_m)
+                spawned += 1
+            self._appear_spawned[env_index] = spawned
+            self._appear_happened[env_index] = spawned > 0
+            self._appear_skipped[env_index] = skipped
+            self._appear_azimuth_rad[env_index] = first_azimuth
+            self._appear_distance_m[env_index] = first_distance
+
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+        # Guarded at the call site as well as inside the method, so the
+        # certified inert path (appear_count == 0) makes no call at all. The
+        # guard reads the CFG field (like contact_terminates below), not the
+        # buffer mirror, so pre-existing cfg pickles without the field stay
+        # inert via the getattr default.
+        if getattr(self.cfg, "appear_count", 0) > 0:
+            self._maybe_appear_obstacles()
         current_xy = self._com_xy()
         prefix_active = ~self._reached_goal
         travelled = torch.norm(current_xy - self._previous_xy, dim=-1)
@@ -1492,6 +1800,37 @@ class HazardNavEnv(DirectRLEnv):
                 self.episode_scenario_hashes[completed] = self._scenario_hashes[
                     completed
                 ]
+
+            if getattr(self.cfg, "appear_count", 0) > 0:
+                # Same latch, same moment, as episode_min_clearance above:
+                # the FINISHED episode's appearance record (did it happen,
+                # was it skipped, where and when) survives the auto-reset so
+                # the evaluator reads it beside that episode's metrics.
+                self.episode_appear_time_s[completed_ids] = self._appear_time_s[
+                    completed_ids
+                ]
+                self.episode_appear_happened[completed_ids] = (
+                    self._appear_happened[completed_ids]
+                )
+                self.episode_appear_skipped[completed_ids] = (
+                    self._appear_skipped[completed_ids]
+                )
+                self.episode_appear_spawned[completed_ids] = (
+                    self._appear_spawned[completed_ids]
+                )
+                self.episode_appear_azimuth_rad[completed_ids] = (
+                    self._appear_azimuth_rad[completed_ids]
+                )
+                self.episode_appear_distance_m[completed_ids] = (
+                    self._appear_distance_m[completed_ids]
+                )
+                self.extras.setdefault("log", {})
+                self.extras["log"]["Episode/appearance_happened"] = (
+                    self._appear_happened[completed_ids].float().mean()
+                )
+                self.extras["log"]["Episode/appearance_skipped"] = (
+                    self._appear_skipped[completed_ids].float().mean()
+                )
 
             self.extras.setdefault("log", {})
             self.extras["log"]["Episode/success"] = success.float().mean()
@@ -1659,6 +1998,24 @@ class HazardNavEnv(DirectRLEnv):
             )
             actuator_scenario.update(
                 actuator_scenario_entry(GROUP_MOTOR_TAU_S, drawn.tolist())
+            )
+        if self.cfg.payload_mass_kg_choices:
+            choice_indices = actuator_choice_indices(
+                self._scenario,
+                self._layout_rng,
+                GROUP_PAYLOAD_MASS_KG,
+                reset_env_indices,
+                len(self.cfg.payload_mass_kg_choices),
+            )
+            choices = np.asarray(
+                self.cfg.payload_mass_kg_choices, dtype=np.float32
+            )
+            drawn = choices[choice_indices]
+            self._payload_mass_kg_per_env[env_ids] = torch.as_tensor(
+                drawn, device=self.device
+            )
+            actuator_scenario.update(
+                actuator_scenario_entry(GROUP_PAYLOAD_MASS_KG, drawn.tolist())
             )
         # Actuator memory is episode-local for both scalar and choice modes.
         self._applied_thrust_per_env[env_ids] = 0.0
@@ -1989,6 +2346,35 @@ class HazardNavEnv(DirectRLEnv):
         self._ep_goal_bonus[env_ids] = 0.0
         self._ep_reverse_cost[env_ids] = 0.0
 
+        # Mid-episode appearance (appearance variants only): the per-episode
+        # time t0 off the protocol's own "appearance" stream, stamped as the
+        # raw draw. appear_count == 0 contributes {} without touching
+        # anything -- no call, no buffer, no draw -- so certified ids keep
+        # their exact scenario-hash key set.
+        appear_scenario = (
+            self._reset_appearance(env_ids, reset_env_indices)
+            if getattr(self.cfg, "appear_count", 0) > 0
+            else {}
+        )
+
+        # Fresh sea for the episode that starts now (Wave variants only), off
+        # the protocol's per-(env, episode) "wave" stream so eval seeds control
+        # the sea; unseeded envs fall back to the historical global-RNG line
+        # inside SeaState.resample. Stamp mirrors station_keeping_env.py:829-844
+        # (every entry is a raw draw or, for direction_rad, recoverable beside
+        # mean_direction_rad by subtraction).
+        wave_scenario: dict[str, dict[str, object]] = {}
+        if self._sea is not None:
+            self._sea.resample(env_ids, scenario=self._scenario)
+            wave_scenario["wave"] = {
+                "hs_m": self._sea.hs[env_ids],
+                "tp_s": self._sea.tp[env_ids],
+                "gamma": self._sea.gamma[env_ids],
+                "mean_direction_rad": self._sea.mean_direction[env_ids],
+                "phase_rad": self._sea.phase[env_ids],
+                "direction_rad": self._sea.direction[env_ids],
+            }
+
         # Resolved scenario for the episode that starts now. Values only, never
         # the key: a key-salted hash would make two eval seeds differ by
         # construction and could never expose two runs that genuinely drew the
@@ -2017,6 +2403,8 @@ class HazardNavEnv(DirectRLEnv):
                 },
                 GROUP_ROTATION: {"angle_rad": rotation_angles},
                 **actuator_scenario,
+                **appear_scenario,
+                **wave_scenario,
             },
         ):
             self._scenario_params[env_index] = resolved

@@ -7,6 +7,7 @@ generation and all analytic obstacle math can be tested without Isaac Lab.
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Sequence
 from dataclasses import dataclass
 import heapq
 import math
@@ -2210,7 +2211,167 @@ def sample_forced_crossing_layout(
     )
 
 
+# --- Mid-episode obstacle appearance: the sudden-terrain-change axis ---------
+#
+# One or more EXTRA cylinders flip from inactive to active at a per-episode
+# time t0.  The buffers are read every step already, so the flip needs no data
+# structure; what needs care is FAIRNESS -- the obstacle must be guaranteed
+# visible the instant it exists, and it must not make the remaining task
+# impossible.  The planner below is the whole decision; the env only executes
+# an accepted plan, so this function is testable on CPU without Isaac.
+#
+# FAIRNESS FLOOR (frozen 2026-08-26, owner's verified derivation):
+#
+# * The appearance azimuth is ALIGNED TO A SENSOR RAY at the moment of
+#   appearance.  The 36-ray sensor has 10-degree spacing, so a cylinder of the
+#   minimum admitted radius (MIN_OBSTACLE_RADIUS_M = 0.8) subtends less than
+#   the 5-degree half-spacing beyond r / sin(5 deg) = 9.18 m and could fall
+#   BETWEEN rays; centred on a ray it is hit at any admitted distance
+#   (25 - 0.8 = 24.2 m of surface range against the 30 m ray cap).
+#
+# * The centre distance, measured from the CURRENT boat position, is clamped
+#   to [APPEAR_MIN_DISTANCE_M, APPEAR_MAX_DISTANCE_M] = [9.2, 25] m.  The
+#   floor is the r/sin(5 deg) guaranteed-visibility bound rounded up for the
+#   minimum radius; braking is NOT the binding constraint -- a full-reverse
+#   stop from the 3 m/s top speed plus a 0.25 s reaction margin needs only
+#   0.891 m.  The ceiling keeps the appearance inside the ray horizon with
+#   margin for the largest admitted radius.
+#
+# * Admission is the layout samplers' own feasibility check: eight-connected
+#   BFS at PLANNING inflation (half-beam + margin) over the POST-appearance
+#   field, from the current boat position to the goal, plus no overlap with
+#   the hull disk or the goal disc.  An inadmissible azimuth is resampled
+#   (the caller supplies the bounded candidate order); exhaustion returns
+#   None, and the env records the skip instead of forcing an unfair spawn.
+APPEAR_MIN_DISTANCE_M = 9.2
+APPEAR_MAX_DISTANCE_M = 25.0
+
+
+@dataclass(frozen=True)
+class AppearancePlan:
+    """One admitted mid-episode appearance, described as measured."""
+
+    center: np.ndarray  # local-frame XY of the admitted cylinder centre
+    radius_m: float
+    ray_index: int  # the sensor ray the azimuth is aligned to
+    azimuth_rad: float  # world-frame bearing boat -> centre (== ray azimuth)
+    distance_m: float  # the clamped centre distance actually used
+    attempts: int  # candidates examined, including the accepted one
+
+
+def plan_obstacle_appearance(
+    boat_xy: np.ndarray,
+    forward_xy: np.ndarray,
+    goal_xy: np.ndarray,
+    centers: np.ndarray,
+    radii: np.ndarray,
+    *,
+    distance_m: float,
+    radius_m: float,
+    candidate_ray_indices: Sequence[int] | np.ndarray,
+    ray_count: int = 36,
+    goal_radius_m: float = 2.0,
+    half_beam_m: float = HALF_BEAM_M,
+    bfs_cell_m: float = FORCED_SEAL_CELL_M,
+    inflation_m: float = OBSTACLE_INFLATION_M,
+) -> AppearancePlan | None:
+    """Plan one fair, admissible mid-episode obstacle appearance.
+
+    ``boat_xy``/``forward_xy`` are the boat's CURRENT planar position and
+    heading direction; ``centers``/``radii`` are the currently ACTIVE field
+    (same local frame as ``boat_xy`` and ``goal_xy``).  Candidates are taken
+    from ``candidate_ray_indices`` IN ORDER -- the caller draws that order
+    from its scenario stream, which is what bounds the resampling -- and the
+    first candidate that passes every admission check is returned.  ``None``
+    means every supplied azimuth was inadmissible: the caller must SKIP the
+    appearance for this episode and record that it did.
+
+    The candidate centre for ray ``k`` is built exactly on that ray:
+    ``boat + d * (cos(a_k) * forward + sin(a_k) * left)`` with
+    ``a_k = 2 * pi * k / ray_count``, the same direction formula the env's
+    ray sensor uses, so alignment holds to float precision by construction.
+    """
+    if int(ray_count) < 1:
+        raise ValueError("ray_count must be positive")
+    if not MIN_OBSTACLE_RADIUS_M <= float(radius_m) <= MAX_OBSTACLE_RADIUS_M:
+        raise ValueError(
+            f"appearance radius {radius_m} outside "
+            f"[{MIN_OBSTACLE_RADIUS_M}, {MAX_OBSTACLE_RADIUS_M}] m; the "
+            "9.2 m visibility floor is derived for the minimum radius"
+        )
+    boat = np.asarray(boat_xy, dtype=np.float64).reshape(2)
+    goal = np.asarray(goal_xy, dtype=np.float64).reshape(2)
+    forward = np.asarray(forward_xy, dtype=np.float64).reshape(2)
+    forward_norm = float(np.linalg.norm(forward))
+    if forward_norm <= 0.0:
+        raise ValueError("forward_xy must be a nonzero direction")
+    forward = forward / forward_norm
+    left = np.array((-forward[1], forward[0]), dtype=np.float64)
+    field_centers = np.asarray(centers, dtype=np.float64).reshape(-1, 2)
+    field_radii = np.asarray(radii, dtype=np.float64).reshape(-1)
+    if field_centers.shape[0] != field_radii.shape[0]:
+        raise ValueError("centers and radii must have matching lengths")
+
+    # The fairness clamp: [9.2, 25] m from the CURRENT boat position.
+    distance = min(
+        max(float(distance_m), APPEAR_MIN_DISTANCE_M), APPEAR_MAX_DISTANCE_M
+    )
+
+    attempts = 0
+    for ray_index in candidate_ray_indices:
+        attempts += 1
+        index = int(ray_index)
+        if not 0 <= index < int(ray_count):
+            raise ValueError(
+                f"candidate ray index {index} outside [0, {ray_count})"
+            )
+        angle = 2.0 * math.pi * index / float(ray_count)
+        direction = math.cos(angle) * forward + math.sin(angle) * left
+        center = boat + distance * direction
+        # Hull overlap: vacuous at >= 9.2 m and <= 2.0 m radius, but asserted
+        # rather than assumed (the checker-vs-reality lesson).
+        if float(np.linalg.norm(center - boat)) - float(radius_m) - float(
+            half_beam_m
+        ) <= 0.0:
+            continue
+        # Goal disc: the appeared cylinder may not overlap the success region.
+        if float(np.linalg.norm(center - goal)) <= float(radius_m) + float(
+            goal_radius_m
+        ):
+            continue
+        # The samplers' own admission: BFS at planning inflation over the
+        # POST-appearance field, from the current boat position to the goal.
+        post_centers = (
+            np.vstack((field_centers, center[None, :]))
+            if field_centers.size
+            else center[None, :].copy()
+        )
+        post_radii = np.concatenate((field_radii, (float(radius_m),)))
+        remaining = bfs_geodesic_length(
+            boat,
+            goal,
+            post_centers,
+            post_radii,
+            cell_m=float(bfs_cell_m),
+            inflation_m=float(inflation_m),
+        )
+        if remaining is None:
+            continue
+        return AppearancePlan(
+            center=center,
+            radius_m=float(radius_m),
+            ray_index=index,
+            azimuth_rad=float(math.atan2(direction[1], direction[0])),
+            distance_m=float(distance),
+            attempts=attempts,
+        )
+    return None
+
+
 __all__ = [
+    "APPEAR_MAX_DISTANCE_M",
+    "APPEAR_MIN_DISTANCE_M",
+    "AppearancePlan",
     "BAND_FORTRESS_MAX_OBSTACLES",
     "COLLISION_MARGIN_M",
     "DIFFICULTIES",
@@ -2242,6 +2403,7 @@ __all__ = [
     "RingGapSpec",
     "analytic_min_clearance",
     "bfs_geodesic_length",
+    "plan_obstacle_appearance",
     "difficulty_for_level",
     "direct_segment_blocked",
     "geodesic_descent_directions",

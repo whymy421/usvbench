@@ -84,6 +84,7 @@ try:
         GROUP_LAYOUT,
         GROUP_MASS_SCALE,
         GROUP_MOTOR_TAU_S,
+        GROUP_PAYLOAD_MASS_KG,
         GROUP_ROTATION,
         GROUP_THRUST_CAP_SCALE,
         GROUP_THRUST_IMBALANCE,
@@ -102,6 +103,7 @@ except ImportError:  # direct execution
         GROUP_LAYOUT,
         GROUP_MASS_SCALE,
         GROUP_MOTOR_TAU_S,
+        GROUP_PAYLOAD_MASS_KG,
         GROUP_ROTATION,
         GROUP_THRUST_CAP_SCALE,
         GROUP_THRUST_IMBALANCE,
@@ -269,6 +271,7 @@ def _namespace(base, env_indices, row: int = 0, **extra) -> dict:
         "GROUP_DRAG_SCALE": GROUP_DRAG_SCALE,
         "GROUP_THRUST_CAP_SCALE": GROUP_THRUST_CAP_SCALE,
         "GROUP_MOTOR_TAU_S": GROUP_MOTOR_TAU_S,
+        "GROUP_PAYLOAD_MASS_KG": GROUP_PAYLOAD_MASS_KG,
     }
     namespace.update(extra)
     return namespace

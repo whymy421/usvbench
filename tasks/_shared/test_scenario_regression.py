@@ -675,6 +675,11 @@ def _path_following_stamp(segments, first_headings, heading_changes,
         "heading_changes": heading_changes,
         "headings": headings,
         "spawn_headings": spawn_headings,
+        # What the shipped reset produces for every cfg without a sea_state
+        # field (the certified ids): the Wave-variant block above the stamp
+        # leaves wave_scenario empty, so the splice adds no group -- the same
+        # fabrication discipline as _sea=None on the station-keeping stamp.
+        "wave_scenario": {},
     }
     _exec_statements([_PF_STAMP_LOOP], PATH_FOLLOWING_ENV, namespace)
     return headings, base._scenario_params, base._scenario_hashes

@@ -117,6 +117,11 @@ NATIVE_LAYOUTS: dict[str, list[int] | UnsupportedNativeLayout] = {
     "Isaac-USV-HazardNav-Direct-v12": list(_HAZARD_V3),
     "Isaac-USV-HazardBasin-Direct-v1": list(_HAZARD_V3),
     "Isaac-USV-HazardCrossDemo-Direct-v1": list(_HAZARD_V3),
+    # Mid-episode obstacle appearance: the observation is UNCHANGED (the
+    # appeared cylinder enters through the pre-existing ray returns), so
+    # the id carries its certified crossing parent layout verbatim and a
+    # certified crossing checkpoint loads zero-shot.
+    "Isaac-USV-HazardCrossAppear-Direct-v1": list(_HAZARD_V3),
     "Isaac-USV-HazardCrossImb-Direct-v1": list(_HAZARD_V3),
     "Isaac-USV-HazardRing2-Direct-v1": list(_HAZARD_V3),
     "Isaac-USV-HazardFortress-Direct-v1": list(_HAZARD_V3),
@@ -174,6 +179,15 @@ NATIVE_LAYOUTS: dict[str, list[int] | UnsupportedNativeLayout] = {
     "Isaac-USV-SuiteS-DiagonalRow-Direct-v1": list(_HAZARD_V3),
     "Isaac-USV-SuiteS-Clusters-Direct-v1": list(_HAZARD_V3),
     "Isaac-USV-SuiteS-GapWall-Direct-v1": list(_HAZARD_V3),
+    # Wave background variants: the sea is a pure force disturbance (no
+    # observation change), so each id carries its certified parent's native
+    # layout verbatim and every certified checkpoint loads zero-shot.
+    "Isaac-USV-HazardCross-Wave-Direct-v1": list(_HAZARD_V3),
+    "Isaac-USV-Iceberg-Wave-Direct-v1": list(range(SUPERSET_DIM_V2)),
+    "Isaac-USV-PathFollow-BlueBoat-Wave-Direct-v1": list(_PATH),
+    "Isaac-USV-PathHazard-Wave-Direct-v1": list(_PATH_HAZARD),
+    "Isaac-USV-Dock-BlueBoat-Wave-Direct-v1": list(_DOCK),
+    "Isaac-USV-HarborMission-Wave-Direct-v1": list(_HARBOR),
 }
 
 
