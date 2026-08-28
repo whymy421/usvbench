@@ -94,6 +94,27 @@ class DockingEnv(DirectRLEnv):
         self.time_to_success = torch.full((self.num_envs,), torch.nan, device=self.device)
         self.episode_path_length = torch.zeros(self.num_envs, device=self.device)
         self.final_hold_timer = torch.zeros(self.num_envs, device=self.device)
+        # Longest CONTINUOUS stretch of the finished episode that satisfied the
+        # berthing predicate -- position, heading AND speed together, as
+        # _task_state assembles it -- in seconds. ``held`` thresholds exactly
+        # this quantity (:842), so recording it exposes the graded metric the
+        # binary criterion hides: an approach that never once arrived and one
+        # that arrived and could not hold still are both "failure", and only
+        # this number separates them. It is defined for EVERY episode, success
+        # or failure, so a dose response reads off it with no conditioning on
+        # the outcome.
+        #
+        # Read it with the berth-wall caveat. On the wall ids success is the
+        # threshold AND a clean prefix (:843-844), so max_hold_s past the
+        # requirement is NECESSARY but not SUFFICIENT there: an episode that
+        # scraped a wall on the approach and then berthed perfectly records the
+        # full hold and success=False. scripts/check_hold_consistency.py
+        # asserts the bare equivalence, so on a wall certificate it will list
+        # those episodes -- that is the contact veto showing through, not a
+        # latch bug. On the open-water ids berth_walls stays False
+        # (docking_env_cfg.py:209), the veto is vacuous, and the threshold is
+        # exactly success as in the station-keeping families.
+        self.episode_max_hold_s = torch.zeros(self.num_envs, device=self.device)
 
         self._hold_steps = torch.zeros(
             self.num_envs, dtype=torch.long, device=self.device
@@ -112,6 +133,29 @@ class DockingEnv(DirectRLEnv):
         self.actions = torch.zeros(
             (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
         )
+
+        # Sea state (Wave variants only). Certified ids have no sea_state cfg
+        # field, so getattr returns None and nothing here runs for them. The
+        # field is a pure background force: it never touches the observation,
+        # reward, or termination paths of this env.
+        #
+        # Docking is the one family without the scenario protocol -- its own
+        # spawn draws ride the seed-derived per-env _spawn_gen above, which is
+        # immune to the skrl Runner reseed (tasks/_shared/scenario_rng.py:34-38)
+        # -- so the wave draws get their own keyed per-(env, episode) "wave"
+        # stream via make_scenario_rng: two --eval-seed values sail two
+        # genuinely different seas. cfg.seed None -> None -> the historical
+        # global-RNG fallback inside SeaState.resample.
+        self._sea = None
+        self._sea_scenario = None
+        if getattr(self.cfg, "sea_state", None) is not None and self.cfg.sea_state.enable:
+            from .._shared.scenario_draws import make_scenario_rng
+            from .._shared.sea_state import SeaState
+
+            self._sea_scenario = make_scenario_rng(
+                self.cfg, self.num_envs, self.device
+            )
+            self._sea = SeaState(self.cfg.sea_state, self.num_envs, self.device)
 
         # C3 x C5: solid berth walls. Cylinders reuse hazard_nav's certified
         # clearance/ray kernels so the contact predicate and the 36-ray sensor
@@ -618,6 +662,18 @@ class DockingEnv(DirectRLEnv):
         # enter the current-force path at all.
         if self.physics_cfg.enable_current:
             force_w += self._compute_current_forces()
+        if self._sea is not None:
+            # Same world-frame entry point as the current, so a task may carry
+            # both and their water velocities simply add.
+            # Mirrors station_keeping_env.py:541-551.
+            t = float(self.episode_length_buf[0]) * self.control_step_s
+            wave_f, wave_t = self._sea.forces(
+                self.robot.data.root_com_pos_w[:, :2],
+                self.robot.data.root_com_vel_w[:, :2],
+                t,
+            )
+            force_w += wave_f
+            torque_w += wave_t
 
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_w)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
@@ -807,6 +863,12 @@ class DockingEnv(DirectRLEnv):
             self.time_to_success[completed_ids] = time_to_success
             self.episode_path_length[completed_ids] = self.path_length[completed_ids]
             self.final_hold_timer[completed_ids] = self.hold_timer[completed_ids]
+            # Latched here, alongside episode_path_length and under the same
+            # discipline: _max_hold_steps is zeroed further down in this reset,
+            # so reading it any later would report the NEXT episode's value.
+            self.episode_max_hold_s[completed_ids] = (
+                self._max_hold_steps[completed_ids].float() * self.control_step_s
+            )
 
             self.extras.setdefault("log", {})
             self.extras["log"]["Episode/success"] = success.float().mean()
@@ -917,3 +979,12 @@ class DockingEnv(DirectRLEnv):
         self._min_clearance[env_ids] = torch.inf
         self._episode_finished[env_ids] = False
         self._previous_xy[env_ids] = com_target_xy
+        if self._sea is not None:
+            # Fresh sea for the episode that starts now, off the per-(env,
+            # episode) "wave" stream when seeded. reset_idx MUST advance the
+            # episode counter before the draw (tasks/_shared/scenario_rng.py);
+            # with no scenario the draw falls back to the global torch RNG,
+            # the historical training path.
+            if self._sea_scenario is not None:
+                self._sea_scenario.reset_idx(env_ids)
+            self._sea.resample(env_ids, scenario=self._sea_scenario)

@@ -51,6 +51,18 @@ class StationKeepingBoatEnv(DirectRLEnv):
         self.time_to_success = torch.full((self.num_envs,), torch.nan, device=self.device)
         self.episode_path_length = torch.zeros(self.num_envs, device=self.device)
         self.final_hold_timer = torch.zeros(self.num_envs, device=self.device)
+        # Longest CONTINUOUS hold achieved in the finished episode, in seconds.
+        # Success is literally a threshold on this quantity (_get_dones compares
+        # _max_hold_steps against required_hold_steps), so recording it exposes
+        # the graded metric the binary criterion hides: an episode that never
+        # once entered the hold zone and one that held for all but the final
+        # control step are both "failure", and only this number separates them.
+        # Unlike path length it is defined for EVERY episode, success or
+        # failure, so reading a dose response off it needs no conditioning on
+        # the outcome. Same export, and the same latch discipline in _reset_idx,
+        # as the sibling family one directory over
+        # (tasks/station_keeping/station_keeping_env.py:80-88).
+        self.episode_max_hold_s = torch.zeros(self.num_envs, device=self.device)
 
         self._hold_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         self._max_hold_steps = torch.zeros(
@@ -324,6 +336,12 @@ class StationKeepingBoatEnv(DirectRLEnv):
             self.time_to_success[completed_ids] = time_to_success
             self.episode_path_length[completed_ids] = self.path_length[completed_ids]
             self.final_hold_timer[completed_ids] = self.hold_timer[completed_ids]
+            # Latched here, alongside episode_path_length and under the same
+            # discipline: _max_hold_steps is zeroed further down in this reset,
+            # so reading it any later would report the NEXT episode's value.
+            self.episode_max_hold_s[completed_ids] = (
+                self._max_hold_steps[completed_ids].float() * self.control_step_s
+            )
             for completed in completed_ids.tolist():
                 self.episode_scenario[completed] = self._scenario_params[completed]
                 self.episode_scenario_hashes[completed] = self._scenario_hashes[
