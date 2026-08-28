@@ -66,6 +66,22 @@ except ImportError:
 TASK = args_cli.task
 env_cfg = parse_env_cfg(TASK, device="cuda:0", num_envs=64)
 env_cfg.seed = args_cli.eval_seed
+# Every cfg field this run actually writes, as {field: value read back off the
+# cfg}. Same key name and same flat {path: value} shape as the "overrides"
+# stamp scripts/eval_v6_frozen.py:340 writes from apply_overrides(), so one
+# reader serves both certificates even though this script pins its knobs by a
+# different mechanism. Before this, gcert_nc5376_drag_scale_v20_e123.json
+# carried {checkpoint, imbalance, level, records, seed, task} and the 20 lived
+# in the FILENAME alone: copy or rename the file and the condition it certifies
+# is gone.
+applied_overrides = {}
+# Which of those fields is the Suite D axis under test, or None when no axis
+# was pinned. Bound BEFORE the branch below, not inside it: the branch happens
+# to exit when neither --axis nor --imbalance is given, so `axis` is in fact
+# always bound by the time the blob is built, but that is a property of a
+# SystemExit far upstream, and a certificate writer must not be one edit to
+# that branch away from dying on a NameError after the episodes have run.
+pinned_axis = None
 if args_cli.axis is not None:
     axis, value = args_cli.axis, args_cli.value
     if value is None:
@@ -77,6 +93,12 @@ else:
 if not hasattr(env_cfg, axis):
     raise SystemExit(f"cfg has no field {axis!r}")
 setattr(env_cfg, axis, value)
+pinned_axis = axis
+# Read the knob back off the cfg instead of recording args_cli.value: what the
+# certificate has to prove is the value the EPISODES ran at, and a cfg that
+# coerces or clamps on assignment would otherwise be certified with the number
+# that was asked for rather than the one that was used.
+applied_overrides[axis] = getattr(env_cfg, axis)
 # Kill the per-episode randomization for EVERY axis, not just the one under
 # test: a held-out evaluation must vary exactly one thing.
 for choices in ("thrust_imbalance_choices", "mass_scale_choices",
@@ -84,6 +106,15 @@ for choices in ("thrust_imbalance_choices", "mass_scale_choices",
                 "motor_tau_s_choices"):
     if hasattr(env_cfg, choices):
         setattr(env_cfg, choices, ())
+        # Record the blanking too. A cell whose choices tuple was emptied held
+        # one knob value for every episode; a cell that still carries
+        # (0.80, 1.00, 1.30) drew a fresh one per episode, and the two are not
+        # the same evidence -- attributing a success rate to a knob VALUE is
+        # only legitimate for the first kind. A reader who cannot see which
+        # kind a certificate is cannot check that attribution, and an absent
+        # key is ambiguous between "not blanked" and "written by a script that
+        # never blanked".
+        applied_overrides[choices] = getattr(env_cfg, choices)
 for assignment in args_cli.extra_sets:
     field, _, raw = assignment.partition("=")
     if not _ or not hasattr(env_cfg, field):
@@ -92,6 +123,13 @@ for assignment in args_cli.extra_sets:
     caster = type(current) if isinstance(current, (int, float, bool)) else str
     setattr(env_cfg, field, caster(raw) if caster is not bool
             else raw.lower() in ("1", "true", "yes"))
+    # Same read-back the echo above already prints, kept for the certificate.
+    # It matters most where this loop is weakest: `caster` falls through to
+    # `str` for any non-scalar field, so --set on a tuple field writes the raw
+    # text to a cfg slot that holds a tuple and the run continues. Recording
+    # what is ON the cfg makes that visible in the certificate instead of
+    # letting the file imply a tuple was pinned.
+    applied_overrides[field] = getattr(env_cfg, field)
     print(f"set {field}={getattr(env_cfg, field)}", flush=True)
 print(f"axis={axis} value={value}", flush=True)
 if hasattr(env_cfg, "curriculum_frozen"):
@@ -209,6 +247,16 @@ if args_cli.out:
                    "scenario_protocol": scenario_protocol,
                    "imbalance": args_cli.imbalance,
                    "checkpoint": os.path.abspath(args_cli.checkpoint),
+                   # WHICH entry of "overrides" is the Suite D axis under
+                   # test. Not recoverable from the flat dict alone: with
+                   # --axis drag_scale --value 20 --set mass_scale=1.1 both
+                   # keys are plain cfg fields carrying plain floats, and the
+                   # attribution claim ("this cell isolates drag_scale")
+                   # depends on knowing which one was swept. The name only --
+                   # the value stays in "overrides" and is not duplicated
+                   # here, so the two can never drift apart.
+                   "axis": pinned_axis,
+                   "overrides": applied_overrides,
                    "records": records}, f, indent=1)
     print(f"  records -> {args_cli.out}")
 sys.stdout.flush()

@@ -53,6 +53,17 @@ import subprocess
 import sys
 from collections.abc import Mapping
 
+# Shared --set FIELD=VALUE parsing. Dotted paths reach nested cfgs, which is
+# what the wave ladder needs: its rungs live at cfg.sea_state.hs_range, one
+# level below anything a top-level-only override could touch. Imported before
+# Isaac so the no-Isaac argparse layer of test_classical_baseline_math.py
+# still reaches the parser.
+try:
+    from cfg_override import apply_overrides, validate_assignments
+except ImportError:  # invoked from a cwd that is not scripts/
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from cfg_override import apply_overrides, validate_assignments
+
 from isaaclab.app import AppLauncher
 
 
@@ -130,8 +141,15 @@ parser.add_argument("--hold-mode", choices=["deadband", "continuous"], default="
 parser.add_argument("--kp", type=float, default=2.0, help="Heading PID proportional gain (hand-set default).")
 parser.add_argument("--ki", type=float, default=0.0, help="Heading PID integral gain (hand-set default).")
 parser.add_argument("--kd", type=float, default=0.5, help="Heading PID derivative gain (hand-set default).")
+parser.add_argument("--set", dest="extra_sets", action="append", default=[],
+                    metavar="FIELD=VALUE",
+                    help="Extra cfg overrides (repeatable). Dotted paths reach "
+                         "nested cfgs, e.g. one pinned wave rung: "
+                         "--set sea_state.hs_range=0.6,0.6 "
+                         "--set sea_state.tp_range=2.25,2.25")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
+validate_assignments(args_cli.extra_sets, parser.error)
 
 if args_cli.num_envs <= 0:
     parser.error("--num_envs must be positive")
@@ -846,6 +864,11 @@ def _run_mission(
             }
             # Station keeping and path following have no obstacle field, hence
             # no clearance buffer; every hazard/docking family records it.
+            # Longest continuous hold, the graded quantity the binary success
+            # criterion thresholds. Guarded by hasattr so families without a
+            # hold phase are unchanged.
+            if hasattr(base, "episode_max_hold_s"):
+                rec["max_hold_s"] = float(base.episode_max_hold_s[env_id])
             if hasattr(base, "episode_min_clearance"):
                 rec["min_clearance_m"] = float(base.episode_min_clearance[env_id])
             # Cross-track error, mirrored from scripts/eval_v6_frozen.py so every
@@ -1014,6 +1037,17 @@ def main(env_cfg, experiment_cfg):
                 "current_speed_override_mps field."
             )
 
+    # Dotted overrides go last so an explicit --set always wins over the
+    # convenience flags above: a queue pinning a wave rung must never be
+    # silently overwritten by a default. With no --set this is a no-op, so
+    # every certified command line that predates it stays bit-identical. The
+    # applied pairs are kept, like scripts/eval_v6_frozen.py:126, so the
+    # output JSON can state which rung it evaluated instead of leaving that
+    # to the filename.
+    applied_overrides = dict(
+        apply_overrides(env_cfg, args_cli.extra_sets, label="[eval] set")
+    )
+
     # Fingerprint AFTER the overrides so cfg_sha1 describes the run as
     # configured (the resurrected script hashed before applying overrides).
     cfg_sha1, cfg_scalars = _cfg_fingerprint(env_cfg)
@@ -1135,6 +1169,11 @@ def main(env_cfg, experiment_cfg):
                     # object, the off-protocol literal when it does not --
                     # never unconditionally the header.
                     "scenario_protocol": scenario_protocol,
+                    # Every --set actually written to the cfg, under the same
+                    # key scripts/eval_v6_frozen.py:340 uses so one schema
+                    # serves both. A wave-ladder cell is identified by this
+                    # field, not by whatever the caller named the file.
+                    "overrides": applied_overrides,
                     "controller": controller_name,
                     "gains": {
                         "kp": args_cli.kp,

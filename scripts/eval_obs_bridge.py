@@ -46,6 +46,16 @@ from tasks._shared.obs_superset import (  # noqa: E402
     native_to_superset,
 )
 
+# Shared --set FIELD=VALUE parsing (scripts/cfg_override.py). Dotted paths
+# reach nested cfgs, which the wave ladder needs: its rungs live at
+# cfg.sea_state.hs_range, one level below anything a top-level-only override
+# could touch. Also CPU-only, so it stays above the isaaclab import.
+try:
+    from cfg_override import apply_overrides  # noqa: E402
+except ImportError:  # invoked from a cwd that is not scripts/
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from cfg_override import apply_overrides  # noqa: E402
+
 from isaaclab.app import AppLauncher  # noqa: E402
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -67,8 +77,10 @@ parser.add_argument("--cfg-entry-point", default="skrl_cfg_entry_point",
 parser.add_argument("--out", default=None, help="JSON per-episode records")
 parser.add_argument("--set", dest="extra_sets", action="append", default=[],
                     metavar="FIELD=VALUE",
-                    help="extra top-level EVAL-task cfg overrides (repeatable), "
-                         "e.g. --set current_speed_override_mps=2.25")
+                    help="extra EVAL-task cfg overrides (repeatable); dotted "
+                         "paths reach nested cfgs and comma tuples pin ranges, "
+                         "e.g. --set current_speed_override_mps=2.25 or one "
+                         "wave rung --set sea_state.hs_range=0.6,0.6")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
 
@@ -227,15 +239,7 @@ env_cfg.seed = args_cli.eval_seed
 if hasattr(env_cfg, "curriculum_frozen"):
     env_cfg.curriculum_frozen = True
     env_cfg.eval_level = args_cli.level
-for assignment in args_cli.extra_sets:
-    field, _sep, raw = assignment.partition("=")
-    if not _sep or not hasattr(env_cfg, field):
-        raise SystemExit(f"--set target {field!r} is not a cfg field")
-    current = getattr(env_cfg, field)
-    caster = type(current) if isinstance(current, (int, float, bool)) else str
-    setattr(env_cfg, field, caster(raw) if caster is not bool
-            else raw.lower() in ("1", "true", "yes"))
-    print(f"set {field}={getattr(env_cfg, field)}", flush=True)
+applied_overrides = dict(apply_overrides(env_cfg, args_cli.extra_sets))
 experiment_cfg = load_cfg_from_registry(
     args_cli.train_task, args_cli.cfg_entry_point)
 env = gym.make(TASK, cfg=env_cfg, render_mode=None)
@@ -297,6 +301,14 @@ while len(records) < args_cli.episodes and step < max_steps:
                       else float(base.time_to_success[i])),
             "path_length_m": float(base.episode_path_length[i]),
         }
+        # Longest continuous hold, the graded quantity the binary success
+        # criterion thresholds (station_keeping_env.py: _success is
+        # _max_hold_steps >= required_hold_steps). Defined for every episode,
+        # so a dose response can be read off it without conditioning on the
+        # outcome -- conditioning on "both cells succeeded" was shown to flip
+        # the SIGN of a p~1e-19 result on the deadband-PID wave ladder.
+        if hasattr(base, "episode_max_hold_s"):
+            rec["max_hold_s"] = float(base.episode_max_hold_s[i])
         # Station keeping and path following have no obstacle field, hence no
         # clearance buffer; every hazard/docking family records it.
         if hasattr(base, "episode_min_clearance"):
@@ -417,6 +429,11 @@ if args_cli.out:
                    # object, the off-protocol literal when it does not --
                    # never unconditionally the header.
                    "scenario_protocol": scenario_protocol,
+                   # Every --set actually written to the cfg, under the same
+                   # key scripts/eval_v6_frozen.py:340 uses so one schema
+                   # serves both. A wave-ladder cell is identified by this
+                   # field, not by whatever the caller named the file.
+                   "overrides": applied_overrides,
                    "checkpoint": checkpoint_path,
                    "train_task": args_cli.train_task,
                    "eval_task": args_cli.eval_task,
