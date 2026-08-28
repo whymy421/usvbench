@@ -81,6 +81,14 @@ import math
 import os
 import sys
 
+# Shared --set FIELD=VALUE parsing (scripts/cfg_override.py). Pure Python, no
+# Isaac import, so the CPU test path reaches the parser unchanged.
+try:
+    from cfg_override import apply_overrides, validate_assignments
+except ImportError:  # invoked from a cwd that is not scripts/
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from cfg_override import apply_overrides, validate_assignments
+
 _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_SCRIPTS_DIR)
 
@@ -140,8 +148,10 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Sampling seed (deterministic per device).")
     parser.add_argument("--set", dest="extra_sets", action="append", default=[],
                         metavar="FIELD=VALUE",
-                        help="Extra top-level cfg overrides (repeatable), "
-                             "e.g. Suite D probes: --set thrust_cap_scale=0.7")
+                        help="Extra cfg overrides (repeatable). Dotted paths "
+                             "reach nested cfgs. Suite D probe: "
+                             "--set thrust_cap_scale=0.7 ; pinned wave rung: "
+                             "--set sea_state.hs_range=0.6,0.6")
     return parser
 
 
@@ -163,9 +173,7 @@ def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) ->
         parser.error("--w-dock-heading and --w-dock-speed must be >= 0")
     if not args.task.startswith(SUPPORTED_TASK_PREFIX):
         parser.error(f"--task must start with {SUPPORTED_TASK_PREFIX!r}")
-    for assignment in args.extra_sets:
-        if "=" not in assignment:
-            parser.error(f"--set expects FIELD=VALUE, got {assignment!r}")
+    validate_assignments(args.extra_sets, parser.error)
 
 
 def _quat_rotate(torch, quat, vec):
@@ -571,15 +579,13 @@ def _run_isaac_eval() -> None:
     task = args_cli.task
     env_cfg = parse_env_cfg(task, device="cuda:0", num_envs=args_cli.num_envs)
     env_cfg.seed = args_cli.eval_seed
-    for assignment in args_cli.extra_sets:
-        field_name, _, raw = assignment.partition("=")
-        if not hasattr(env_cfg, field_name):
-            raise SystemExit(f"--set target {field_name!r} is not a cfg field")
-        current = getattr(env_cfg, field_name)
-        caster = type(current) if isinstance(current, (int, float, bool)) else str
-        setattr(env_cfg, field_name, caster(raw) if caster is not bool
-                else raw.lower() in ("1", "true", "yes"))
-        print(f"set {field_name}={getattr(env_cfg, field_name)}", flush=True)
+    # Shared dotted-path overrides (scripts/cfg_override.py). The previous
+    # inline loop reached top-level fields only, so a wave rung at
+    # cfg.sea_state.hs_range could not be pinned at all. Kept, like
+    # scripts/eval_v6_frozen.py:126, so every applied override can be echoed
+    # into the output JSON: a pinned rung that lives only in the output
+    # filename is not evidence.
+    applied_overrides = dict(apply_overrides(env_cfg, args_cli.extra_sets))
     if hasattr(env_cfg, "curriculum_frozen"):
         env_cfg.curriculum_frozen = True
         env_cfg.eval_level = args_cli.level
@@ -722,6 +728,11 @@ def _run_isaac_eval() -> None:
                 ),
                 "path_length_m": float(base.episode_path_length[i]),
             }
+            # Longest continuous hold, the graded quantity the binary success
+            # criterion thresholds. Guarded by hasattr so families without a
+            # hold phase are unchanged.
+            if hasattr(base, "episode_max_hold_s"):
+                rec["max_hold_s"] = float(base.episode_max_hold_s[i])
             if hasattr(base, "episode_min_clearance"):
                 rec["min_clearance_m"] = float(base.episode_min_clearance[i])
             # Cross-track error, mirrored from scripts/eval_v6_frozen.py so every
@@ -814,6 +825,11 @@ def _run_isaac_eval() -> None:
                     # object, the off-protocol literal when it does not --
                     # never unconditionally the header.
                     "scenario_protocol": scenario_protocol,
+                    # Every --set actually written to the cfg, under the same
+                    # key scripts/eval_v6_frozen.py:340 uses so one schema
+                    # serves both. A wave-ladder cell is identified by this
+                    # field, not by whatever the caller named the file.
+                    "overrides": applied_overrides,
                     "controller": "mppi",
                     "mppi": mppi_repro,
                     "records": records,

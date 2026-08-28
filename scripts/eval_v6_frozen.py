@@ -18,7 +18,18 @@ the header, and its per-episode records must be treated as unpaired.
 """
 import argparse
 import json
+import os
 import sys
+
+# Shared --set FIELD=VALUE parsing (scripts/cfg_override.py). Dotted paths
+# reach nested cfgs, which the wave ladder needs: its rungs live at
+# cfg.sea_state.hs_range, one level below anything a top-level-only override
+# could touch. Pure Python, no Isaac import, so it is safe before the launcher.
+try:
+    from cfg_override import apply_overrides
+except ImportError:  # invoked from a cwd that is not scripts/
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from cfg_override import apply_overrides
 
 from isaaclab.app import AppLauncher
 
@@ -37,8 +48,10 @@ parser.add_argument("--cfg-entry-point", default="skrl_cfg_entry_point",
 parser.add_argument("--out", default=None, help="JSON per-episode records")
 parser.add_argument("--set", dest="extra_sets", action="append", default=[],
                     metavar="FIELD=VALUE",
-                    help="extra top-level cfg overrides (repeatable), e.g. "
-                         "--set obs_noise_sigma_ray=0.18; same coercion "
+                    help="extra cfg overrides (repeatable); dotted paths reach "
+                         "nested cfgs and comma tuples pin ranges, e.g. "
+                         "--set obs_noise_sigma_ray=0.18 or one wave rung "
+                         "--set sea_state.hs_range=0.6,0.6; same coercion "
                          "rules as eval_imbalance.py")
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
@@ -110,17 +123,7 @@ if hasattr(env_cfg, "curriculum_frozen"):
 # (obs_noise_sigma_*/obs_bias_sigma_*/obs_delay_steps/obs_dropout_p) ride
 # this, so degraded runs never mint a gym id; every applied override is
 # echoed into the output JSON top level.
-applied_overrides = {}
-for assignment in args_cli.extra_sets:
-    field, _, raw = assignment.partition("=")
-    if not _ or not hasattr(env_cfg, field):
-        raise SystemExit(f"--set target {field!r} is not a cfg field")
-    current = getattr(env_cfg, field)
-    caster = type(current) if isinstance(current, (int, float, bool)) else str
-    setattr(env_cfg, field, caster(raw) if caster is not bool
-            else raw.lower() in ("1", "true", "yes"))
-    applied_overrides[field] = getattr(env_cfg, field)
-    print(f"set {field}={getattr(env_cfg, field)}", flush=True)
+applied_overrides = dict(apply_overrides(env_cfg, args_cli.extra_sets))
 # Resolved degradation dose actually carried by this run (defaults included),
 # recorded so a gcert JSON is self-describing even when no --set was passed.
 OBS_DEGRADATION_FIELDS = (
@@ -196,6 +199,14 @@ while len(records) < args_cli.episodes and step < max_steps:
                       else float(base.time_to_success[i])),
             "path_length_m": float(base.episode_path_length[i]),
         }
+        # Longest continuous hold, the graded quantity the binary success
+        # criterion thresholds (station_keeping_env.py: _success is
+        # _max_hold_steps >= required_hold_steps). Defined for every episode,
+        # so a dose response can be read off it without conditioning on the
+        # outcome -- conditioning on "both cells succeeded" was shown to flip
+        # the SIGN of a p~1e-19 result on the deadband-PID wave ladder.
+        if hasattr(base, "episode_max_hold_s"):
+            rec["max_hold_s"] = float(base.episode_max_hold_s[i])
         # Station keeping and path following have no obstacle field, hence no
         # clearance buffer; every hazard/docking family records it.
         if hasattr(base, "episode_min_clearance"):
