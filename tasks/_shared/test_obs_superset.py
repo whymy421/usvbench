@@ -77,6 +77,9 @@ EXPECTED_V2_DIMS = {
     "Isaac-USV-HazardBasin-Direct-v1": 42,  # hazard_nav_env_cfg.py:439
     "Isaac-USV-HazardCrossDemo-Direct-v1": 42,  # hazard_nav_env_cfg.py:439
     "Isaac-USV-HazardCrossImb-Direct-v1": 42,  # hazard_nav_env_cfg.py:439
+    # Mid-episode appearance: observation identical to the certified
+    # crossing parent (the appeared cylinder enters via the existing rays).
+    "Isaac-USV-HazardCrossAppear-Direct-v1": 42,  # parent HazardCross-Direct-v1
     "Isaac-USV-HazardRing2-Direct-v1": 42,  # hazard_nav_env_cfg.py:439
     "Isaac-USV-HazardFortress-Direct-v1": 42,  # hazard_nav_env_cfg.py:439
     "Isaac-USV-HazardFortress2-Direct-v1": 42,  # hazard_nav_env_cfg.py:439
@@ -112,6 +115,14 @@ EXPECTED_V2_DIMS = {
     "Isaac-USV-StationKeep-BlueBoat-Current-Kin-Direct-v1": 6,  # station_keeping_env_cfg.py:258
     "Isaac-USV-StationKeep-BlueBoat-RampCurrent-Direct-v1": 3,  # station_keeping_env_cfg.py:288
     "Isaac-USV-StationKeep-BlueBoat-Wave-Direct-v1": 9,  # station_keeping_env_cfg.py:273
+    # Wave background variants: observation identical to the certified parent
+    # id (the sea is a pure force disturbance), so each dim is the parent's.
+    "Isaac-USV-HazardCross-Wave-Direct-v1": 42,  # parent HazardCross-Direct-v1
+    "Isaac-USV-Iceberg-Wave-Direct-v1": 64,  # parent Iceberg-Direct-v1
+    "Isaac-USV-PathFollow-BlueBoat-Wave-Direct-v1": 7,  # parent PathFollow-BlueBoat-Direct-v1
+    "Isaac-USV-PathHazard-Wave-Direct-v1": 43,  # parent PathHazard-Direct-v1
+    "Isaac-USV-Dock-BlueBoat-Wave-Direct-v1": 6,  # parent Dock-BlueBoat-Direct-v1
+    "Isaac-USV-HarborMission-Wave-Direct-v1": 46,  # parent HarborMission-Direct-v1
 }
 
 
@@ -129,6 +140,9 @@ V1_SLICES = {
 CONTRACT_MODE_IDS = {
     "Isaac-USV-HazardNavC64-Direct-v1",
     "Isaac-USV-Iceberg-Direct-v1",
+    # Wave background twin of the iceberg id: same 64-D contract-mode
+    # observation (identity layout, reserved slots included), waves only.
+    "Isaac-USV-Iceberg-Wave-Direct-v1",
 }
 
 

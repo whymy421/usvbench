@@ -18,6 +18,7 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 
 from .._shared.obs_superset import SUPERSET_DIM, SUPERSET_DIM_V2
+from .._shared.sea_state import SeaStateCfg
 from .._shared.vehicles import VehicleSpec, get_vehicle
 
 
@@ -345,6 +346,60 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     motor_tau_s: float = 0.0
     motor_tau_s_choices: tuple = ()
 
+    # --- Suite D axis: deck payload (point mass strapped on deck) ------------
+    # The single easiest real-boat perturbation -- bolt a known weight to the
+    # deck -- which makes it the anchor axis for embodied validation. Modelled
+    # honestly against the 3-DOF planar wrench _apply_action integrates: a
+    # POINT mass ``payload_mass_kg`` at body position (``payload_offset_x_m``
+    # forward, ``payload_offset_y_m`` to port) relative to the hull's
+    # USD-authored centre of mass. Exact planar consequences, all three
+    # carried (hazard_nav_env.py, payload block in _apply_action):
+    #   (1) total mass   m -> m + mp: every linear acceleration falls by
+    #       m/(m+mp) -- thrust, drag, and wave forces alike;
+    #   (2) yaw inertia  Iz -> Iz + mu*|d|^2 with mu = m*mp/(m+mp), the
+    #       parallel-axis/reduced-mass term about the SHIFTED centre of mass
+    #       (a centred payload leaves yaw response exactly untouched);
+    #   (3) COM shift    delta = mp*d/(m+mp): every planar force, still
+    #       physically applied at the hull reference point, acquires the
+    #       moment N_arm = delta_y*Fx_body - delta_x*Fy_body about the new
+    #       COM -- a thrust-proportional trim plus velocity-dependent drag
+    #       moments (a port-side weight pulls the bow to port under thrust).
+    # NOT modelled, deliberately: heel/trim attitude, added-mass change, and
+    # the ~|delta| kinematic offset of the tracked reference point (5.9 cm for
+    # 3 kg at 0.4 m) -- effects the planar model cannot carry honestly. The
+    # roll/pitch torque channels are left alone (mass_scale scales them, this
+    # axis does not: a planar point mass is not a uniform density change).
+    # Heavier floats deeper, exactly as mass_scale already floats deeper.
+    #
+    # Why this axis is not redundant given the other five: ``mass_scale``
+    # constrains the linear and angular acceleration scale factors to be
+    # EQUAL, while a centred payload slows surge/sway and leaves yaw agility
+    # unchanged; ``thrust_imbalance``'s yaw bias x*L*T comes chained to the
+    # reciprocal surge coupling x*N/L and never touches drag, while the
+    # payload trim delta_y*T carries no surge coupling and adds drag-borne
+    # yaw moments (delta_y*Dx - delta_x*Dy) no existing knob can produce.
+    # Numeric independence proof: test_payload_axis.py.
+    #
+    # Zero payload_mass_kg is INERT: the scalar path never executes the block
+    # and the choices path routes drawn-zero envs through torch.where to the
+    # untouched tensors, so every certified id stays byte-identical. Offsets
+    # with zero mass are physically no payload and stay inert. Primary mode
+    # is constant-per-run via --set (the dose axis); the choices tuple
+    # samples per episode off the scenario protocol's own
+    # "actuator_payload_mass_kg" stream.
+    payload_mass_kg: float = 0.0
+    payload_mass_kg_choices: tuple = ()
+    payload_offset_x_m: float = 0.0
+    payload_offset_y_m: float = 0.0
+    # The wrench-division trick works in RATIOS to the USD-authored rigid
+    # body, so the authored values must be named here (mass_scale never
+    # needed them; independent mass/inertia ratios do). Read from
+    # assets/blueboat_physics.usd /World/BlueBoat MassAPI: physics:mass
+    # 17.26 kg, physics:diagonalInertia z 2.376 kg m^2. Reference values for
+    # the ratio only -- the USD stays authoritative and untouched.
+    payload_ref_mass_kg: float = 17.26
+    payload_ref_izz_kgm2: float = 2.376
+
     # --- Observation-channel degradation (eval-time OOD hooks) ---------------
     # Physical-unit corruption of the IDEAL measurements (goal vector, body-
     # frame velocities, ray returns) before feature construction, inside
@@ -363,6 +418,42 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     obs_bias_sigma_ray: float = 0.0   # m, per-episode per-ray offset draw
     obs_delay_steps: int = 0          # control steps of measurement latency
     obs_dropout_p: float = 0.0        # per-step frame loss (sample-and-hold)
+
+    # --- Mid-episode obstacle appearance (sudden terrain change) -------------
+    # At a per-episode time t0 -- drawn from the scenario protocol's own
+    # "appearance" group, so eval seeds control it -- appear_count EXTRA
+    # cylinders flip from inactive to active in obstacle_active. The buffers
+    # are already read every step, so nothing structural changes: the extra
+    # slots are simply reserved (left inactive) at reset and flipped at t0.
+    #
+    # FAIRNESS FLOOR (frozen 2026-08-26, derivation at hazard_geometry.py
+    # plan_obstacle_appearance): the appearance azimuth is aligned to the
+    # nearest of the 36 sensor rays at the moment of appearance, and the
+    # centre distance from the CURRENT boat position is clamped to
+    # [9.2, 25] m -- 9.2 m = r/sin(5 deg) guaranteed-visibility bound at the
+    # 0.8 m minimum radius; braking (0.891 m at 3 m/s full reverse + 0.25 s
+    # reaction) is not the binding constraint. Admission reruns the layout
+    # sampler's own check (BFS feasibility at planning inflation) on the
+    # post-appearance field; an inadmissible azimuth is resampled (bounded by
+    # appear_max_attempts distinct rays), and exhaustion SKIPS the appearance
+    # for that env and records the skip.
+    #
+    # appear_count = 0 keeps every certified id bit-identical: no buffer is
+    # written, no stream is consumed, no step-path branch is taken.
+    # appear_distance_m is the DOSE axis (far = light, near = heavy); rungs
+    # 20 / 15 / 12 / 9.5 m are pinned per run via eval --set on the appearance
+    # gym id, never by minting per-rung ids.
+    appear_count: int = 0
+    appear_time_min_s: float = 5.0
+    appear_time_max_s: float = 30.0
+    appear_distance_m: float = 20.0
+    # 0.8 m is MIN_OBSTACLE_RADIUS_M, the radius the 9.2 m floor is derived
+    # for (two-ray coverage rule at 36 rays); 2.0 is MAX_OBSTACLE_RADIUS_M.
+    appear_radius_m: float = 0.8
+    # Admission BFS resolution. 0.25 m is FORCED_SEAL_CELL_M -- the value the
+    # crossing sampler itself audits with -- and resolves every tier gate.
+    appear_bfs_cell_m: float = 0.25
+    appear_max_attempts: int = 36
 
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
@@ -491,6 +582,25 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
             raise ValueError("reward_reverse_action_scale must be non-negative")
         if self.contact_dwell_tau_s <= 0.0:
             raise ValueError("contact_dwell_tau_s must be positive")
+        if self.appear_count < 0:
+            raise ValueError("appear_count must be non-negative")
+        if self.appear_count > 0:
+            if (
+                self.appear_time_min_s < 0.0
+                or self.appear_time_max_s < self.appear_time_min_s
+            ):
+                raise ValueError(
+                    "appearance time window must satisfy 0 <= min <= max"
+                )
+            # The 9.2 m guaranteed-visibility floor is derived for the 0.8 m
+            # minimum admitted radius (hazard_geometry.MIN_OBSTACLE_RADIUS_M);
+            # a smaller cylinder could fall between two rays at that range.
+            if not 0.8 <= self.appear_radius_m <= 2.0:
+                raise ValueError("appear_radius_m must lie in [0.8, 2.0] m")
+            if self.appear_bfs_cell_m <= 0.0:
+                raise ValueError("appear_bfs_cell_m must be positive")
+            if self.appear_max_attempts < 1:
+                raise ValueError("appear_max_attempts must be at least one")
 
 
 @configclass
@@ -740,6 +850,41 @@ class HazardCrossDemoEnvCfg(HazardForcedCrossingEnvCfg):
 
 
 @configclass
+class HazardCrossAppearEnvCfg(HazardForcedCrossingEnvCfg):
+    """Forced crossing + one mid-episode obstacle appearance (sudden terrain
+    change).
+
+    Parent: the certified crossing cfg -- observation, reward, termination,
+    layout distribution and tier semantics are inherited byte for byte, so a
+    certified crossing checkpoint loads here zero-shot and the ONLY new event
+    in an episode is the appearance. One extra cylinder of the minimum admitted
+    radius (0.8 m) flips active at a per-episode time t0 ~ U[appear_time_min_s,
+    appear_time_max_s] drawn from the scenario protocol's own "appearance"
+    group; the fairness floor (ray-aligned azimuth, [9.2, 25] m distance clamp)
+    and the sampler-grade BFS admission are documented at the appear_* fields
+    on the base cfg and in hazard_geometry.plan_obstacle_appearance.
+
+    DOSE AXIS = appearance distance (far = light, near = heavy). The frozen
+    rung ladder is 20 / 15 / 12 / 9.5 m, pinned per run via
+    ``eval --set appear_distance_m=<rung>`` on this id -- the same discipline
+    as the observation-degradation doses, so intermediate rungs never mint
+    ids. The default (20 m) is the lightest rung.
+
+    The time window default [5, 30] s brackets the certified crossing
+    champions' median time-to-success (18-21 s), so the appearance lands
+    mid-transit for a competent policy rather than after the episode is
+    decided; both endpoints stay --set-able for probes.
+
+    Slot budget: the parent reserves max_obstacles = 96 against the 10k-layout
+    audit's worst case of 79 wall cylinders, so the one appearance slot rides
+    the existing 17-slot headroom; the env still hard-fails if a slot is ever
+    unavailable rather than silently skipping.
+    """
+
+    appear_count: int = 1
+
+
+@configclass
 class HazardOpenWaterTaxEnvCfg(HazardNavV3EnvCfg):
     """v11 recipe plus a tax on the empty water around the obstacle field.
 
@@ -945,3 +1090,67 @@ class HazardSuiteSGapWallEnvCfg(HazardSuiteSEnvCfg):
     """Suite S: overlap-sealed wall with one off-axis tier-width gate."""
 
     suite_s_class: str = "gap_wall"
+
+
+@configclass
+class HazardForcedCrossingWaveEnvCfg(HazardForcedCrossingEnvCfg):
+    """Forced crossing x waves: the certified exam, sailed in an irregular sea.
+
+    BACKGROUND DISTURBANCE ONLY. Unlike the station-keeping Wave id (which
+    appends 3 sea-state observation channels), this variant changes NOTHING
+    about the observation, reward, termination, or layout of its parent
+    (Isaac-USV-HazardCross-Direct-v1): the JONSWAP field enters through the
+    same world-frame force path as the certified current, and the policy is
+    never told the sea exists. A certified crossing checkpoint therefore
+    loads zero-shot and the comparison is "same policy, same observation,
+    world now has waves".
+
+    Band: the frozen evaluation box (2026-08-26): H_s 0.30-0.60 m (the
+    station-keeping wave band for this hull), T_p 2.0-2.5 s. Every corner
+    passes the DNV-RP-C205 steepness admission
+    (sea_state.validate_steepness_admission; worst corner Hs=0.60 m at
+    Tp=2.0 s gives Sp ~ 1/10.4 < 1/7) and captures >= 95% of the analytic
+    JONSWAP variance on the default 104-component 0.04-1.60 Hz band (worst
+    corner 98.8% at gamma=1). The rung ladder pins Hs per-rung later via
+    --set; hs_range stays the full certified band here. The certified
+    station-keeping id's 1.5 s floor stays excluded: it is grandfathered
+    history, not a template.
+
+    DUAL CALM REFERENCE: enable=True with Hs -> 0 is NOT calm water -- the
+    quadratic hull drag in sea_state.forces() still opposes the hull with
+    orbital_drag_coeff * speed^2 (0.08 N at 0.1 m/s, 8 N at 1 m/s, 72 N at
+    3 m/s; see sea_state.zero_amplitude_drag_force). Any dose ladder over
+    this variant must carry BOTH a true-calm reference (enable=False) and an
+    intercept rung (enable=True, Hs -> 0).
+    """
+
+    sea_state: SeaStateCfg = SeaStateCfg()
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.sea_state.enable = True
+        self.sea_state.hs_range = (0.30, 0.60)
+        self.sea_state.tp_range = (2.0, 2.5)
+
+
+@configclass
+class HazardIcebergWaveEnvCfg(HazardIcebergEnvCfg):
+    """Iceberg x waves: the detour exam in an irregular sea.
+
+    BACKGROUND DISTURBANCE ONLY -- same discipline as
+    HazardForcedCrossingWaveEnvCfg above: identical 64-D contract-mode
+    observation, reward, and layout as Isaac-USV-Iceberg-Direct-v1; the sea
+    enters only as a world-frame force, so the certified iceberg checkpoint
+    loads zero-shot. The frozen evaluation box (H_s 0.30-0.60 m, T_p
+    2.0-2.5 s), its steepness/capture admission, and the DUAL CALM REFERENCE
+    note (enable=True with Hs -> 0 is NOT calm water) are documented on the
+    crossing variant above.
+    """
+
+    sea_state: SeaStateCfg = SeaStateCfg()
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.sea_state.enable = True
+        self.sea_state.hs_range = (0.30, 0.60)
+        self.sea_state.tp_range = (2.0, 2.5)

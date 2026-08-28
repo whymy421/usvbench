@@ -66,9 +66,14 @@ def test_registered_id_count_is_pinned():
     literals, patterns = gym_registered_ids()
     # 2026-08-23: 56 -> 61 for the five Suite S structural-generalization ids
     # (SingleRow/StaggeredRows/DiagonalRow/Clusters/GapWall).
-    assert (len(literals), len(patterns)) == (62, 2), (
+    # 2026-08-26: 62 -> 68 for the six Wave background variants (HazardCross/
+    # Iceberg/PathFollow-BlueBoat/PathHazard/Dock-BlueBoat/HarborMission),
+    # owner's order: every task family gets a wave background disturbance id.
+    # 2026-08-26: 68 -> 69 for the mid-episode obstacle appearance id
+    # (Isaac-USV-HazardCrossAppear-Direct-v1, sudden-terrain-change axis).
+    assert (len(literals), len(patterns)) == (69, 2), (
         f"literal ids: {len(literals)}, f-string registrations: {len(patterns)}; "
-        "pinned (62, 2)"
+        "pinned (69, 2)"
     )
 
 

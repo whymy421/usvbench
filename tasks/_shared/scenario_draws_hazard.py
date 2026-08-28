@@ -127,12 +127,32 @@ GROUP_LAYOUT = "layout"
 # (hazard_nav_env.py:1790-1795) while every other layout_mode consumes many.
 GROUP_ROTATION = "rotation"
 
+# Appended 2026-08-26 for the mid-episode obstacle appearance axis (sudden
+# terrain change; fairness derivation and planner at
+# tasks/hazard_nav/hazard_geometry.py:plan_obstacle_appearance).  Its own
+# group for the usual reason -- property (d): the appearance time and the
+# azimuth-candidate order may not shift the layout, the rotation or any
+# actuator knob, and vice versa.  The stream is consumed in a fixed order per
+# episode -- first the appearance time t0 at reset, then one ray permutation
+# per extra cylinder at the moment of appearance -- so the GENERATOR has to
+# stay alive from reset until t0, which is why ``appearance_stream`` below
+# returns the generator itself rather than a finished value.  Group names are
+# hashed as TEXT (scenario_rng.py:56-63), so appending this name perturbs no
+# stream that already exists.
+GROUP_APPEARANCE = "appearance"
+
 # One group per actuator/dynamics knob; see GROUPS in the module docstring.
 GROUP_THRUST_IMBALANCE = "actuator_thrust_imbalance"
 GROUP_MASS_SCALE = "actuator_mass_scale"
 GROUP_DRAG_SCALE = "actuator_drag_scale"
 GROUP_THRUST_CAP_SCALE = "actuator_thrust_cap_scale"
 GROUP_MOTOR_TAU_S = "actuator_motor_tau_s"
+# Appended 2026-08-26 for the deck-payload axis (point mass strapped on deck;
+# model and distinguishability argument at the payload_* fields in
+# tasks/hazard_nav/hazard_nav_env_cfg.py). Group names are hashed as TEXT
+# (scenario_rng.py:56-63), so appending this name perturbs no stream that
+# already exists.
+GROUP_PAYLOAD_MASS_KG = "actuator_payload_mass_kg"
 
 ACTUATOR_GROUPS = (
     GROUP_THRUST_IMBALANCE,
@@ -140,6 +160,7 @@ ACTUATOR_GROUPS = (
     GROUP_DRAG_SCALE,
     GROUP_THRUST_CAP_SCALE,
     GROUP_MOTOR_TAU_S,
+    GROUP_PAYLOAD_MASS_KG,
 )
 
 TWO_PI = 2.0 * math.pi
@@ -278,6 +299,35 @@ def spawn_jitter_offsets(
     return offsets
 
 
+def appearance_stream(
+    scenario: ScenarioRNG | None,
+    fallback_rng: np.random.Generator,
+    env_index: int,
+) -> np.random.Generator:
+    """The per-(env, episode) stream for the mid-episode appearance primitive.
+
+    Seeded env: the keyed ``appearance`` stream of this (env, episode) --
+    identical algebra to ``episode_layout_rng``, different group.  The caller
+    draws the appearance time t0 from the returned generator at reset and then
+    KEEPS the object, because the azimuth-candidate permutation is drawn from
+    the same stream mid-episode; calling this helper again for the same (env,
+    episode) would restart the stream and replay the t0 draw.
+
+    Unseeded env (``scenario is None``): a PRIVATE child generator seeded by
+    one ``integers`` draw off the env's historical fallback.  This
+    deliberately differs from ``episode_layout_rng``'s return-the-fallback
+    convention: the appearance stream is consumed MID-EPISODE, and handing
+    back the shared advancing generator would let one env's appearance timing
+    reorder every other env's later reset draws.  The certified ids are
+    untouched either way -- with ``appear_count == 0`` (every pre-existing
+    cfg) the env never calls this helper, so the fallback stream is not
+    advanced by even that one child-seed draw.
+    """
+    if scenario is None:
+        return np.random.default_rng(int(fallback_rng.integers(2**63)))
+    return scenario.numpy_rng(GROUP_APPEARANCE, int(env_index))
+
+
 def actuator_scenario_entry(group: str, values: Any) -> dict[str, dict[str, Any]]:
     """One ``stamp_scenario`` group block for a knob that was actually drawn.
 
@@ -294,10 +344,12 @@ def actuator_scenario_entry(group: str, values: Any) -> dict[str, dict[str, Any]
 
 __all__ = [
     "ACTUATOR_GROUPS",
+    "GROUP_APPEARANCE",
     "GROUP_DRAG_SCALE",
     "GROUP_LAYOUT",
     "GROUP_MASS_SCALE",
     "GROUP_MOTOR_TAU_S",
+    "GROUP_PAYLOAD_MASS_KG",
     "GROUP_ROTATION",
     "GROUP_SPAWN",
     "GROUP_THRUST_CAP_SCALE",
@@ -305,6 +357,7 @@ __all__ = [
     "TWO_PI",
     "actuator_choice_indices",
     "actuator_scenario_entry",
+    "appearance_stream",
     "episode_layout_rng",
     "layout_rotation_angle",
     "spawn_jitter_offsets",

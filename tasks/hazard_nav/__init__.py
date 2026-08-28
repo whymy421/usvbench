@@ -250,6 +250,26 @@ gym.register(
     },
 )
 
+# Mid-episode obstacle appearance (sudden terrain change): the certified
+# crossing exam, plus ONE extra cylinder that flips active at a per-episode
+# protocol-drawn time, ray-aligned and distance-clamped so it is guaranteed
+# visible the instant it exists (fairness derivation in
+# hazard_geometry.plan_obstacle_appearance). Append-only as always: the
+# crossing id, its layouts, champions and certificates are untouched. The
+# dose axis is appearance distance -- rungs 20/15/12/9.5 m via
+# eval --set appear_distance_m, never per-rung ids.
+gym.register(
+    id="Isaac-USV-HazardCrossAppear-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardCrossAppearEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
 # Suite D: forced crossing with the frozen per-episode training pack.
 gym.register(
     id="Isaac-USV-HazardCrossImb-Direct-v1",
@@ -509,6 +529,38 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": (
             f"{__name__}.hazard_nav_env_cfg:HazardSuiteSGapWallEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+
+# Wave background variants (owner's order: every task family gets one).
+# BACKGROUND FORCE ONLY -- unlike the station-keeping Wave id, these add no
+# sea-state observation channels: the native layout, reward, and termination
+# are byte-identical to the certified parent id, so a certified checkpoint
+# loads zero-shot and the id is a pure environmental stress axis.
+# Registered append-only; NATIVE_LAYOUTS maps each id to its parent's layout.
+gym.register(
+    id="Isaac-USV-HazardCross-Wave-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardForcedCrossingWaveEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+
+gym.register(
+    id="Isaac-USV-Iceberg-Wave-Direct-v1",
+    entry_point=f"{__name__}.hazard_nav_env:HazardNavEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.hazard_nav_env_cfg:HazardIcebergWaveEnvCfg"
         ),
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },

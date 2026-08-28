@@ -178,6 +178,16 @@ class PathHazardEnv(DirectRLEnv):
         self.episode_scenario = [{} for _ in range(self.num_envs)]
         self.episode_scenario_hashes = [{} for _ in range(self.num_envs)]
 
+        # Sea state (Wave variants only). Certified ids have no sea_state cfg
+        # field, so getattr returns None and nothing here runs for them. The
+        # field is a pure background force: it never touches the observation,
+        # reward, or termination paths of this env.
+        self._sea = None
+        if getattr(self.cfg, "sea_state", None) is not None and self.cfg.sea_state.enable:
+            from .._shared.sea_state import SeaState
+
+            self._sea = SeaState(self.cfg.sea_state, self.num_envs, self.device)
+
         # Diagnostics only -- none of these feed back into the reward.
         self._fee_steps = torch.zeros(self.num_envs, device=self.device)
         self._ep_prox_cost = torch.zeros(self.num_envs, device=self.device)
@@ -581,6 +591,20 @@ class PathHazardEnv(DirectRLEnv):
                 self.physics_cfg.restoring_stiffness_roll,
                 self.physics_cfg.restoring_stiffness_pitch,
             )
+
+        if self._sea is not None:
+            # Same world-frame entry point as the buoyancy/drag wrench (and as
+            # the certified current path in the families that carry one), so
+            # the wave field and a current simply add their water velocities.
+            # Mirrors station_keeping_env.py:541-551.
+            t = float(self.episode_length_buf[0]) * self.control_step_s
+            wave_f, wave_t = self._sea.forces(
+                self.robot.data.root_com_pos_w[:, :2],
+                self.robot.data.root_com_vel_w[:, :2],
+                t,
+            )
+            force_world += wave_f
+            torque_world += wave_t
 
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_world)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_world)
@@ -1130,6 +1154,24 @@ class PathHazardEnv(DirectRLEnv):
         self._contact_before_last_gate[env_ids] = initial_clearance < 0.0
         self.actions[env_ids] = 0.0
 
+        # Fresh sea for the episode that starts now (Wave variants only), off
+        # the protocol's per-(env, episode) "wave" stream so eval seeds control
+        # the sea; unseeded envs fall back to the historical global-RNG line
+        # inside SeaState.resample. Stamp mirrors station_keeping_env.py:829-844
+        # (every entry is a raw draw or, for direction_rad, recoverable beside
+        # mean_direction_rad by subtraction).
+        wave_scenario: dict[str, dict[str, object]] = {}
+        if self._sea is not None:
+            self._sea.resample(env_ids, scenario=self._scenario)
+            wave_scenario["wave"] = {
+                "hs_m": self._sea.hs[env_ids],
+                "tp_s": self._sea.tp[env_ids],
+                "gamma": self._sea.gamma[env_ids],
+                "mean_direction_rad": self._sea.mean_direction[env_ids],
+                "phase_rad": self._sea.phase[env_ids],
+                "direction_rad": self._sea.direction[env_ids],
+            }
+
         # Resolved scenario for the episode that starts now. Both primitives
         # are on the protocol: "spawn_pose" off the torch stream, "layout" off
         # the per-(env, episode) numpy stream of _layout_generator. Values
@@ -1151,6 +1193,7 @@ class PathHazardEnv(DirectRLEnv):
                     "obstacle_radii_m": radii,
                     "obstacle_count": self.obstacle_count[env_ids],
                 },
+                **wave_scenario,
             },
         ):
             self._scenario_params[env_index] = resolved

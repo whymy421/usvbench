@@ -17,6 +17,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 
+from .._shared.sea_state import SeaStateCfg
 from .._shared.vehicles import VehicleSpec, get_vehicle
 
 
@@ -354,3 +355,44 @@ class HarborMissionKinEnvCfg(HarborMissionEnvCfg):
 
     obs_kinematic: bool = True
     observation_space = 49
+
+
+@configclass
+class HarborMissionWaveEnvCfg(HarborMissionEnvCfg):
+    """Harbor mission x waves: the certified ordered mission in an irregular sea.
+
+    BACKGROUND DISTURBANCE ONLY. Unlike the station-keeping Wave id (which
+    appends 3 sea-state observation channels), this variant changes NOTHING
+    about the observation, reward, termination, or route sampling of its
+    parent (Isaac-USV-HarborMission-Direct-v1): the JONSWAP field enters
+    through the same world-frame force path as the buoyancy/drag wrench, and
+    the policy is never told the sea exists. A certified checkpoint therefore
+    loads zero-shot and the comparison is "same policy, same observation,
+    world now has waves".
+
+    Band: the frozen evaluation box (2026-08-26): H_s 0.30-0.60 m (the
+    station-keeping wave band for this hull), T_p 2.0-2.5 s. Every corner
+    passes the DNV-RP-C205 steepness admission
+    (sea_state.validate_steepness_admission; worst corner Hs=0.60 m at
+    Tp=2.0 s gives Sp ~ 1/10.4 < 1/7) and captures >= 95% of the analytic
+    JONSWAP variance on the default 104-component 0.04-1.60 Hz band (worst
+    corner 98.8% at gamma=1). The rung ladder pins Hs per-rung later via
+    --set; hs_range stays the full certified band here. The certified
+    station-keeping id's 1.5 s floor stays excluded: it is grandfathered
+    history, not a template.
+
+    DUAL CALM REFERENCE: enable=True with Hs -> 0 is NOT calm water -- the
+    quadratic hull drag in sea_state.forces() still opposes the hull with
+    orbital_drag_coeff * speed^2 (0.08 N at 0.1 m/s, 8 N at 1 m/s, 72 N at
+    3 m/s; see sea_state.zero_amplitude_drag_force). Any dose ladder over
+    this variant must carry BOTH a true-calm reference (enable=False) and an
+    intercept rung (enable=True, Hs -> 0).
+    """
+
+    sea_state: SeaStateCfg = SeaStateCfg()
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.sea_state.enable = True
+        self.sea_state.hs_range = (0.30, 0.60)
+        self.sea_state.tp_range = (2.0, 2.5)
