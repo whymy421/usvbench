@@ -6,10 +6,22 @@ pair, runs --steps zero-action control steps, and reports:
 
 * measured 4*sigma of the free-surface elevation vs nominal Hs,
 * the spectral peak location (Hann-windowed FFT, averaged over envs) vs 1/Tp,
-* whether 1/Tp is representable inside the component band [f_min, f_max] at
-  all (the wave cfg pins Tp as low as 1.5 s while SeaStateCfg.f_max defaults
-  to 0.5 Hz, so short-Tp peaks sit OUTSIDE the band - the probe flags this),
+* whether 1/Tp is representable inside the component band [f_min, f_max]
+  (since the 2026-08-26 band fix SeaStateCfg.f_max defaults to 1.60 Hz, so
+  every sanctioned Tp >= 1.5 s peak is in-band; the flag remains live for
+  overridden cfgs),
+* a PRE-NORMALISATION ANALYTIC-SPECTRUM CAPTURE gate per (Hs, Tp) pair:
+  captured = sum(S_analytic(f_i) * df) over the component grid, divided by
+  the analytic total m0 (high-resolution quadrature), FAIL below 95%, taken
+  at the worst-case gamma of the cfg's gamma_range.  This is computed from
+  the ANALYTIC spectrum, NEVER from the renormalised amplitudes: the Hs
+  renormalisation nearly cancels truncation (measured scale factor 1.024 at
+  Tp=2.25/gamma=3.3 on the old 0.50 Hz band while 37% of the analytic
+  variance was missing), so an amplitude-based check can never detect it,
 * an aliasing sanity check of the component band against the control dt,
+* the SLOPE-CHANNEL DISCLOSURE (roll/pitch moment integrand ~ f^4 * S(f)
+  does not converge with f_max; the band extension roughly doubles slope RMS
+  at unchanged labels, so pre/post-band moment channels are not comparable),
 * hull heave/roll/pitch response statistics, and the 1:10 Froude table.
 
 Elevation source: the wave physics (tasks/_shared/sea_state.py, spectrum from
@@ -152,6 +164,21 @@ if sea is None:
         "the D2 probe needs cfg.sea_state.enable=True - use the wave gym id "
         "or --set sea_state.enable=True")
 
+# F5: the analytic-capture gate reuses the SAME sea-state module the env
+# built its field from (single source of truth for the JONSWAP formula and
+# the capture quadrature; CPU-tested in tasks/_shared/test_wave_fix_package
+# .py).  sys.modules holds it regardless of the package path Isaac used.
+sea_state_mod = sys.modules[type(sea).__module__]
+CAPTURE_THRESHOLD = 0.95
+
+SLOPE_DISCLOSURE = (
+    "SLOPE-CHANNEL DISCLOSURE: the roll/pitch moment forcing integrand "
+    "~ f^4 * S(f) does not converge with f_max; the 2026-08-26 band "
+    "extension (0.50 -> 1.60 Hz) roughly DOUBLES surface-slope RMS at "
+    "unchanged (Hs, Tp) labels (measured 0.088 -> 0.178 at Hs=0.45, "
+    "Tp=2.25, gamma=3.3). Physics decision, not a bug: roll/pitch moment "
+    "channels recorded before and after the band change are NOT comparable.")
+
 control_dt = float(base.control_step_s)
 fs_hz = 1.0 / control_dt
 nyquist_hz = fs_hz / 2.0
@@ -197,6 +224,7 @@ if n_steps >= int(base.max_episode_length):
           "the fixed-horizon auto-reset will redraw phases mid-window (Hs/Tp "
           "stay pinned) and smear the spectrum slightly")
 
+print("  " + SLOPE_DISCLOSURE)
 print("  Froude scaling 1:10 -> length x10, time x sqrt(10)=3.162, "
       "speed x sqrt(10)=3.162")
 print("    model Hs (m)  model Tp (s)  full Hs (m)  full Tp (s)")
@@ -253,6 +281,21 @@ for hs_nom, tp_nom in pairs:
     f_peak = float(freqs[peak_index])
     fp_nom = 1.0 / tp_nom
 
+    # F5 analytic-spectrum capture gate, PRE-normalisation.  gamma is not
+    # pinned by the probe (the 4*sigma identity is gamma-independent), so
+    # gate on the worst case over the cfg's gamma_range; capture grows with
+    # gamma (peak enhancement concentrates energy inside the band), but both
+    # ends are evaluated rather than assumed.
+    gamma_lo, gamma_hi = (float(v) for v in sea.cfg.gamma_range)
+    capture_by_gamma = {
+        g: float(sea_state_mod.analytic_spectrum_capture(
+            int(sea.cfg.n_components), f_min, f_max, hs_nom, tp_nom, g))
+        for g in sorted({gamma_lo, gamma_hi})
+    }
+    capture_min = min(capture_by_gamma.values())
+    capture_ok = capture_min >= CAPTURE_THRESHOLD
+    overall_pass = overall_pass and capture_ok
+
     representable = f_min <= fp_nom <= f_max
     peak_tol = max(2.0 * df_fft, 0.15 * fp_nom)
     peak_ok = abs(f_peak - fp_nom) <= peak_tol
@@ -280,6 +323,11 @@ for hs_nom, tp_nom in pairs:
           f"{'PASS' if hs_ok else 'FAIL'}")
     print(f"  peak: measured f_peak={f_peak:.3f} Hz vs nominal "
           f"1/Tp={fp_nom:.3f} Hz (tol {peak_tol:.3f}) -> {peak_verdict}")
+    print("  analytic capture (pre-normalisation, vs analytic m0): "
+          + ", ".join(f"gamma={g:g}: {c * 100.0:.2f}%"
+                      for g, c in sorted(capture_by_gamma.items()))
+          + f" (threshold {CAPTURE_THRESHOLD * 100.0:.0f}%) -> "
+          f"{'PASS' if capture_ok else 'FAIL'}")
     print(f"  hull response proxies: heave 4*sigma={heave_4sigma:.3f}m  "
           f"roll RMS={roll_rms_deg:.2f}deg  pitch RMS={pitch_rms_deg:.2f}deg")
 
@@ -298,6 +346,12 @@ for hs_nom, tp_nom in pairs:
         "peak_tolerance_hz": peak_tol,
         "peak_representable_in_band": representable,
         "peak_pass": (peak_ok if representable else None),
+        "analytic_capture_by_gamma": {
+            f"{g:g}": c for g, c in sorted(capture_by_gamma.items())
+        },
+        "analytic_capture_min": capture_min,
+        "analytic_capture_threshold": CAPTURE_THRESHOLD,
+        "analytic_capture_pass": capture_ok,
         "heave_4sigma_m": heave_4sigma,
         "roll_rms_deg": roll_rms_deg,
         "pitch_rms_deg": pitch_rms_deg,
@@ -306,8 +360,9 @@ for hs_nom, tp_nom in pairs:
     })
 
 print(f"D2 ACCEPTANCE: {'PASS' if overall_pass else 'FAIL'} "
-      "(Hs identity + representable peaks + aliasing; NOT-REPRESENTABLE "
-      "pairs are reported, not failed - decide their fate explicitly)")
+      "(Hs identity + representable peaks + aliasing + analytic capture "
+      ">= 95%; NOT-REPRESENTABLE pairs are reported, not failed - decide "
+      "their fate explicitly)")
 
 if args_cli.out:
     with open(args_cli.out, "w", encoding="utf-8") as f:
@@ -322,6 +377,8 @@ if args_cli.out:
             "fft_df_hz": df_fft,
             "component_band_hz": [f_min, f_max],
             "aliasing_pass": alias_ok,
+            "analytic_capture_threshold": CAPTURE_THRESHOLD,
+            "slope_channel_disclosure": SLOPE_DISCLOSURE,
             "elevation_source": "SeaState.elevation at fixed env origins",
             "froude_scale": FROUDE_SCALE,
             "froude_table": _froude_rows(pairs),
