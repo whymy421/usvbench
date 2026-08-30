@@ -1,0 +1,11 @@
+checkpoint,rescue_rate,targets_per_episode,rescues,denominator,preprocessor
+agent_60000.pt,0.0781,0.3125,20,256,restored 'observation_preprocessor'
+agent_120000.pt,0.1211,0.4844,31,256,restored 'observation_preprocessor'
+agent_180000.pt,0.1133,0.4531,29,256,restored 'observation_preprocessor'
+agent_240000.pt,0.0977,0.3906,25,256,restored 'observation_preprocessor'
+agent_300000.pt,0.0859,0.3438,22,256,restored 'observation_preprocessor'
+agent_360000.pt,0.0703,0.2812,18,256,restored 'observation_preprocessor'
+agent_420000.pt,0.1172,0.4688,30,256,restored 'observation_preprocessor'
+agent_480000.pt,0.1250,0.5000,32,256,restored 'observation_preprocessor'
+agent_540000.pt,0.0938,0.3750,24,256,restored 'observation_preprocessor'
+agent_600000.pt,0.0820,0.3281,21,256,restored 'observation_preprocessor'

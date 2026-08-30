@@ -1,0 +1,7 @@
+k_yaw,thrust_scale,rescue_rate,rescues,denominator,mean_speed_mps,mean_yaw_rate,peak_yaw_rate
+"spawn 60-150, deadlines 40-90",0.7,0.5781,148,256,4.817,0.508,1.047
+"spawn 80-200, deadlines 40-90",0.7,0.5820,149,256,5.231,0.481,1.047
+"spawn 100-250, deadlines 40-90",0.7,0.5312,136,256,5.332,0.490,1.047
+"spawn 100-250, deadlines 30-70",0.7,0.4688,120,256,5.528,0.473,1.047
+"spawn 150-350, deadlines 40-100",0.7,0.3438,88,256,4.579,0.516,1.047
+"spawn 150-350, deadlines 30-80",0.7,0.3594,92,256,5.743,0.464,1.047
