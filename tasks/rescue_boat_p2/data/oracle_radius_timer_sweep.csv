@@ -1,0 +1,6 @@
+k_yaw,thrust_scale,rescue_rate,rescues,denominator,mean_speed_mps,mean_yaw_rate,peak_yaw_rate
+original,0.7,0.2617,67,256,8.070,0.216,1.080
+radius 15,0.7,0.6680,171,256,7.942,0.226,1.714
+radius 15 + longer timers,0.7,0.5977,153,256,7.975,0.212,1.047
+radius 15 + timers + tighter spawn,0.7,0.6562,168,256,7.938,0.219,1.047
+all relaxed,0.7,0.8867,227,256,7.841,0.215,1.047

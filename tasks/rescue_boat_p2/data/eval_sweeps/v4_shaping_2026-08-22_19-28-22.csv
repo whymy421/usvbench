@@ -1,0 +1,11 @@
+checkpoint,rescue_rate,targets_per_episode
+agent_30003.pt,0.3125,1.2500
+agent_60006.pt,0.5312,2.1250
+agent_90009.pt,0.5312,2.1250
+agent_120012.pt,0.6250,2.5000
+agent_150015.pt,0.6484,2.5938
+agent_180018.pt,0.6562,2.6250
+agent_210021.pt,0.6758,2.7031
+agent_240024.pt,0.4531,1.8125
+agent_270027.pt,0.4766,1.9062
+agent_300030.pt,0.8086,3.2344

@@ -1,0 +1,11 @@
+checkpoint,targets_per_episode
+agent_60000.pt,0.0000
+agent_120000.pt,0.0000
+agent_180000.pt,0.0000
+agent_240000.pt,1.5750
+agent_300000.pt,0.0000
+agent_360000.pt,0.0000
+agent_420000.pt,0.0000
+agent_480000.pt,0.0000
+agent_540000.pt,2.1000
+agent_600000.pt,0.0000
