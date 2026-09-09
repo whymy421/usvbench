@@ -7,6 +7,22 @@ built on [Isaac Lab](https://github.com/isaac-sim/IsaacLab). It covers calm-wate
 navigation, path following, hazard avoidance, docking, station keeping, and mission
 tasks across ROVs, monohulls, BlueBoat, and catamarans.
 
+## Simulation preview
+
+These illustrative snapshots show BlueBoat navigation in the Isaac Sim task scenes.
+
+<p align="center">
+  <img src="docs/media/blueboat-hazard-navigation.png"
+       alt="BlueBoat hazard-navigation simulation"
+       width="800">
+</p>
+
+<p align="center">
+  <img src="docs/media/blueboat-trajectory-sequence.png"
+       alt="BlueBoat trajectory sequence around obstacles"
+       width="900">
+</p>
+
 ## Uploaded task modules
 
 The current branch contains the 11 task modules below. `Code` means the task environment,
