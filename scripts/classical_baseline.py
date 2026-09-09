@@ -446,7 +446,7 @@ class DockingController:
         # rate damping 1.0), validated by per-second probe traces.
         yaw_rate = self.base.robot.data.root_com_vel_w[:, 5]
         yaw = (1.0 * yaw_error - 1.0 * yaw_rate).clamp(-1.0, 1.0)
-        # HOLD deadband: once parked within 8 deg, stop stirring 鈥?calm water
+        # HOLD deadband: once parked within 8 deg, stop stirring; calm water
         # keeps a parked boat parked; active yaw only reintroduces rate.
         in_deadband = (self.phase == self.HOLD) & (
             dock_error.abs() < math.radians(8.0)
