@@ -103,10 +103,10 @@ These change the physics, so they invalidate current checkpoints → require re-
   but the dangling reference should be removed from the asset.
 
 ## B. Benchmark enrichment  — students
-- **B1 — Wave navigation task (highest priority).** All current tasks are *calm*; they do
-  not test wave-robust navigation. Add a navigation task under JONSWAP/Airy waves (the env
-  already has a wave field, currently disabled for calm). Deliver ROV + boat baselines.
-  Success: a `wave_nav` task + baseline numbers (mean±std) + a wave-robustness metric.
+- **B1 — Wave navigation task (highest priority, environment implemented).** HazardNav now
+  ships calm, Airy and JONSWAP ids with the same policy contract, a deterministic evaluator,
+  and plant-v2 wave coupling. Remaining work is to train wave-robust policies and report
+  mean±std baselines plus a wave-robustness metric; no unmeasured result is claimed yet.
 - **B2 — Obstacle avoidance (in waves).** Add static/dynamic obstacles; baseline + a
   collision metric.
 - **B3 — Multi-target / coverage variants.**
