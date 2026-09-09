@@ -192,6 +192,38 @@ VEHICLES: dict[str, VehicleSpec] = {
         hull_spacing_m=0.7214,
         notes="BlueBoat CAD and Blue Robotics datasheet.",
     ),
+    "catamaran": VehicleSpec(
+        name="catamaran",
+        asset_kind="rigid_object",
+        usd_relpath="catamaran.usd",
+        mass_kg=120.0,
+        thrust_fwd_n=850.0,
+        thrust_rev_n=340.0,
+        yaw_torque_nm=740.0,
+        surge_lin=65.0,
+        surge_quad=110.0,
+        sway_lin=195.0,
+        sway_quad=330.0,
+        heave_damping=330.0,
+        yaw_lin=385.0,
+        yaw_quad=355.0,
+        restoring_stiffness_roll=265.0,
+        restoring_stiffness_pitch=2934.0,
+        rollpitch_rate_damping=460.0,
+        displaced_volume_m3=0.3,
+        hull_height_m=1.0,
+        buoyancy_center_offset_m=0.0,
+        bow_body_axis="+x",
+        # Dimensions of the converted hull used to spread wave samples over
+        # the catamaran plan form; restoring radii are calibrated above.
+        hull_length_m=3.0,
+        hull_spacing_m=1.101,
+        notes=(
+            "Surge/yaw Froude-scaled from VRX WAM-V and confirmed against measured "
+            "terminal values; sway follows the BlueBoat 3x-surge convention; "
+            "restoring from mesh hydrostatics at assumed KG=0.30 m."
+        ),
+    ),
 }
 
 

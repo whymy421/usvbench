@@ -49,6 +49,7 @@ _HARBOR = (
 NATIVE_LAYOUTS = {
     "Isaac-My-First-Task-Calm-Direct-v1": list(_NAV),
     "Isaac-My-First-Task-Calm-Boat-Direct-v1": list(_NAV),
+    "Isaac-USVBench-Boat-Calm-Direct-v1": list(_NAV),
     "Isaac-USV-BlueBoat-Calm-Direct-v1": list(_NAV),
     "Isaac-USV-StationKeep-Direct-v1": list(_NAV),
     "Isaac-USV-StationKeep-BlueBoat-Direct-v1": list(_NAV),

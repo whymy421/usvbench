@@ -57,14 +57,14 @@ git checkout main
 git pull
 
 # 2. Make a branch for your task (name it clearly)
-git checkout -b arif/catamaran-patrol
+git checkout -b yourname/task-name
 
 # 3. Do your work, then stage + commit in small logical chunks
 git add tasks/catamaran_patrol/
 git commit -m "catamaran: add task env + cfg with physics constants"
 
 # 4. Push your branch to GitHub
-git push -u origin arif/catamaran-patrol
+git push -u origin yourname/task-name
 ```
 
 Then open a **Pull Request** on github.com (it'll show a "Compare & pull request"
@@ -105,7 +105,7 @@ If `main` moves while you work, rebase onto it before opening/updating your PR:
 
 ```bash
 git checkout main && git pull
-git checkout arif/catamaran-patrol
+git checkout yourname/task-name
 git rebase main
 # fix any conflicts, then:
 git push --force-with-lease

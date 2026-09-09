@@ -31,7 +31,7 @@
 ## 张年喜的任务清单
 
 1. **复现 boat calm V26 baseline**（Week 1–2）
-   - 跑通 `Isaac-My-First-Task-Calm-Boat-Direct-v1`
+   - 跑通 `Isaac-USVBench-Boat-Calm-Direct-v1`
    - 理解为什么 boat 的 reward 要特殊调（speed-coupling、reach bonus）
    - 复现基线 **3.75** targets/episode（seed 42，确定性评估，见 [`TASKS.md`](../TASKS.md#current-baselines)）
 
