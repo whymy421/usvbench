@@ -125,4 +125,4 @@ TBD (MIT or Apache-2.0 on public release).
 
 ## Citation
 
-TBD (benchmark paper in preparation, target NeurIPS Datasets & Benchmarks 2026).
+TBD (benchmark paper in preparation, target ICRA Datasets & Benchmarks 2026).
