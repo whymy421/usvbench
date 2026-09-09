@@ -53,9 +53,10 @@ the `V23` + `speed_coupling` branch.
 
 ## Install
 
-1. Copy this folder into your Isaac Lab tasks directory:
+1. Copy this folder and the shared modules into your Isaac Lab tasks directory:
    ```
    <IsaacLab>/source/isaaclab_tasks/isaaclab_tasks/direct/boat_calm_nav/
+   <IsaacLab>/source/isaaclab_tasks/isaaclab_tasks/direct/_shared/
    ```
 2. Asset path: handled by `USVBENCH_ASSETS` (train script sets it to `<repo>/assets`).
 3. Activate your Isaac Lab conda env.
