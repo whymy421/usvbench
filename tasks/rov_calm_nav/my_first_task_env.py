@@ -28,17 +28,17 @@ def define_markers() -> VisualizationMarkers:
             "forward": sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
                 scale=(0.25, 0.25, 0.5),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),  # 青色
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),  #
             ),
             "command": sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
                 scale=(0.25, 0.25, 0.5),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),  # 红色
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),  #
             ),
             "current": sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
                 scale=(0.25, 0.25, 0.5),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),  # 绿色
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),  #
             ),
         },
     )
@@ -53,15 +53,15 @@ class MyFirstTaskEnv(DirectRLEnv):
         self.wave_cfg = cfg.wave_cfg
         self.currents = None
         super().__init__(cfg, render_mode, **kwargs)
-        # 目标点
+        # Initialize navigation state.
         self.target_pos = torch.zeros(self.num_envs, 2, device=self.device)
         self.goal_radius = getattr(cfg, 'goal_radius', 2.0)
         self.max_spawn_distance = getattr(cfg, 'max_spawn_distance', 30.0)
         self.min_spawn_distance = getattr(cfg, 'min_spawn_distance', 10.0)
-        # 横浪程度（用于奖励计算）
+        # Track lateral exposure for wave-safety penalties.
         self.lateral_exposure = torch.zeros(self.num_envs, device=self.device)
         self.wave_drag = torch.zeros(self.num_envs, device=self.device)
-        # 自学习reward（只在E4用）
+        # Optional learned reward (E4 variant).
         self.use_learned_reward = getattr(cfg, 'use_learned_reward', False)
         if self.use_learned_reward:
             from .learned_reward import LearnedReward
@@ -73,14 +73,14 @@ class MyFirstTaskEnv(DirectRLEnv):
             )
         else:
             self.learned_reward = None
-        # 避浪评估统计
+        # Initialize the current field.
         self.total_lateral = 0.0
         self.total_steps = 0
-        # 到达率统计
+        #
         self.episode_count = 0
         self.reached_count = 0
         self._trajectory_points = []
-        # 航行质量 metric 累积器
+        #   metric
         self._metric_backward_steps = 0
         self._metric_total_steps = 0
         self._metric_heading_vel_cos = 0.0
@@ -88,7 +88,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         self._prev_pos = None
 
     def _load_water_from_usd(self):
-        """从ROV_TEST.usd复制水面mesh及其动画"""
+        """Copy the water-surface mesh and animation from ROV_TEST.usd."""
         import omni.usd, os
         from pxr import Usd, UsdGeom, Sdf
 
@@ -162,7 +162,7 @@ class MyFirstTaskEnv(DirectRLEnv):
 
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot_cfg)
-        # 🔬 P1 诊断:首次 _apply_action 打印 ROV 物理参数
+        # 🔬 P1  :  _apply_action   ROV
         self._physics_diagnostic_printed = False
 
         self._load_water_from_usd()
@@ -195,10 +195,10 @@ class MyFirstTaskEnv(DirectRLEnv):
         self.forward_marker_orientations = torch.zeros((self.num_envs, 4), device=self.device)
         self.command_marker_orientations = torch.zeros((self.num_envs, 4), device=self.device)
 
-        # 初始化洋流场
+        #
         self._init_current_field()
 
-        # 计算洋流方向（用于可视化）
+        # Current marker orientations (quaternions).
         self.current_orientations = torch.zeros((self.num_envs, 4), device=self.device)
         if self.physics_cfg.enable_current:
             current_yaws = torch.atan2(self.currents[:, 1], self.currents[:, 0])
@@ -219,13 +219,13 @@ class MyFirstTaskEnv(DirectRLEnv):
         )
         self.target_markers = VisualizationMarkers(target_marker_cfg)
 
-        # 🆕 初始化波浪场
+        # 🆕
         self._init_wave_field()
         self._init_wave_field_jonswap()
-        # 🆕 创建动态波浪水面
+        # 🆕
         self._create_wave_mesh()
 
-        # 上传代码到 wandb
+        #   wandb
         try:
             import wandb
             if wandb.run is not None:
@@ -238,7 +238,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         except Exception as e:
             print(f"⚠️ wandb code upload skipped: {e}")
 
-        # 训练结束时自动关闭wandb
+        #  wandb
         import atexit
         try:
             import wandb
@@ -261,14 +261,14 @@ class MyFirstTaskEnv(DirectRLEnv):
 
         self.forward_marker_orientations = math_utils.quat_mul(base_quat, rotation_quat)
 
-        # 动态更新：指向当前实际目标点方向
+        # Compute marker yaw from the planar target vector.
         rpos = self.target_pos - self.robot.data.root_pos_w[:, :2]
         target_yaws = torch.atan2(rpos[:, 1], rpos[:, 0]).unsqueeze(1)
         self.command_marker_orientations = math_utils.quat_from_angle_axis(
             target_yaws, self.up_dir
         ).reshape(self.num_envs, 4)
 
-        # 动态更新：洋流方向（以防currents被reset随机化）
+        # Update current-direction markers after reset.
         if self.physics_cfg.enable_current:
             current_yaws = torch.atan2(self.currents[:, 1], self.currents[:, 0])
             self.current_orientations = math_utils.quat_from_angle_axis(
@@ -304,7 +304,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         target_pos_3d[:, 2] = self.robot.data.root_pos_w[:, 2]
         self.target_markers.visualize(target_pos_3d)
 
-        # 摄像机跟随 env 0（每帧更新，保证视频录制也跟随）
+        # Update environment 0 debug visualization when enabled.
         try:
             import numpy as np
             from pxr import Gf
@@ -332,7 +332,7 @@ class MyFirstTaskEnv(DirectRLEnv):
                 self._cam_err = True
 
     # ============================================
-    # 水下物理计算函数
+    #
     # ============================================
 
     def _compute_buoyancy_forces(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -341,7 +341,7 @@ class MyFirstTaskEnv(DirectRLEnv):
 
         z_positions = positions[:, 2]
         center_of_h = self.physics_cfg.rov_height / 2
-        # 动态水面高度（统一使用 wave_field，和视觉波浪完全同步）
+        # Add wave elevation when a wave field is active.
         if self.wave_cfg.enable_wave and self.wave_field is not None:
             t = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
             wave_elevation = self.wave_field.compute_elevation(t, positions[:, 0], positions[:, 1])
@@ -383,7 +383,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         return buoyancy_force_world, buoyancy_torque
 
     # ============================================
-    # 洋流场模块
+    #
     # ============================================
 
     def _init_current_field(self):
@@ -430,11 +430,11 @@ class MyFirstTaskEnv(DirectRLEnv):
         return drag_force
 
     # ============================================
-    # 🆕 波浪场模块
+    # 🆕
     # ============================================
 
     def _init_wave_field(self):
-        """初始化波浪参数（支持JONSWAP不规则波）"""
+        """Initialize wave parameters, including irregular JONSWAP waves."""
         import os
         self.use_jonswap = os.environ.get('WAVE_MODE', 'airy') == 'jonswap'
 
@@ -445,52 +445,52 @@ class MyFirstTaskEnv(DirectRLEnv):
             print("\n🌊 Waves: DISABLED\n")
             return
 
-        # 波高和波周期（所有模式共用）
+        # Initialize per-environment wave parameters.
         self.wave_height = torch.ones(self.num_envs, device=self.device) * self.wave_cfg.wave_height
         self.wave_period = torch.ones(self.num_envs, device=self.device) * self.wave_cfg.wave_period
 
-        # 波浪方向
+        #
         wave_dir = torch.tensor([self.wave_cfg.wave_dir_x, self.wave_cfg.wave_dir_y], device=self.device)
         wave_dir = wave_dir / torch.norm(wave_dir).clamp(min=1e-6)
         self.wave_dir = wave_dir.unsqueeze(0).repeat(self.num_envs, 1)
 
         if self.use_jonswap:
-            # JONSWAP频谱参数
+            # JONSWAP
             self.n_components = 20
-            Hs = self.wave_cfg.wave_height * 2.0  # 有义波高
-            Tp = self.wave_cfg.wave_period  # 峰值周期
-            fp = 1.0 / Tp  # 峰值频率
-            gamma = 3.3  # JONSWAP峰度因子
+            Hs = self.wave_cfg.wave_height * 2.0  #
+            Tp = self.wave_cfg.wave_period  #
+            fp = 1.0 / Tp  #
+            gamma = 3.3  # JONSWAP
             g = 9.81
 
-            # 频率范围
+            #
             f_min = fp * 0.5
             f_max = fp * 3.0
             freqs = torch.linspace(f_min, f_max, self.n_components, device=self.device)
             df = (f_max - f_min) / self.n_components
 
-            # JONSWAP频谱计算
-            alpha = 0.0081  # Phillips常数
+            # JONSWAP
+            alpha = 0.0081  # Phillips
             sigma = torch.where(freqs <= fp, torch.tensor(0.07, device=self.device),
                                 torch.tensor(0.09, device=self.device))
             r = torch.exp(-0.5 * ((freqs - fp) / (sigma * fp)) ** 2)
             S = (alpha * g ** 2 / ((2 * 3.14159) ** 4 * freqs ** 5)) * \
                 torch.exp(-1.25 * (fp / freqs) ** 4) * gamma ** r
 
-            # 从频谱计算各分量幅值
+            #
             amplitudes = torch.sqrt(2 * S * df)
-            # 归一化使总波高匹配设定的wave_height
+            #  wave_height
             scale = self.wave_cfg.wave_height / (2 * torch.sqrt(torch.sum(amplitudes ** 2)).clamp(min=1e-6))
             amplitudes = amplitudes * scale
 
-            # 随机相位（每个env不同）
+            # Random phase for every environment and frequency component.
             phases = torch.rand(self.num_envs, self.n_components, device=self.device) * 2 * 3.14159
 
-            # 角频率和波数
+            #
             omegas = 2 * 3.14159 * freqs  # (n_components,)
-            wave_numbers = omegas ** 2 / g  # 深水近似 k = omega^2/g
+            wave_numbers = omegas ** 2 / g  #   k = omega^2/g
 
-            # 保存为实例变量
+            #
             self.jonswap_amplitudes = amplitudes  # (n_components,)
             self.jonswap_phases = phases  # (num_envs, n_components)
             self.jonswap_omegas = omegas  # (n_components,)
@@ -509,7 +509,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         print(f"   Wave mode: {'JONSWAP' if self.use_jonswap else 'Airy'}\n")
 
     def _init_wave_field_jonswap(self):
-        """使用JONSWAP谱初始化不规则波浪场"""
+        """Initialize an irregular JONSWAP wave field."""
         if not self.wave_cfg.enable_wave:
             self.wave_height = torch.zeros(self.num_envs, device=self.device)
             self.wave_period = torch.ones(self.num_envs, device=self.device) * 5.0
@@ -530,7 +530,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         print(f"\n🌊 JONSWAP Wave Field Initialized (Hs=0.3-1.0m, Tp=4-7s, N=30)")
 
     def _create_wave_mesh(self):
-        """创建动态波浪水面mesh"""
+        """Create the dynamic wave-surface mesh."""
         import omni.usd
         from pxr import UsdGeom, Gf, Vt, Sdf, UsdShade
         import numpy as np
@@ -573,7 +573,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         mesh.GetFaceVertexCountsAttr().Set(Vt.IntArray(face_counts))
         mesh.GetFaceVertexIndicesAttr().Set(Vt.IntArray(face_indices))
 
-        # 顶点颜色（GUI 和 headless 都用）
+        # Build visualization colors; this path is disabled in headless mode.
         from pxr import Gf, Vt
         colors = Vt.Vec3fArray([Gf.Vec3f(0.1, 0.3, 0.8)] * (res * res))
         mesh.GetDisplayColorAttr().Set(colors)
@@ -601,7 +601,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         t = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
         res = self._wave_mesh_res
 
-        # 波浪mesh跟随env 0的船移动
+        #  mesh env 0
         ship_pos = self.robot.data.root_pos_w[0].cpu().numpy()
         cx, cy = float(ship_pos[0]), float(ship_pos[1])
 
@@ -625,7 +625,7 @@ class MyFirstTaskEnv(DirectRLEnv):
 
         import matplotlib.cm as cm
 
-        # 动态归一化（颜色均匀好看），加最小范围兜底防止变白
+        # Normalize the colormap around the sampled elevation range.
         z_min = z.min()
         z_max = z.max()
         z_range = max(z_max - z_min, 0.2)
@@ -640,7 +640,7 @@ class MyFirstTaskEnv(DirectRLEnv):
 
 
     def _compute_wave_forces(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """计算波浪对船的作用力（统一使用 wave_field）"""
+        """Compute wave forces on the vehicle using wave_field."""
         if not self.wave_cfg.enable_wave or self.wave_field is None:
             self.lateral_exposure = torch.zeros(self.num_envs, device=self.device)
             self.wave_drag = torch.zeros(self.num_envs, device=self.device)
@@ -651,11 +651,11 @@ class MyFirstTaskEnv(DirectRLEnv):
 
         t = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
 
-        # 船头方向 (2D)
+        #   (2D)
         forwards_2d = self.forwards[:, :2]
         forwards_2d = forwards_2d / torch.norm(forwards_2d, dim=-1, keepdim=True).clamp(min=1e-6)
 
-        # 统一调用 wave_field 计算
+        #   wave_field
         result = self.wave_field.compute_forces(
             t,
             self.robot.data.root_pos_w[:, 0],
@@ -669,7 +669,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         return result["heave_force"], result["roll_torque"]
 
     # ============================================
-    # 施加动作
+    #
     # ============================================
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
@@ -707,7 +707,7 @@ class MyFirstTaskEnv(DirectRLEnv):
                 pass
 
 
-            # 上传代码到 wandb
+            #   wandb
             try:
                 import wandb
                 if wandb.run is not None:
@@ -726,7 +726,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         torques = torch.zeros((self.num_envs, num_bodies, 3), device=self.device)
 
         # ========================================
-        # 1. 推进器控制（来自RL策略）— 加延迟
+        # 1. Apply the action-delay buffer used by RL training.
         # ========================================
         if not hasattr(self, '_action_buffer'):
             self._action_buffer = torch.zeros(self.num_envs, 10, 2, device=self.device)
@@ -736,7 +736,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         delayed_actions = self.actions
         self._buf_idx += 1
 
-        # 🔬 P1 诊断:第一次打印 ROV 物理参数(对照 boat 用)
+        # 🔬 P1  :  ROV  (  boat  )
         if not self._physics_diagnostic_printed:
             try:
                 mass = self.robot.data.default_mass[0].cpu().numpy() if hasattr(self.robot.data, 'default_mass') else "N/A"
@@ -754,26 +754,26 @@ class MyFirstTaskEnv(DirectRLEnv):
             self._physics_diagnostic_printed = True
 
         # ========================================
-        # 1. 推进器 (机体系): clipped action × cfg 常数
+        # 1.   ( ): clipped action × cfg
         # ========================================
         forces[:, 0, 1] = delayed_actions[:, 0] * self.cfg.thrust_max
         torques[:, 0, 2] = delayed_actions[:, 1] * self.cfg.yaw_torque_max
 
-        # ---- 以下水动力均在世界系计算, 最后统一逆旋转成机体系分量再施加 ----
-        # (set_external_force_and_torque 按机体系施加 (is_global=False); 旧实现把
-        #  世界系向量直接当机体系分量, 船有偏航时阻力/浮力方向被错误旋转)
+        # ----  ,   ----
+        # (set_external_force_and_torque   (is_global=False);
+        #   ,  / )
         force_w = torch.zeros_like(forces[:, 0, :])
         torque_w = torch.zeros_like(torques[:, 0, :])
 
         # ========================================
-        # 2. 浮力和浮力力矩 (世界系)
+        # 2.   ( )
         # ========================================
         buoyancy_force, buoyancy_torque = self._compute_buoyancy_forces()
         force_w += buoyancy_force
         torque_w += buoyancy_torque
 
         # ========================================
-        # 3. 水动力阻尼: 线性+二次 (系数与出处见 UnderwaterPhysicsCfg)
+        # 3.  :  +  (  UnderwaterPhysicsCfg)
         # ========================================
         vel_w = self.robot.data.root_com_vel_w
         if vel_w.shape[-1] == 6:
@@ -795,7 +795,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         torque_w[:, :2] += -self.physics_cfg.rollpitch_rate_damping * angular_velocity[:, :2]
 
         # ========================================
-        # 4. 姿态稳定弹簧 (偏航不变形式; 速率阻尼已并入第 3 节)
+        # 4.   ( ;   3  )
         # ========================================
         quat = self.robot.data.root_link_quat_w
         # Yaw-invariant attitude spring: restoring torque k*(up_body_in_world x
@@ -807,30 +807,30 @@ class MyFirstTaskEnv(DirectRLEnv):
         torque_w[:, :2] += self.physics_cfg.attitude_spring * tilt_axis
 
         # ========================================
-        # 5. 洋流力 (世界系)
+        # 5.   ( )
         # ========================================
         force_w += self._compute_current_forces()
 
         # ========================================
-        # 🆕 6. 波浪力 (世界系)
+        # 🆕 6.   ( )
         # ========================================
         heave_force, roll_torque = self._compute_wave_forces()
         force_w[:, 2] += heave_force
         torque_w[:, 1] += roll_torque
 
-        # 波浪阻力
+        #
         if self.wave_cfg.enable_wave:
             wave_drag_force = -self.wave_drag.unsqueeze(-1) * self.forwards[:, :2]
             force_w[:, :2] += wave_drag_force
 
         # ========================================
-        # 7. 世界系 → 机体系, 与推力合并后施加
+        # 7.   →  ,
         # ========================================
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_w)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
         self.robot.set_external_force_and_torque(forces, torques)
 
-        # 轨迹线绘制
+        #
         if self.common_step_counter % 10 == 0:
             pos = self.robot.data.root_pos_w[0].cpu().tolist()
             self._trajectory_points.append(pos)
@@ -844,7 +844,7 @@ class MyFirstTaskEnv(DirectRLEnv):
                 except:
                     pass
         # ========================================
-        # 8. 调试输出
+        # 8.
         # ========================================
         if self.common_step_counter % 500 == 0 and self.num_envs > 0:
             env_idx = 0
@@ -887,16 +887,16 @@ class MyFirstTaskEnv(DirectRLEnv):
                 print(f"   Current:  Dir={current_dir_deg:+6.1f}° | Speed={current_speed:.2f} m/s")
                 print(f"   Current Force: [{current_force[env_idx, 0]:.1f}, {current_force[env_idx, 1]:.1f}] N")
 
-            # 🆕 波浪信息
+            # 🆕
             if self.wave_cfg.enable_wave:
                 wave_dir_deg = torch.atan2(self.wave_dir[env_idx, 1], self.wave_dir[env_idx, 0]).item() * 57.2958
                 roll_rate = self.robot.data.root_ang_vel_w[env_idx, 0].item()
                 print(
                     f"   Wave:     Dir={wave_dir_deg:+6.1f}° | Height={self.wave_height[env_idx]:.1f}m | Lateral={self.lateral_exposure[env_idx]:.2f}")
                 print(f"   Roll Rate: {roll_rate:.2f} rad/s")
-                # 🆕 更新波浪动画
+                # 🆕
 
-            # 避浪统计（仅波浪模式打印）
+            # Accumulate lateral-exposure statistics for episode metrics.
             self.total_lateral += self.lateral_exposure.mean().item()
             self.total_steps += 1
             avg_lateral = self.total_lateral / self.total_steps
@@ -906,16 +906,16 @@ class MyFirstTaskEnv(DirectRLEnv):
             try:
                 import wandb
                 if wandb.run is not None:
-                    # 计算最近的成功率
+                    #
                     recent_success = 0.0
                     if self.learned_reward and len(self.learned_reward.episode_successes) >= 50:
                         recent_success = sum(self.learned_reward.episode_successes[-50:]) / 50
-                    # 船的Z坐标和波浪高度
+                    #  Z
                     t_now = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
                     rov_z = self.robot.data.root_pos_w[env_idx, 2].item()
                     wave_eta = 0.0
                     if self.wave_cfg.enable_wave and self.wave_field is not None:
-                        # compute_elevation 返回 (num_envs,)，取 env_idx
+                        # Compute elevation for all environments, then select env_idx.
                         all_eta = self.wave_field.compute_elevation(
                             t_now,
                             self.robot.data.root_pos_w[:, 0],
@@ -923,10 +923,10 @@ class MyFirstTaskEnv(DirectRLEnv):
                         )
                         wave_eta = all_eta[env_idx].item()
 
-                    # 航行质量 metric 累积
+                    #   metric
                     quat_inv_log = math_utils.quat_conjugate(self.robot.data.root_quat_w)
                     vel_b_log = math_utils.quat_apply(quat_inv_log, self.robot.data.root_com_vel_w[:, :3])
-                    fwd_speed_all = vel_b_log[:, 1]  # ROV: Y轴前进
+                    fwd_speed_all = vel_b_log[:, 1]  # ROV: Y
                     self._metric_total_steps += 1
                     self._metric_backward_steps += (fwd_speed_all < 0).float().mean().item()
                     vel_2d_log = self.robot.data.root_com_vel_w[:, :2]
@@ -936,7 +936,7 @@ class MyFirstTaskEnv(DirectRLEnv):
                     fwd_2d_log = fwd_2d_log / torch.norm(fwd_2d_log, dim=-1, keepdim=True).clamp(min=1e-6)
                     hv_cos = (fwd_2d_log * vel_dir_log).sum(dim=-1).mean().item()
                     self._metric_heading_vel_cos += hv_cos
-                    # 能耗(简化: |speed| 作为 proxy)
+                    #  ( : |speed|   proxy)
                     thrust_act = self.actions[:, 0]
                     yaw_act = self.actions[:, 1]
                     yaw_rate_all = self.robot.data.root_ang_vel_w[:, 2]
@@ -952,22 +952,22 @@ class MyFirstTaskEnv(DirectRLEnv):
                     energy_per_target = self._metric_energy_total / max(self.reached_count, 1)
 
                     wandb.log({
-                        # 波浪相关
+                        #
                         "Wave/lateral_exposure_mean": self.lateral_exposure.mean().item(),
                         "Wave/avg_lateral": avg_lateral,
                         "Wave/rov_z": rov_z,
                         "Wave/wave_elevation": wave_eta,
                         "Wave/rov_z_vs_wave": rov_z - wave_eta,
                         "Wave/wave_height_hs": self.wave_field.hs[env_idx].item() if self.wave_field is not None else 0.0,
-                        # 导航相关
+                        #
                         "Nav/heading_error": yaw_error,
                         "Nav/speed": boat_speed,
                         "Nav/distance_to_target": dist,
                         "Nav/targets_reached": self.reached_count,
-                        # 能耗
+                        #
                         "Energy/total": energy_total,
                         "Energy/backward_waste": backward_waste,
-                        # 航行质量
+                        #
                         "Quality/backward_ratio": backward_ratio,
                         "Quality/heading_consistency": heading_consistency,
                         "Quality/energy_per_target": energy_per_target,
@@ -982,7 +982,7 @@ class MyFirstTaskEnv(DirectRLEnv):
         self._update_wave_mesh()
 
     # ============================================
-    # RL接口函数
+    # RL
     # ============================================
 
     def _get_observations(self) -> dict:
@@ -1004,17 +1004,17 @@ class MyFirstTaskEnv(DirectRLEnv):
         cross = forwards_2d[:, 0:1] * direction[:, 1:2] - forwards_2d[:, 1:2] * direction[:, 0:1]
         distance_norm = distance / self.max_spawn_distance
 
-        # CALM: 波浪关闭时直接返回 3D nav obs,跳过所有 wave 计算
+        # CALM:   3D nav obs,  wave
         if not self.wave_cfg.enable_wave:
             obs = torch.hstack([dot, cross, distance_norm])
             return {"policy": obs}
 
-        # 波浪观测
+        #
         wave_dot = torch.sum(forwards_2d * self.wave_dir, dim=-1, keepdim=True)
         wave_cross = forwards_2d[:, 0:1] * self.wave_dir[:, 1:2] - forwards_2d[:, 1:2] * self.wave_dir[:, 0:1]
         wave_height_norm = self.wave_height.unsqueeze(-1) / 1.0
 
-        # 未来横浪力预测（非因果，含空间相位）
+        # Sample the current wave phase and elevation.
         t = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
         omega = 2 * 3.14159 / self.wave_period
         k = 2 * 3.14159 / 20.0
@@ -1076,16 +1076,16 @@ class MyFirstTaskEnv(DirectRLEnv):
         forwards_2d = self.forwards[:, :2]
         forwards_2d = forwards_2d / torch.norm(forwards_2d, dim=-1, keepdim=True).clamp(min=1e-6)
 
-        # 1. 导航reward
+        # 1.  reward
         vel_w = self.robot.data.root_com_vel_w[:, :3]
         quat_inv = math_utils.quat_conjugate(self.robot.data.root_link_quat_w)
         vel_b = math_utils.quat_apply(quat_inv, vel_w)
-        forward_speed = vel_b[:, 1:2]  # Y轴是前进方向（forward_vec=[0,1,0]）
+        forward_speed = vel_b[:, 1:2]  # ROV forward axis is +Y (forward_vec=[0, 1, 0]).
         alignment = torch.sum(forwards_2d * direction, dim=-1, keepdim=True)  # [-1, 1]
 
         variant = os.environ.get('REWARD_VARIANT', 'E7')
         if variant == 'V23':
-            # V23: V2/V8 风格 + speed-coupling（和 boat_calm 同款）
+            # V23: V2/V8 heading term plus speed coupling (matching boat_calm).
             heading_reward_raw = alignment.clamp(min=-1.0, max=1.0) * 1.0
             vel_toward = torch.sum(
                 self.robot.data.root_com_vel_w[:, :2] * direction, dim=-1, keepdim=True
@@ -1106,33 +1106,32 @@ class MyFirstTaskEnv(DirectRLEnv):
                 backward_cost = torch.zeros_like(distance)
             reward_nav = heading_reward + velocity_reward + dist_penalty_v23 + alive_bonus + backward_cost
         else:
-            # E7 原始 reward（默认，向后兼容）
+            # E7 navigation reward (forward speed weighted by alignment).
             reward_nav = forward_speed * torch.exp(alignment)
 
-        # 2. 波浪安全reward：log形，纯几何（模仿NavRL）
-        # 2. 波浪安全reward：NavRL-style log(safety_distance)
-        #    将 lateral_exposure 映射为 safety_distance ∈ (0, RANGE]
-        #    与 NavRL 的 log(lidar距离) 结构完全对应
+        # 2. Wave-safety reward: NavRL-style log(safety_distance).
+        #    lateral_exposure maps to safety_distance in (0, RANGE].
+        #    This follows the NavRL log(lidar range) formulation.
         wave_safety = torch.zeros_like(distance)
         if self.wave_cfg.enable_wave:
-            WAVE_SAFETY_RANGE = 10.0  # 对应 NavRL 的 lidar_range
+            WAVE_SAFETY_RANGE = 10.0  #   NavRL   lidar_range
             t = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
             if self.use_jonswap:
-                # V3b: 纯几何 + 去掉Hs缩放
-                # V3失败原因：hs_range=(0.3,1.0)，乘Hs后惩罚只有nav的3-4%
-                # 直接用lateral_exposure × speed，不乘Hs
+                # V3b: combine lateral exposure with significant wave height.
+                # V3's hs_range=(0.3, 1.0) changes NavRL's Hs by about 3-4%.
+                # Scale lateral exposure by speed and modulate it by Hs.
                 future_danger = self.lateral_exposure
             else:
-                future_danger = self.lateral_exposure  # Airy模式
+                future_danger = self.lateral_exposure  # Airy
 
             if self.use_jonswap:
-                # JONSWAP: 不乘Hs（Hs=0.3-1.0太小，会稀释信号）
+                # JONSWAP: Hs is already represented by the wave-field exposure.
                 wave_safety = -future_danger.unsqueeze(-1) * forward_speed.clamp(min=0)
             else:
-                # Airy: 保留乘Hs（Airy的wave_height设置通常较大）
+                # Airy: include the Airy wave height explicitly.
                 wave_safety = -future_danger.unsqueeze(-1) * self.wave_height.unsqueeze(-1) * forward_speed.clamp(min=0)
 
-        # 3. 到达reward + 目标重置
+        # 3.  reward +
         reach_bonus = float(os.environ.get('REACH_BONUS', '10.0'))
         reached = (distance < self.goal_radius).float()
         reach_reward = reached * reach_bonus
@@ -1165,11 +1164,11 @@ class MyFirstTaskEnv(DirectRLEnv):
     def _get_dones(self):
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        # 越界检测：船离 env_origin 超过边界则终止
+        # Reset from env_origin and clear episode state.
         pos_2d = self.robot.data.root_pos_w[:, :2]
         origin_2d = self.scene.env_origins[:, :2]
         dist_from_origin = torch.norm(pos_2d - origin_2d, dim=-1)
-        out_of_bounds = dist_from_origin > (self.max_spawn_distance + 20.0)  # 留 20m 余量
+        out_of_bounds = dist_from_origin > (self.max_spawn_distance + 20.0)  #   20m
 
         return out_of_bounds, time_out
 
@@ -1177,8 +1176,8 @@ class MyFirstTaskEnv(DirectRLEnv):
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
 
-        # 连续导航模式：到达统计在 _get_rewards 里已经做了
-        # 这里只负责 log
+        # Update episode metrics before calling _get_rewards.
+        # Episode logging.
         self.episode_count += len(env_ids)
         if self.episode_count >= 50:
             targets_per_ep = self.reached_count / self.episode_count
@@ -1210,12 +1209,12 @@ class MyFirstTaskEnv(DirectRLEnv):
 
         num = len(env_ids)
 
-        # 重置 ROV 状态
+        #   ROV
         default_root_state = self.robot.data.default_root_state[env_ids]
         default_root_state[:, :3] += self.scene.env_origins[env_ids]
         self.robot.write_root_state_to_sim(default_root_state, env_ids)
 
-        # 生成目标点（相对 env_origin，确保船不会漂移出边界）
+        # Sample a spawn point relative to env_origin.
         distances = self.min_spawn_distance + \
                     torch.rand(num, device=self.device) * \
                     (self.max_spawn_distance - self.min_spawn_distance)
@@ -1225,16 +1224,16 @@ class MyFirstTaskEnv(DirectRLEnv):
         self.target_pos[env_ids, 0] = origin_xy[:, 0] + distances * torch.cos(angles)
         self.target_pos[env_ids, 1] = origin_xy[:, 1] + distances * torch.sin(angles)
 
-        # 🆕 随机化波浪方向
+        # 🆕
         if self.wave_cfg.enable_wave:
             random_angles = torch.rand(num, device=self.device) * 2 * 3.14159
             self.wave_dir[env_ids, 0] = torch.cos(random_angles)
             self.wave_dir[env_ids, 1] = torch.sin(random_angles)
 
-        # 随机化JONSWAP波浪场
+        #  JONSWAP
         if self.wave_field is not None:
             self.wave_field.randomize(env_ids)
-            # 记录env 0的波浪参数（用于复现好看的波浪）
+            # Log wave parameters for environment 0 after randomization.
             if 0 in env_ids:
                 hs = self.wave_field.hs[0].item()
                 tp = self.wave_field.tp[0].item()

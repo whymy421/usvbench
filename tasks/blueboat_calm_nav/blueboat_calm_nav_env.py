@@ -29,17 +29,17 @@ def define_markers() -> VisualizationMarkers:
             "forward": sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
                 scale=(0.25, 0.25, 0.5),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),  # 青色
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),  #
             ),
             "command": sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
                 scale=(0.25, 0.25, 0.5),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),  # 红色
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),  #
             ),
             "current": sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
                 scale=(0.25, 0.25, 0.5),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),  # 绿色
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),  #
             ),
         },
     )
@@ -54,17 +54,17 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         self.wave_cfg = cfg.wave_cfg
         self.currents = None
         super().__init__(cfg, render_mode, **kwargs)
-        # 目标点
+        #
         self.target_pos = torch.zeros(self.num_envs, 2, device=self.device)
-        # 🆕 goal_radius 可被 env var 覆盖(sweep 用)
+        # 🆕 goal_radius   env var  (sweep  )
         import os as _os
         self.goal_radius = float(_os.environ.get('GOAL_RADIUS_OVERRIDE', getattr(cfg, 'goal_radius', 2.0)))
         self.max_spawn_distance = getattr(cfg, 'max_spawn_distance', 30.0)
         self.min_spawn_distance = getattr(cfg, 'min_spawn_distance', 10.0)
-        # 横浪程度（用于奖励计算）
+        #  ( )
         self.lateral_exposure = torch.zeros(self.num_envs, device=self.device)
         self.wave_drag = torch.zeros(self.num_envs, device=self.device)
-        # 自学习reward（只在E4用）
+        #  reward( E4 )
         self.use_learned_reward = getattr(cfg, 'use_learned_reward', False)
         if self.use_learned_reward:
             from .learned_reward import LearnedReward
@@ -76,24 +76,24 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
             )
         else:
             self.learned_reward = None
-        # 避浪评估统计
+        #
         self.total_lateral = 0.0
         self.total_steps = 0
-        # 到达率统计
+        #
         self.episode_count = 0
         self.reached_count = 0
         self._trajectory_points = []
-        # V41 航行质量 metric 累积器
-        self._metric_path_length = 0.0      # 实际轨迹长度
-        self._metric_straight_dist = 0.0    # 直线段累计(reach 时结算)
-        self._metric_backward_steps = 0     # 倒车步数
-        self._metric_total_steps = 0        # 总步数
-        self._metric_heading_vel_cos = 0.0  # heading-velocity cos 累计
-        self._metric_energy_total = 0.0     # 能耗累计
-        self._prev_pos = None               # 上一步位置(算轨迹长度)
+        # V41   metric
+        self._metric_path_length = 0.0      #
+        self._metric_straight_dist = 0.0    #  (reach  )
+        self._metric_backward_steps = 0     #
+        self._metric_total_steps = 0        #
+        self._metric_heading_vel_cos = 0.0  # heading-velocity cos
+        self._metric_energy_total = 0.0     #
+        self._prev_pos = None               #  ( )
 
     def _load_water_from_usd(self):
-        """从ROV_TEST.usd复制水面mesh及其动画"""
+        """Copy the water-surface mesh and animation from ROV_TEST.usd."""
         import omni.usd, os
         from pxr import Usd, UsdGeom, Sdf
 
@@ -170,7 +170,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
 
         # Print the USD-authored BlueBoat physical properties on first use.
         self._physics_diagnostic_printed = False
-        self._prev_distance = None  # 势能式 distance-progress reward 用(PROGRESS_COEF)
+        self._prev_distance = None  #   distance-progress reward  (PROGRESS_COEF)
 
         self._load_water_from_usd()
 
@@ -180,7 +180,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 
-        # 🆕 每个 env 一个独特颜色的箭头(HSV 色轮),显示船头朝向
+        # 🆕   env  (HSV  ),
         import colorsys
         env_colors = [colorsys.hsv_to_rgb(i / self.num_envs, 0.9, 1.0) for i in range(self.num_envs)]
         env_arrow_cfg = VisualizationMarkersCfg(
@@ -196,7 +196,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         )
         self.visualization_markers = VisualizationMarkers(cfg=env_arrow_cfg)
 
-        # 🆕 黑色箭头:指向目标方向(所有 env 同色,但每艘船单独算朝向)
+        # 🆕  : (  env  , )
         target_arrow_cfg = VisualizationMarkersCfg(
             prim_path="/Visuals/TargetDirArrows",
             markers={
@@ -229,10 +229,10 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         self.forward_marker_orientations = torch.zeros((self.num_envs, 4), device=self.device)
         self.command_marker_orientations = torch.zeros((self.num_envs, 4), device=self.device)
 
-        # 初始化洋流场
+        #
         self._init_current_field()
 
-        # 计算洋流方向（用于可视化）
+        #  ( )
         self.current_orientations = torch.zeros((self.num_envs, 4), device=self.device)
         if self.physics_cfg.enable_current:
             current_yaws = torch.atan2(self.currents[:, 1], self.currents[:, 0])
@@ -252,20 +252,20 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
             prim_path="/Visuals/TargetMarkers",
             markers={
                 "target": sim_utils.SphereCfg(
-                    radius=3.0,   # 🆕 匹配 goal_radius,视觉"碰球"= 真触发 reach
+                    radius=3.0,   # 🆕   goal_radius, " "=   reach
                     visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
                 ),
             },
         )
         self.target_markers = VisualizationMarkers(target_marker_cfg)
 
-        # 🆕 初始化波浪场
+        # 🆕
         self._init_wave_field()
         self._init_wave_field_jonswap()
-        # 🆕 创建动态波浪水面
+        # 🆕
         self._create_wave_mesh()
 
-        # 上传代码到 wandb
+        #   wandb
         try:
             import wandb
             if wandb.run is not None:
@@ -278,7 +278,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         except Exception as e:
             print(f"⚠️ wandb code upload skipped: {e}")
 
-        # 训练结束时自动关闭wandb
+        #  wandb
         import atexit
         try:
             import wandb
@@ -289,33 +289,33 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
 
 
     def _visualize_markers(self):
-        # 🆕 彩色箭头 = 当前实际速度方向(每船按 env 上色);黑色箭头 = 指向目标
+        # 🆕   =  (  env  );  =
         self.marker_locations = self.robot.data.root_pos_w
 
-        # 彩色:world xy 速度矢量方向(atan2 → yaw)。arrow_x.usd 默认沿 +X,直接用 yaw。
-        # (速度≈0 时 atan2(0,0)=0 → 指 +X/世界东,会有点抖,属正常)
+        #  :world xy  (atan2 → yaw).arrow_x.usd   +X,  yaw.
+        # ( ≈0   atan2(0,0)=0 →   +X/ , , )
         vel_xy = self.robot.data.root_com_vel_w[:, :2]
         vel_yaws = torch.atan2(vel_xy[:, 1], vel_xy[:, 0]).unsqueeze(1)
         arrow_orientations = math_utils.quat_from_angle_axis(
             vel_yaws, self.up_dir
         ).reshape(self.num_envs, 4)
 
-        # 彩色 + 黑色箭头同高度,方向一致时会重合
+        #   +  ,
         offset = torch.zeros((self.num_envs, 3), device=self.device)
         offset[:, 2] = 1.2
         arrow_loc = self.marker_locations + offset
 
-        # marker_indices = env_id → 每艘船自己的颜色(速度方向)
+        # marker_indices = env_id →  ( )
         env_ids = torch.arange(self.num_envs, device=self.device)
         self.visualization_markers.visualize(arrow_loc, arrow_orientations, marker_indices=env_ids)
 
-        # 🆕 黑色箭头:指向目标(arrow_x.usd 默认沿 +X,直接用 atan2 给 yaw)
+        # 🆕  : (arrow_x.usd   +X,  atan2   yaw)
         rpos = self.target_pos - self.robot.data.root_pos_w[:, :2]
         target_yaws = torch.atan2(rpos[:, 1], rpos[:, 0]).unsqueeze(1)
         target_quat = math_utils.quat_from_angle_axis(
             target_yaws, self.up_dir
         ).reshape(self.num_envs, 4)
-        # 黑色箭头同高度(方向一致时重合,heading 错时可见夹角)
+        #  ( ,heading  )
         target_offset = torch.zeros((self.num_envs, 3), device=self.device)
         target_offset[:, 2] = 1.2
         target_loc = self.marker_locations + target_offset
@@ -326,7 +326,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         target_pos_3d[:, 2] = self.robot.data.root_pos_w[:, 2]
         self.target_markers.visualize(target_pos_3d)
 
-        # 🆕 摄像机跟随 env 0(用 Isaac Lab 正确 API,headless + 视频都生效)
+        # 🆕   env 0(  Isaac Lab   API,headless +  )
         try:
             import numpy as np
             from isaaclab.sim import SimulationContext
@@ -341,7 +341,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                 self._cam_err = True
 
     # ============================================
-    # 水下物理计算函数
+    #
     # ============================================
 
     def _compute_buoyancy_forces(self) -> tuple[torch.Tensor, torch.Tensor]:
@@ -350,7 +350,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
 
         z_positions = positions[:, 2]
         center_of_h = self.physics_cfg.rov_height / 2
-        # 动态水面高度（统一使用 wave_field，和视觉波浪完全同步）
+        #  (  wave_field, )
         if self.wave_cfg.enable_wave and self.wave_field is not None:
             t = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
             wave_elevation = self.wave_field.compute_elevation(t, positions[:, 0], positions[:, 1])
@@ -392,7 +392,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         return buoyancy_force_world, buoyancy_torque
 
     # ============================================
-    # 洋流场模块
+    #
     # ============================================
 
     def _init_current_field(self):
@@ -439,11 +439,11 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         return drag_force
 
     # ============================================
-    # 🆕 波浪场模块
+    # 🆕
     # ============================================
 
     def _init_wave_field(self):
-        """初始化波浪参数（支持JONSWAP不规则波）"""
+        """Initialize wave parameters, including irregular JONSWAP waves."""
         import os
         self.use_jonswap = os.environ.get('WAVE_MODE', 'airy') == 'jonswap'
 
@@ -454,52 +454,52 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
             print("\n🌊 Waves: DISABLED\n")
             return
 
-        # 波高和波周期（所有模式共用）
+        #  ( )
         self.wave_height = torch.ones(self.num_envs, device=self.device) * self.wave_cfg.wave_height
         self.wave_period = torch.ones(self.num_envs, device=self.device) * self.wave_cfg.wave_period
 
-        # 波浪方向
+        #
         wave_dir = torch.tensor([self.wave_cfg.wave_dir_x, self.wave_cfg.wave_dir_y], device=self.device)
         wave_dir = wave_dir / torch.norm(wave_dir).clamp(min=1e-6)
         self.wave_dir = wave_dir.unsqueeze(0).repeat(self.num_envs, 1)
 
         if self.use_jonswap:
-            # JONSWAP频谱参数
+            # JONSWAP
             self.n_components = 20
-            Hs = self.wave_cfg.wave_height * 2.0  # 有义波高
-            Tp = self.wave_cfg.wave_period  # 峰值周期
-            fp = 1.0 / Tp  # 峰值频率
-            gamma = 3.3  # JONSWAP峰度因子
+            Hs = self.wave_cfg.wave_height * 2.0  #
+            Tp = self.wave_cfg.wave_period  #
+            fp = 1.0 / Tp  #
+            gamma = 3.3  # JONSWAP
             g = 9.81
 
-            # 频率范围
+            #
             f_min = fp * 0.5
             f_max = fp * 3.0
             freqs = torch.linspace(f_min, f_max, self.n_components, device=self.device)
             df = (f_max - f_min) / self.n_components
 
-            # JONSWAP频谱计算
-            alpha = 0.0081  # Phillips常数
+            # JONSWAP
+            alpha = 0.0081  # Phillips
             sigma = torch.where(freqs <= fp, torch.tensor(0.07, device=self.device),
                                 torch.tensor(0.09, device=self.device))
             r = torch.exp(-0.5 * ((freqs - fp) / (sigma * fp)) ** 2)
             S = (alpha * g ** 2 / ((2 * 3.14159) ** 4 * freqs ** 5)) * \
                 torch.exp(-1.25 * (fp / freqs) ** 4) * gamma ** r
 
-            # 从频谱计算各分量幅值
+            #
             amplitudes = torch.sqrt(2 * S * df)
-            # 归一化使总波高匹配设定的wave_height
+            #  wave_height
             scale = self.wave_cfg.wave_height / (2 * torch.sqrt(torch.sum(amplitudes ** 2)).clamp(min=1e-6))
             amplitudes = amplitudes * scale
 
-            # 随机相位（每个env不同）
+            #  ( env )
             phases = torch.rand(self.num_envs, self.n_components, device=self.device) * 2 * 3.14159
 
-            # 角频率和波数
+            #
             omegas = 2 * 3.14159 * freqs  # (n_components,)
-            wave_numbers = omegas ** 2 / g  # 深水近似 k = omega^2/g
+            wave_numbers = omegas ** 2 / g  #   k = omega^2/g
 
-            # 保存为实例变量
+            #
             self.jonswap_amplitudes = amplitudes  # (n_components,)
             self.jonswap_phases = phases  # (num_envs, n_components)
             self.jonswap_omegas = omegas  # (n_components,)
@@ -518,7 +518,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         print(f"   Wave mode: {'JONSWAP' if self.use_jonswap else 'Airy'}\n")
 
     def _init_wave_field_jonswap(self):
-        """使用JONSWAP谱初始化不规则波浪场"""
+        """Initialize an irregular JONSWAP wave field."""
         if not self.wave_cfg.enable_wave:
             self.wave_height = torch.zeros(self.num_envs, device=self.device)
             self.wave_period = torch.ones(self.num_envs, device=self.device) * 5.0
@@ -539,7 +539,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         print(f"\n🌊 JONSWAP Wave Field Initialized (Hs=0.3-1.0m, Tp=4-7s, N=30)")
 
     def _create_wave_mesh(self):
-        """创建动态波浪水面mesh"""
+        """Create the dynamic wave-surface mesh."""
         import omni.usd
         from pxr import UsdGeom, Gf, Vt, Sdf, UsdShade
         import numpy as np
@@ -582,7 +582,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         mesh.GetFaceVertexCountsAttr().Set(Vt.IntArray(face_counts))
         mesh.GetFaceVertexIndicesAttr().Set(Vt.IntArray(face_indices))
 
-        # 顶点颜色（GUI 和 headless 都用）
+        #  (GUI   headless  )
         from pxr import Gf, Vt
         colors = Vt.Vec3fArray([Gf.Vec3f(0.1, 0.3, 0.8)] * (res * res))
         mesh.GetDisplayColorAttr().Set(colors)
@@ -610,7 +610,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         t = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
         res = self._wave_mesh_res
 
-        # 波浪mesh跟随env 0的船移动
+        #  mesh env 0
         ship_pos = self.robot.data.root_pos_w[0].cpu().numpy()
         cx, cy = float(ship_pos[0]), float(ship_pos[1])
 
@@ -634,7 +634,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
 
         import matplotlib.cm as cm
 
-        # 动态归一化（颜色均匀好看），加最小范围兜底防止变白
+        #  ( ),
         z_min = z.min()
         z_max = z.max()
         z_range = max(z_max - z_min, 0.2)
@@ -649,7 +649,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
 
 
     def _compute_wave_forces(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """计算波浪对船的作用力（统一使用 wave_field）"""
+        """Compute wave forces on the vehicle using wave_field."""
         if not self.wave_cfg.enable_wave or self.wave_field is None:
             self.lateral_exposure = torch.zeros(self.num_envs, device=self.device)
             self.wave_drag = torch.zeros(self.num_envs, device=self.device)
@@ -660,11 +660,11 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
 
         t = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
 
-        # 船头方向 (2D)
+        #   (2D)
         forwards_2d = self.forwards[:, :2]
         forwards_2d = forwards_2d / torch.norm(forwards_2d, dim=-1, keepdim=True).clamp(min=1e-6)
 
-        # 统一调用 wave_field 计算
+        #   wave_field
         result = self.wave_field.compute_forces(
             t,
             self.robot.data.root_pos_w[:, 0],
@@ -678,7 +678,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         return result["heave_force"], result["roll_torque"]
 
     # ============================================
-    # 施加动作
+    #
     # ============================================
 
     def _pre_physics_step(self, actions: torch.Tensor) -> None:
@@ -688,7 +688,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         self._visualize_markers()
 
     def _apply_action(self) -> None:
-        import os  # 函数级 import 防 UnboundLocalError(line 732 的 conditional import 让 Python 把 os 当 local)
+        import os  #   import   UnboundLocalError(line 732   conditional import   Python   os   local)
         if not hasattr(self, '_printed_body_info'):
             print(f"\n{'=' * 60}")
             print(f"🔍 BlueBoat Configuration:")
@@ -718,7 +718,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                 pass
 
 
-            # 上传代码到 wandb
+            #   wandb
             try:
                 import wandb
                 if wandb.run is not None:
@@ -737,17 +737,17 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         torques = torch.zeros((self.num_envs, num_bodies, 3), device=self.device)
 
         # ========================================
-        # 1. 推进器控制（来自RL策略）— 加延迟
+        # 1.  ( RL )—
         # ========================================
         if not hasattr(self, '_action_buffer'):
             self._action_buffer = torch.zeros(self.num_envs, 10, 2, device=self.device)
             self._buf_idx = 0
 
-        # 🆕 真 action delay(原代码 buffer 定义了但没用)
-        delay_len = int(os.environ.get('ACTION_DELAY', '0'))  # 0=不延迟(原 behavior),10=硬规则
+        # 🆕   action delay(  buffer  )
+        delay_len = int(os.environ.get('ACTION_DELAY', '0'))  # 0= (  behavior),10=
         self._action_buffer[:, self._buf_idx % 10] = self.actions
         if delay_len > 0:
-            # 取 delay_len 步前的 action(若 buffer 还没填满,默认 0)
+            #   delay_len   action(  buffer  ,  0)
             delayed_idx = (self._buf_idx - delay_len + 1) % 10
             delayed_actions = self._action_buffer[:, delayed_idx]
         else:
@@ -782,26 +782,26 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         forces[:, 0, 1] = 0
         torques[:, 0, 2] = delayed_actions[:, 1] * self.cfg.yaw_torque_max
 
-        # 🆕 V6 obs:存 prev_action 给下次 obs 用
+        # 🆕 V6 obs:  prev_action   obs
         self._prev_action_obs = delayed_actions[:, :2].detach().clone()
 
-        # ---- 水动力: 船体阻力在机体系算 (各向异性), 其余在世界系算,
-        #      最后统一逆旋转成机体系分量再施加 ----
-        # (set_external_force_and_torque 按机体系施加 (is_global=False); 旧实现把
-        #  世界系向量直接当机体系分量, 船有偏航时阻力/浮力方向被错误旋转)
+        # ----  :   ( ),  ,
+        #        ----
+        # (set_external_force_and_torque   (is_global=False);
+        #   ,  / )
         quat = self.robot.data.root_quat_w
         force_w = torch.zeros_like(forces[:, 0, :])
         torque_w = torch.zeros_like(torques[:, 0, :])
 
         # ========================================
-        # 2. 浮力和浮力力矩 (世界系)
+        # 2.   ( )
         # ========================================
         buoyancy_force, buoyancy_torque = self._compute_buoyancy_forces()
         force_w += buoyancy_force
         torque_w += buoyancy_torque
 
         # ========================================
-        # 3. 船体阻力 (机体系, 各向异性线性+二次; 系数出处见 cfg)
+        # 3.   ( ,  + ;   cfg)
         # ========================================
         vel_w = self.robot.data.root_com_vel_w
         if vel_w.shape[-1] == 6:
@@ -817,9 +817,9 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                          + self.physics_cfg.surge_quad_damping * torch.abs(vel_b[:, 0])) * vel_b[:, 0]
         drag_b[:, 1] = -(self.physics_cfg.sway_lin_damping
                          + self.physics_cfg.sway_quad_damping * torch.abs(vel_b[:, 1])) * vel_b[:, 1]
-        # 机体系阻力直接进机体系张量 (与推力同路)
+        #   ( )
         forces[:, 0, :2] += drag_b[:, :2]
-        # 垂向阻尼在世界系 (稳定升沉)
+        #   ( )
         force_w[:, 2] += -self.physics_cfg.heave_damping * linear_velocity[:, 2]
 
         wz = angular_velocity[:, 2]
@@ -838,30 +838,30 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         torques[:, 0, :2] += restoring_torque[:, :2]
 
         # ========================================
-        # 5. 洋流力 (世界系)
+        # 5.   ( )
         # ========================================
         force_w += self._compute_current_forces()
 
         # ========================================
-        # 🆕 6. 波浪力 (世界系)
+        # 🆕 6.   ( )
         # ========================================
         heave_force, roll_torque = self._compute_wave_forces()
         force_w[:, 2] += heave_force
         torque_w[:, 1] += roll_torque
 
-        # 波浪阻力
+        #
         if self.wave_cfg.enable_wave:
             wave_drag_force = -self.wave_drag.unsqueeze(-1) * self.forwards[:, :2]
             force_w[:, :2] += wave_drag_force
 
         # ========================================
-        # 7. 世界系 → 机体系, 与推力/船体阻力合并后施加
+        # 7.   →  ,  /
         # ========================================
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_w)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
         self.robot.set_external_force_and_torque(forces, torques)
 
-        # 轨迹线绘制
+        #
         if self.common_step_counter % 10 == 0:
             pos = self.robot.data.root_pos_w[0].cpu().tolist()
             self._trajectory_points.append(pos)
@@ -875,7 +875,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                 except:
                     pass
         # ========================================
-        # 8. 调试输出
+        # 8.
         # ========================================
         if self.common_step_counter % 500 == 0 and self.num_envs > 0:
             env_idx = 0
@@ -918,16 +918,16 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
             if self.physics_cfg.enable_current:
                 print(f"   Current Force: [{current_force[env_idx, 0]:.1f}, {current_force[env_idx, 1]:.1f}] N")
 
-            # 🆕 波浪信息
+            # 🆕
             if self.wave_cfg.enable_wave:
                 wave_dir_deg = torch.atan2(self.wave_dir[env_idx, 1], self.wave_dir[env_idx, 0]).item() * 57.2958
                 roll_rate = self.robot.data.root_ang_vel_w[env_idx, 0].item()
                 print(
                     f"   Wave:     Dir={wave_dir_deg:+6.1f}° | Height={self.wave_height[env_idx]:.1f}m | Lateral={self.lateral_exposure[env_idx]:.2f}")
                 print(f"   Roll Rate: {roll_rate:.2f} rad/s")
-                # 🆕 更新波浪动画
+                # 🆕
 
-            # 避浪统计
+            #
             self.total_lateral += self.lateral_exposure.mean().item()
             self.total_steps += 1
             avg_lateral = self.total_lateral / self.total_steps
@@ -936,16 +936,16 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
             try:
                 import wandb
                 if wandb.run is not None:
-                    # 计算最近的成功率
+                    #
                     recent_success = 0.0
                     if self.learned_reward and len(self.learned_reward.episode_successes) >= 50:
                         recent_success = sum(self.learned_reward.episode_successes[-50:]) / 50
-                    # 船的Z坐标和波浪高度
+                    #  Z
                     t_now = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
                     rov_z = self.robot.data.root_pos_w[env_idx, 2].item()
                     wave_eta = 0.0
                     if self.wave_cfg.enable_wave and self.wave_field is not None:
-                        # compute_elevation 返回 (num_envs,)，取 env_idx
+                        # compute_elevation   (num_envs,),  env_idx
                         all_eta = self.wave_field.compute_elevation(
                             t_now,
                             self.robot.data.root_pos_w[:, 0],
@@ -953,7 +953,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                         )
                         wave_eta = all_eta[env_idx].item()
 
-                    # 🆕 能耗指标(批量平均):
+                    # 🆕  ( ):
                     # power_total = |thrust × forward_speed| + |torque × yaw_rate|
                     # forward_speed_all: body-frame forward velocity for all envs
                     quat_inv_log = math_utils.quat_conjugate(self.robot.data.root_quat_w)
@@ -962,21 +962,21 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                     thrust_act = self.actions[:, 0]                    # [-1, 1]
                     yaw_act = self.actions[:, 1]
                     yaw_rate_all = self.robot.data.root_ang_vel_w[:, 2]
-                    # power(单位:|action × speed|,无量纲)
+                    # power( :|action × speed|, )
                     power_linear = (thrust_act.abs() * fwd_speed_all.abs()).mean().item()
                     power_angular = (yaw_act.abs() * yaw_rate_all.abs()).mean().item()
                     energy_total = power_linear + power_angular
-                    # 倒车浪费能量(thrust 推 bow 但 boat 反向滑动):
+                    #  (thrust   bow   boat  ):
                     backward_waste = (thrust_act.abs() * fwd_speed_all.clamp(max=0).abs()).mean().item()
 
-                    # V41 航行质量 metric 累积
-                    cur_pos = self.robot.data.root_pos_w[:, :2].mean(dim=0)  # 批量平均位置
+                    # V41   metric
+                    cur_pos = self.robot.data.root_pos_w[:, :2].mean(dim=0)  #
                     if self._prev_pos is not None:
                         step_dist = torch.norm(cur_pos - self._prev_pos).item()
                         self._metric_path_length += step_dist
                     self._prev_pos = cur_pos.clone()
                     self._metric_total_steps += 1
-                    # backward_ratio: 倒车的 env 占比
+                    # backward_ratio:   env
                     self._metric_backward_steps += (fwd_speed_all < 0).float().mean().item()
                     # heading-velocity consistency: cos(heading, velocity_dir)
                     vel_2d_log = self.robot.data.root_com_vel_w[:, :2]
@@ -988,31 +988,31 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                     self._metric_heading_vel_cos += hv_cos
                     self._metric_energy_total += energy_total
 
-                    # 计算瞬时航行质量指标
+                    #
                     n = max(self._metric_total_steps, 1)
                     backward_ratio = self._metric_backward_steps / n
                     heading_consistency = self._metric_heading_vel_cos / n
                     energy_per_target = (self._metric_energy_total / max(self.reached_count, 1))
 
                     wandb.log({
-                        # 波浪相关
+                        #
                         "Wave/lateral_exposure_mean": self.lateral_exposure.mean().item(),
                         "Wave/avg_lateral": avg_lateral,
                         "Wave/rov_z": rov_z,
                         "Wave/wave_elevation": wave_eta,
                         "Wave/rov_z_vs_wave": rov_z - wave_eta,
                         "Wave/wave_height_hs": self.wave_field.hs[env_idx].item() if self.wave_field is not None else 0.0,
-                        # 导航相关
+                        #
                         "Nav/heading_error": yaw_error,
                         "Nav/speed": boat_speed,
                         "Nav/distance_to_target": dist,
                         "Nav/targets_reached": self.reached_count,
-                        # 能耗
+                        #
                         "Energy/power_linear": power_linear,
                         "Energy/power_angular": power_angular,
                         "Energy/total": energy_total,
                         "Energy/backward_waste": backward_waste,
-                        # 航行质量(V41+)
+                        #  (V41+)
                         "Quality/backward_ratio": backward_ratio,
                         "Quality/heading_consistency": heading_consistency,
                         "Quality/energy_per_target": energy_per_target,
@@ -1028,11 +1028,11 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         self._update_wave_mesh()
 
     # ============================================
-    # RL接口函数
+    # RL
     # ============================================
 
     def _get_observations(self) -> dict:
-        import os  # 防 UnboundLocalError(后面 conditional import)
+        import os  #   UnboundLocalError(  conditional import)
         self.velocity = self.robot.data.root_com_vel_w
         self.forwards = math_utils.quat_apply(
             self.robot.data.root_quat_w,
@@ -1051,9 +1051,9 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         cross = forwards_2d[:, 0:1] * direction[:, 1:2] - forwards_2d[:, 1:2] * direction[:, 0:1]
         distance_norm = distance / self.max_spawn_distance
 
-        # CALM: 波浪关闭时返回 obs(支持 3D 或 9D self-state 模式)
+        # CALM:   obs(  3D   9D self-state  )
         if not self.wave_cfg.enable_wave:
-            # 🆕 V6 style:obs 加 self-state(velocity body, ang_vel, prev_action)防 information bottleneck
+            # 🆕 V6 style:obs   self-state(velocity body, ang_vel, prev_action)  information bottleneck
             obs_extended = int(os.environ.get('OBS_EXTENDED', '0'))
             if obs_extended == 1:
                 # body-frame velocity
@@ -1061,7 +1061,7 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                 quat_inv = math_utils.quat_conjugate(self.robot.data.root_quat_w)
                 vel_b_3d = math_utils.quat_apply(quat_inv, vel_w_3d)
                 ang_vel_z = self.robot.data.root_ang_vel_w[:, 2:3]
-                # prev action(下一步会更新;初始 0)
+                # prev action( ;  0)
                 if not hasattr(self, '_prev_action_obs'):
                     self._prev_action_obs = torch.zeros(self.num_envs, 2, device=self.device)
                 obs = torch.hstack([
@@ -1074,12 +1074,12 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                 obs = torch.hstack([dot, cross, distance_norm])
             return {"policy": obs}
 
-        # 波浪观测
+        #
         wave_dot = torch.sum(forwards_2d * self.wave_dir, dim=-1, keepdim=True)
         wave_cross = forwards_2d[:, 0:1] * self.wave_dir[:, 1:2] - forwards_2d[:, 1:2] * self.wave_dir[:, 0:1]
         wave_height_norm = self.wave_height.unsqueeze(-1) / 1.0
 
-        # 未来横浪力预测（非因果，含空间相位）
+        #  ( , )
         t = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
         omega = 2 * 3.14159 / self.wave_period
         k = 2 * 3.14159 / 20.0
@@ -1141,72 +1141,72 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         forwards_2d = self.forwards[:, :2]
         forwards_2d = forwards_2d / torch.norm(forwards_2d, dim=-1, keepdim=True).clamp(min=1e-6)
 
-        # 1. 导航reward：体坐标系前进速度 × 目标对齐（保留原始base设计）
+        # 1.  reward:  ×  ( base )
         vel_w = self.robot.data.root_com_vel_w[:, :3]
         quat_inv = math_utils.quat_conjugate(self.robot.data.root_quat_w)
         vel_b = math_utils.quat_apply(quat_inv, vel_w)
-        # boat: forward_speed = vel_b · forward_vec(只在 X 轴) → vel_b[X] × fwd_x
+        # boat: forward_speed = vel_b · forward_vec(  X  ) → vel_b[X] × fwd_x
         forward_speed = vel_b[:, 0:1] * self._fwd_x
         alignment = torch.sum(forwards_2d * direction, dim=-1, keepdim=True)  # [-1, 1]
 
-        # 🆕 reward 变体(env var REWARD_VARIANT 控制),默认 V12
+        # 🆕 reward  (env var REWARD_VARIANT  ),  V12
         variant = os.environ.get('REWARD_VARIANT', 'V12')
         if variant == 'V11':
-            # 原(失败):反方向也获 +0.37 奖
+            #  ( ):  +0.37
             reward_nav = forward_speed * torch.exp(alignment)
         elif variant == 'V12':
-            # smooth gate: (align+1)/2 → 反方向 = 0,smooth grad
+            # smooth gate: (align+1)/2 →   = 0,smooth grad
             gate = (alignment + 1.0) * 0.5
             reward_nav = forward_speed * torch.exp(alignment) * gate
         elif variant == 'V13':
-            # 硬 ReLU gate,alignment 必须 > 0 才有奖
+            #   ReLU gate,alignment   > 0
             reward_nav = forward_speed * torch.relu(alignment)
         elif variant == 'V14':
-            # 只算前进的速度,后退 = 0 奖
+            #  ,  = 0
             reward_nav = torch.relu(forward_speed) * torch.exp(alignment)
         elif variant == 'V15':
-            # V12 + 显式 heading reward(V2 风格)
+            # V12 +   heading reward(V2  )
             gate = (alignment + 1.0) * 0.5
             reward_nav = forward_speed * torch.exp(alignment) * gate + 0.5 * alignment.clamp(min=-1)
         elif variant == 'V16':
-            # 更陡的对齐惩罚 exp(2×align)
+            #   exp(2×align)
             gate = (alignment + 1.0) * 0.5
             reward_nav = forward_speed * torch.exp(2 * alignment) * gate
         elif variant == 'V23':
-            # V2/V8 风格 + E7 speed-coupling(防"驻足凝视"局部最优)
-            # 硬规则 line 432:任何速度无关的奖励 → "不动=最优"
+            # V2/V8   + E7 speed-coupling( " " )
+            #   line 432:  → " = "
             heading_reward_raw = alignment.clamp(min=-1.0, max=1.0) * 1.0
             vel_toward = torch.sum(
                 self.robot.data.root_com_vel_w[:, :2] * direction, dim=-1, keepdim=True
             )
-            velocity_reward = vel_toward.clamp(min=0) * 0.3   # 本身就是速度
+            velocity_reward = vel_toward.clamp(min=0) * 0.3   #
             dist_penalty_v23 = -(distance / self.max_spawn_distance) * 0.3
-            # 🆕 V40:SIDE_APPROACH=1 → 不要求船头对准目标,侧面碰也算 reach
-            #   把 heading_reward 用 vel_toward 的方向(速度对目标的投影)替代
-            #   alive_bonus 也 × |velocity|(不限制 forward_speed)
+            # 🆕 V40:SIDE_APPROACH=1 →  ,  reach
+            #     heading_reward   vel_toward  ( )
+            #   alive_bonus   × |velocity|(  forward_speed)
             side_approach = int(os.environ.get('SIDE_APPROACH', '0'))
             forward_transit = int(os.environ.get('FORWARD_TRANSIT', '0'))
             speed_coupling = int(os.environ.get('SPEED_COUPLE', '1'))
             if side_approach and forward_transit:
-                # V42: SIDE_APPROACH + FORWARD_TRANSIT (修复 V41 逃跑 bug)
-                # V41 失败根因: 没有朝目标方向的引导, 船高速背对目标逃跑
-                # 修复: vel_toward 系数 ↑ 到主导项, alive_bonus 不再奖励乱跑
+                # V42: SIDE_APPROACH + FORWARD_TRANSIT (  V41   bug)
+                # V41  :  ,
+                #  : vel_toward   ↑  , alive_bonus
                 vel_2d = self.robot.data.root_com_vel_w[:, :2]
                 speed_2d = torch.norm(vel_2d, dim=-1, keepdim=True).clamp(min=0.1)
                 vel_dir = vel_2d / speed_2d
-                heading_dir = forwards_2d  # 船头方向(已归一化)
+                heading_dir = forwards_2d  #  ( )
                 forward_align = torch.sum(heading_dir * vel_dir, dim=-1, keepdim=True)
                 fwd_transit_coef = float(os.environ.get('FWD_TRANSIT_COEF', '0.2'))
-                # 正着走奖励: 只有 vel_toward > 0 (朝目标走) 时才给
+                #  :   vel_toward > 0 ( )
                 heading_reward = forward_align.clamp(min=0) * vel_toward.clamp(min=0) * fwd_transit_coef
                 backward_cost_coef = float(os.environ.get('BACKWARD_COST', '0.3'))
                 backward_cost = forward_speed.clamp(max=0) * backward_cost_coef
-                # vel_toward 是主导导航信号 (系数 1.0, V41 是 0.8)
+                # vel_toward   (  1.0, V41   0.8)
                 velocity_reward = vel_toward.clamp(min=0) * 1.0
-                # alive_bonus × vel_toward 方向: 只有朝目标运动才奖
+                # alive_bonus × vel_toward  :
                 alive_bonus = vel_toward.clamp(min=0) * 0.05
             elif side_approach:
-                # V40: 纯侧面 approach,不管行进朝向
+                # V40:   approach,
                 heading_reward = torch.zeros_like(distance)
                 vel_2d_mag = torch.norm(self.robot.data.root_com_vel_w[:, :2], dim=-1, keepdim=True)
                 alive_bonus = vel_2d_mag * 0.05
@@ -1215,11 +1215,11 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
             elif speed_coupling:
                 fs = forward_speed.clamp(min=0)
                 heading_reward = heading_reward_raw * fs
-                # 🆕 ALIVE_DIRECTIONAL=1：alive 奖只给"朝目标方向"的运动，掐掉"朝任意方向猛冲farm奖励"的坏局部最优
+                # 🆕 ALIVE_DIRECTIONAL=1:alive  " " , " farm "
                 if int(os.environ.get('ALIVE_DIRECTIONAL', '0')):
                     alive_bonus = vel_toward.clamp(min=0) * 0.05
                 else:
-                    alive_bonus = fs * 0.05    # 原 V26：必须动才有 alive 奖（朝任意方向）
+                    alive_bonus = fs * 0.05    #   V26:  alive  ( )
                 backward_cost_coef = float(os.environ.get('BACKWARD_COST', '0.5'))
                 backward_cost = forward_speed.clamp(max=0) * backward_cost_coef
             else:
@@ -1230,39 +1230,39 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         else:
             raise ValueError(f"Unknown REWARD_VARIANT: {variant}")
 
-        # 2. 波浪安全reward：log形，纯几何（模仿NavRL）
-        # 2. 波浪安全reward：NavRL-style log(safety_distance)
-        #    将 lateral_exposure 映射为 safety_distance ∈ (0, RANGE]
-        #    与 NavRL 的 log(lidar距离) 结构完全对应
+        # 2.  reward:log , ( NavRL)
+        # 2.  reward:NavRL-style log(safety_distance)
+        #      lateral_exposure   safety_distance ∈ (0, RANGE]
+        #      NavRL   log(lidar )
         wave_safety = torch.zeros_like(distance)
         if self.wave_cfg.enable_wave:
-            WAVE_SAFETY_RANGE = 10.0  # 对应 NavRL 的 lidar_range
+            WAVE_SAFETY_RANGE = 10.0  #   NavRL   lidar_range
             t = self.common_step_counter * self.cfg.sim.dt * self.cfg.decimation
             if self.use_jonswap:
-                # V3b: 纯几何 + 去掉Hs缩放
-                # V3失败原因：hs_range=(0.3,1.0)，乘Hs后惩罚只有nav的3-4%
-                # 直接用lateral_exposure × speed，不乘Hs
+                # V3b:   +  Hs
+                # V3 :hs_range=(0.3,1.0), Hs nav 3-4%
+                #  lateral_exposure × speed, Hs
                 future_danger = self.lateral_exposure
             else:
-                future_danger = self.lateral_exposure  # Airy模式
+                future_danger = self.lateral_exposure  # Airy
 
             if self.use_jonswap:
-                # JONSWAP: 不乘Hs（Hs=0.3-1.0太小，会稀释信号）
+                # JONSWAP:  Hs(Hs=0.3-1.0 , )
                 wave_safety = -future_danger.unsqueeze(-1) * forward_speed.clamp(min=0)
             else:
-                # Airy: 保留乘Hs（Airy的wave_height设置通常较大）
+                # Airy:  Hs(Airy wave_height )
                 wave_safety = -future_danger.unsqueeze(-1) * self.wave_height.unsqueeze(-1) * forward_speed.clamp(min=0)
 
-        # 🆕 距离 shaping(让 agent 学会"近了就慢")
+        # 🆕   shaping(  agent  " ")
         dist_penalty_coef = float(os.environ.get('DIST_PENALTY_COEF', '0.0'))
         if dist_penalty_coef > 0:
             # distance normalized to [0, 1], penalty = -coef × dist_norm
             dist_penalty = -(distance / self.max_spawn_distance) * dist_penalty_coef
             reward_nav = reward_nav + dist_penalty
 
-        # 3. 到达reward + 目标重置
-        # 🆕 REACH_BONUS env var:boat 慢,默认 +10 太小被 respawn 旅行成本吃掉
-        # boat 至少要 +50~+100,见硬规则 line 438 (连续导航需要 reach_reward 足够大)
+        # 3.  reward +
+        # 🆕 REACH_BONUS env var:boat  ,  +10   respawn
+        # boat   +50~+100,  line 438 (  reach_reward  )
         reach_bonus = float(os.environ.get('REACH_BONUS', '10.0'))
         reached = (distance < self.goal_radius).float()
         reach_reward = reached * reach_bonus
@@ -1273,12 +1273,12 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
             distances = self.min_spawn_distance + \
                         torch.rand(len(env_ids), device=self.device) * \
                         (self.max_spawn_distance - self.min_spawn_distance)
-            angles = self._sample_target_angles(len(env_ids))  # cone 课程:respawn 也套锥
+            angles = self._sample_target_angles(len(env_ids))  # cone  :respawn
             origin_xy = self.scene.env_origins[env_ids, :2]
             self.target_pos[env_ids, 0] = origin_xy[:, 0] + distances * torch.cos(angles)
             self.target_pos[env_ids, 1] = origin_xy[:, 1] + distances * torch.sin(angles)
             self.reached_count += len(env_ids)
-            # 🔬 DEBUG:reach 触发时打印,确认 respawn 真的发生
+            # 🔬 DEBUG:reach  ,  respawn
             if 0 in env_ids.cpu().numpy().tolist():
                 new_x = self.target_pos[0, 0].item()
                 new_y = self.target_pos[0, 1].item()
@@ -1290,25 +1290,25 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                   + wave_safety * wave_coef
                   + reach_reward)
 
-        # 🆕 距离决定速度(论文 ψ,治 overshoot 出界):近目标时期望速度随距离线性降,
-        #    惩罚"近了还猛冲"的超速部分。DIST_SPEED_COEF=0 默认关(不变 benchmark)。
+        # 🆕  (  ψ,  overshoot  ): ,
+        #     " " .DIST_SPEED_COEF=0  (  benchmark).
         dist_speed_coef = float(os.environ.get('DIST_SPEED_COEF', '0.0'))
         if dist_speed_coef > 0:
-            d0 = float(os.environ.get('DIST_SPEED_D0', '10.0'))   # 距离 < d0 开始要求减速
+            d0 = float(os.environ.get('DIST_SPEED_D0', '10.0'))   #   < d0
             v_max = float(os.environ.get('MAX_LIN_VEL', '5.0'))
-            v_des = v_max * (distance / d0).clamp(max=1.0)         # 远=v_max,近线性降到 0
-            over_speed = (forward_speed - v_des).clamp(min=0.0)    # 超过期望速度的部分
+            v_des = v_max * (distance / d0).clamp(max=1.0)         #  =v_max,  0
+            over_speed = (forward_speed - v_des).clamp(min=0.0)    #
             reward = reward - dist_speed_coef * over_speed
 
-        # 🆕 势能式"距离-进展"reward(治锁航向不转):奖励真正缩短到目标的距离,逼船转向偏轴目标。
-        #    PROGRESS_COEF=0 默认关。clamp 防 respawn/reset 时距离跳变造成的伪进展尖峰(真实每步<~0.1m)。
+        # 🆕  " - "reward( ): , .
+        #    PROGRESS_COEF=0  .clamp   respawn/reset  ( <~0.1m).
         progress_coef = float(os.environ.get('PROGRESS_COEF', '0.0'))
         if progress_coef > 0 and getattr(self, '_prev_distance', None) is not None \
                 and self._prev_distance.shape == distance.shape:
             progress = (self._prev_distance - distance).clamp(-0.2, 0.2)
             reward = reward + progress_coef * progress
 
-        # 🆕 出界惩罚（默认 0 = V26 不变；实验设 OOB_PENALTY=10 堵住"猛冲出界"坏局部最优）
+        # 🆕  (  0 = V26  ;  OOB_PENALTY=10  " " )
         oob_penalty = float(os.environ.get('OOB_PENALTY', '0.0'))
         if oob_penalty > 0:
             origin_2d = self.scene.env_origins[:, :2]
@@ -1318,18 +1318,18 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
             oob = (dist_from_origin > (self.max_spawn_distance + 20.0)).float()
             reward = reward - oob_penalty * oob
 
-        # 更新 prev_distance(在 respawn 之后,用当前 boat 位置到当前目标),供下一步 progress 用。
-        # respawn 改了 target_pos → 这里重算后,下一步对新目标的 progress 不会有伪尖峰。
+        #   prev_distance(  respawn  ,  boat  ),  progress  .
+        # respawn   target_pos →  ,  progress  .
         _rpos_pd = self.target_pos[:, :2] - self.robot.data.root_pos_w[:, :2]
         self._prev_distance = torch.norm(_rpos_pd, dim=-1, keepdim=True).clamp(min=1e-6)
 
         return reward
 
     def _sample_target_angles(self, n):
-        """目标方位采样,支持 spawn 课程(治"重船学不会转向")。
-        SPAWN_CONE_DEG<360 → 目标只落在船头世界朝向(fwd_bearing)±半角的锥形内;默认 360=全向(不变 benchmark)。
-        CONE_ANNEAL_STEPS>0 → 锥形半角随 common_step_counter 从 SPAWN_CONE_DEG 线性放宽到 360°(课程展开,边学转向边保持可达)。
-        初始 spawn 和 reach-respawn 都用本函数,保证全程一致。"""
+        """Sample target bearings with the optional spawn-cone curriculum.
+
+        Both initial spawn and reach-respawn use this same sampler so the
+        curriculum remains consistent throughout an episode."""
         import os as _o
         cone_start = float(_o.environ.get('SPAWN_CONE_DEG', '360'))
         if cone_start >= 360.0:
@@ -1347,11 +1347,11 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
     def _get_dones(self):
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        # 越界检测：船离 env_origin 超过边界则终止
+        #  :  env_origin
         pos_2d = self.robot.data.root_pos_w[:, :2]
         origin_2d = self.scene.env_origins[:, :2]
         dist_from_origin = torch.norm(pos_2d - origin_2d, dim=-1)
-        out_of_bounds = dist_from_origin > (self.max_spawn_distance + 20.0)  # 留 20m 余量
+        out_of_bounds = dist_from_origin > (self.max_spawn_distance + 20.0)  #   20m
 
         return out_of_bounds, time_out
 
@@ -1359,8 +1359,8 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
 
-        # 连续导航模式：到达统计在 _get_rewards 里已经做了
-        # 这里只负责 log
+        #  :  _get_rewards
+        #   log
         self.episode_count += len(env_ids)
         if self.episode_count >= 50:
             targets_per_ep = self.reached_count / self.episode_count
@@ -1382,9 +1382,9 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                     })
             except:
                 pass
-            # 🆕 早停:课程展开到一定程度(EARLYSTOP_AFTER 步)后,若 in-training Targets/ep 连续
-            #    EARLYSTOP_PATIENCE 次低于 EARLYSTOP_MIN_TARGETS → 判定"没学会转向",提前退出省时间。
-            #    EARLYSTOP_AFTER=0 默认关。注意阈值是 in-training 尺度(被 OOB-reset 摊薄,好模型~0.2-0.3)。
+            # 🆕  : (EARLYSTOP_AFTER  ) ,  in-training Targets/ep
+            #    EARLYSTOP_PATIENCE   EARLYSTOP_MIN_TARGETS →  " ", .
+            #    EARLYSTOP_AFTER=0  .  in-training  (  OOB-reset  , ~0.2-0.3).
             import os as _es
             _es_after = float(_es.environ.get('EARLYSTOP_AFTER', '0'))
             if _es_after > 0 and self.common_step_counter >= _es_after:
@@ -1393,14 +1393,14 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                 self._es_strikes = (getattr(self, '_es_strikes', 0) + 1) if targets_per_ep < _es_min else 0
                 if self._es_strikes >= _es_pat:
                     print(f"🛑 [EARLY-STOP] step={self.common_step_counter} Targets/ep={targets_per_ep:.2f} "
-                          f"< {_es_min} 连续 {self._es_strikes} 次 → 没学会,提前停(省时间)。", flush=True)
+                          f"< {_es_min} after {self._es_strikes} consecutive strikes; stopping early.", flush=True)
                     try:
                         import wandb as _wb
                         if _wb.run is not None:
                             _wb.finish()
                     except Exception:
                         pass
-                    _es._exit(0)  # 硬退出:跳过 Isaac Sim 拆插件(渲染管线在录像时 sys.exit 会 access-violation 崩)
+                    _es._exit(0)  #  :  Isaac Sim  (  sys.exit   access-violation  )
             self.episode_count = 0
             self.reached_count = 0
             self._metric_backward_steps = 0
@@ -1413,32 +1413,32 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
 
         num = len(env_ids)
 
-        # 重置 ROV 状态
+        #   ROV
         default_root_state = self.robot.data.default_root_state[env_ids]
         default_root_state[:, :3] += self.scene.env_origins[env_ids]
         self.robot.write_root_state_to_sim(default_root_state, env_ids)
 
-        # 生成目标点（相对 env_origin，确保船不会漂移出边界）
+        #  (  env_origin, )
         distances = self.min_spawn_distance + \
                     torch.rand(num, device=self.device) * \
                     (self.max_spawn_distance - self.min_spawn_distance)
-        # 🆕 cone 课程(治转向):见 _sample_target_angles。初始 spawn 和 respawn 共用。
+        # 🆕 cone  ( ):  _sample_target_angles.  spawn   respawn  .
         angles = self._sample_target_angles(num)
 
         origin_xy = self.scene.env_origins[env_ids, :2]
         self.target_pos[env_ids, 0] = origin_xy[:, 0] + distances * torch.cos(angles)
         self.target_pos[env_ids, 1] = origin_xy[:, 1] + distances * torch.sin(angles)
 
-        # 🆕 随机化波浪方向
+        # 🆕
         if self.wave_cfg.enable_wave:
             random_angles = torch.rand(num, device=self.device) * 2 * 3.14159
             self.wave_dir[env_ids, 0] = torch.cos(random_angles)
             self.wave_dir[env_ids, 1] = torch.sin(random_angles)
 
-        # 随机化JONSWAP波浪场
+        #  JONSWAP
         if self.wave_field is not None:
             self.wave_field.randomize(env_ids)
-            # 记录env 0的波浪参数（用于复现好看的波浪）
+            #  env 0 ( )
             if 0 in env_ids:
                 hs = self.wave_field.hs[0].item()
                 tp = self.wave_field.tp[0].item()

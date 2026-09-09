@@ -409,7 +409,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     print(f"[INFO] Logging experiment in directory: {log_root_path}")
     log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + f"_{algorithm}_{args_cli.ml_framework}"
     print(f"Exact experiment name requested from command line: {log_dir}")
-    # Sweep: 用环境变量覆盖wandb run name
+    # Sweep: override the wandb run name from the environment.
     sweep_name = os.environ.get('WANDB_NAME', None)
     if sweep_name:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -489,7 +489,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # ============================================
     if args_cli.video and video_dir is not None:
         import wandb
-        # 清空旧视频
+        # Clear old videos.
         for old_mp4 in glob.glob(os.path.join(video_dir, "*.mp4")):
             os.remove(old_mp4)
         uploaded_videos = set()

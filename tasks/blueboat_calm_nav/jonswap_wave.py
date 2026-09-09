@@ -1,20 +1,20 @@
 """
 JONSWAP Irregular Wave Module for Isaac Lab
 ============================================
-替换原有单频正弦波，实现基于JONSWAP谱的不规则波叠加。
+This module replaces a single sinusoid with an irregular JONSWAP spectrum.
 
-用法:
-    在 MultiUSVEnv 中替换 _init_wave_field() 和 _compute_wave_forces()
+Usage:
+    Replace `_init_wave_field()` and `_compute_wave_forces()` in MultiUSVEnv.
 
     from .jonswap_wave import JONSWAPWaveField
 
-    # 在 _setup_scene() 或 __init__ 中:
+    # In _setup_scene() or __init__:
     self.wave_field = JONSWAPWaveField(cfg=cfg.wave_cfg, num_envs=self.num_envs, device=self.device)
 
-    # 在 _compute_wave_forces() 中:
+    # In _compute_wave_forces():
     eta, vel_x, vel_y = self.wave_field.compute(t, positions_x, positions_y)
 
-作者: Raina (Multi-USV MARL Project)
+Author: Raina (Multi-USV MARL Project)
 """
 
 import torch
@@ -22,32 +22,32 @@ import math
 
 
 class JONSWAPWaveField:
-    """基于JONSWAP谱的不规则波浪场。
+    """Irregular wave field generated from a JONSWAP spectrum.
 
-    核心原理:
+    Core model:
         η(x,y,t) = Σ aₙ · cos(kₙ·(dx·x + dy·y) - ωₙ·t + φₙ)
 
-        其中:
-        - aₙ = √(2·S(fₙ)·Δf) 为第n个谐波的振幅，由JONSWAP谱决定
-        - ωₙ = 2π·fₙ 为角频率
-        - kₙ = ωₙ²/g 为波数（深水近似）
-        - φₙ 为随机相位 [0, 2π)
-        - (dx, dy) 为波浪传播方向单位向量
+        where:
+        - aₙ = √(2·S(fₙ)·Δf) is the JONSWAP-derived harmonic amplitude
+        - ωₙ = 2π·fₙ is angular frequency
+        - kₙ = ωₙ²/g is the deep-water wavenumber
+        - φₙ is a random phase in [0, 2π)
+        - (dx, dy) is the unit propagation direction
     """
 
     def __init__(
         self,
         num_envs: int,
         device: torch.device,
-        # JONSWAP谱参数
-        hs_range: tuple[float, float] = (0.3, 1.0),     # 有义波高范围 (m)
-        tp_range: tuple[float, float] = (4.0, 7.0),     # 谱峰周期范围 (s)
-        gamma_range: tuple[float, float] = (1.0, 5.0),   # 峰增强因子范围
-        # 离散化参数
-        n_components: int = 30,                            # 谐波分量数
-        f_min: float = 0.04,                               # 最小频率 (Hz)
-        f_max: float = 0.5,                                # 最大频率 (Hz)
-        # 物理常数
+        # JONSWAP spectrum parameters.
+        hs_range: tuple[float, float] = (0.3, 1.0),     # Significant wave height (m)
+        tp_range: tuple[float, float] = (4.0, 7.0),     # Peak period (s)
+        gamma_range: tuple[float, float] = (1.0, 5.0),  # Peak enhancement factor
+        # Discretization parameters.
+        n_components: int = 30,                          # Harmonic component count
+        f_min: float = 0.04,                              # Minimum frequency (Hz)
+        f_max: float = 0.5,                               # Maximum frequency (Hz)
+        # Physical constants.
         gravity: float = 9.81,
     ):
         self.num_envs = num_envs
@@ -60,7 +60,7 @@ class JONSWAPWaveField:
         self.tp_range = tp_range
         self.gamma_range = gamma_range
 
-        # 频率离散化 (所有env共享频率网格)
+        # All environments share the same frequency grid.
         self.df = (f_max - f_min) / n_components
         # (n_components,)
         self.freqs = torch.linspace(
@@ -70,66 +70,66 @@ class JONSWAPWaveField:
             device=device
         )
         self.omegas = 2 * math.pi * self.freqs  # (n_components,)
-        self.wave_numbers = self.omegas ** 2 / gravity  # 深水色散关系 (n_components,)
+        self.wave_numbers = self.omegas ** 2 / gravity  #   (n_components,)
 
-        # 每个env的参数 (在reset时随机化)
+        # Per-environment wave parameters, randomized on reset.
         self.hs = torch.zeros(num_envs, device=device)
         self.tp = torch.zeros(num_envs, device=device)
         self.gamma = torch.zeros(num_envs, device=device)
         self.wave_dir = torch.zeros(num_envs, 2, device=device)  # (dx, dy)
 
-        # 每个env、每个频率分量的振幅和相位
+        # Per-environment component amplitudes and phases.
         # (num_envs, n_components)
         self.amplitudes = torch.zeros(num_envs, n_components, device=device)
         self.phases = torch.zeros(num_envs, n_components, device=device)
         self.comp_dir_x = torch.zeros(num_envs, n_components, device=device)
         self.comp_dir_y = torch.zeros(num_envs, n_components, device=device)
-        # 初始化所有env
+        # Initialize all environments.
         all_ids = torch.arange(num_envs, device=device)
         self.randomize(all_ids)
 
     def _compute_jonswap_spectrum(self, hs: torch.Tensor, tp: torch.Tensor, gamma: torch.Tensor) -> torch.Tensor:
-        """计算JONSWAP谱。
+        """Compute the JONSWAP spectral density.
 
         S(f) = α · f^(-5) · exp(-5/4 · (fp/f)^4) · γ^r
 
-        其中:
-            α = 5/16 · Hs² · fp⁴  (Phillips常数，归一化到Hs)
+        Parameters:
+            α = 5/16 · Hs² · fp⁴  (Phillips normalization to Hs)
             r = exp(-0.5 · ((f - fp) / (σ · fp))²)
             σ = 0.07 (f ≤ fp), 0.09 (f > fp)
 
         Args:
-            hs: (num_envs,) 有义波高
-            tp: (num_envs,) 谱峰周期
-            gamma: (num_envs,) 峰增强因子
+            hs: (num_envs,) significant wave heights
+            tp: (num_envs,) peak periods
+            gamma: (num_envs,) peak enhancement factors
 
         Returns:
-            S: (num_envs, n_components) 谱密度值 m²/Hz
+            S: (num_envs, n_components) spectral density in m²/Hz
         """
         fp = 1.0 / tp  # (num_envs,)
 
-        # 扩展维度以便广播: (num_envs, 1) 和 (1, n_components)
+        # Broadcast to (num_envs, 1) and (1, n_components).
         fp_e = fp.unsqueeze(1)        # (num_envs, 1)
         hs_e = hs.unsqueeze(1)        # (num_envs, 1)
         gamma_e = gamma.unsqueeze(1)  # (num_envs, 1)
         f_e = self.freqs.unsqueeze(0) # (1, n_components)
 
-        # Phillips常数 (归一化)
+        # Phillips normalization.
         alpha = 5.0 / 16.0 * hs_e ** 2 * fp_e ** 4
 
-        # Pierson-Moskowitz部分
+        # Pierson-Moskowitz base spectrum.
         pm = alpha * f_e.pow(-5) * torch.exp(-1.25 * (fp_e / f_e).pow(4))
 
         # sigma: 0.07 for f <= fp, 0.09 for f > fp
         sigma = torch.where(f_e <= fp_e, 0.07, 0.09)
 
-        # 峰增强因子
+        # Peak-enhancement exponent.
         r = torch.exp(-0.5 * ((f_e - fp_e) / (sigma * fp_e)).pow(2))
 
         # JONSWAP = PM × γ^r
         S = pm * gamma_e.pow(r)
 
-        # 数值安全
+        # Numerical safety.
         S = torch.clamp(S, min=0.0)
 
         return S
@@ -147,7 +147,7 @@ class JONSWAPWaveField:
 
         self.phases[env_ids] = torch.rand(num, self.n_components, device=self.device) * 2 * math.pi
 
-        # 方向展布：每个分量在主方向±30°内随机偏移
+        # Spread each component within +/-30 degrees of the mean direction.
         spread_angles = (torch.rand(num, self.n_components, device=self.device) - 0.5) * (math.pi / 3)
         base_angle = torch.atan2(self.wave_dir[env_ids, 1], self.wave_dir[env_ids, 0])
         comp_angles = base_angle.unsqueeze(1) + spread_angles
@@ -189,24 +189,24 @@ class JONSWAPWaveField:
         }
 
     def get_obs(self, forward_2d: torch.Tensor) -> dict[str, torch.Tensor]:
-        """获取波浪相关的观测量，用于RL策略输入。
+        """Return wave features for the RL policy.
 
         Args:
-            forward_2d: (num_envs, 2) USV前向方向
+            forward_2d: (num_envs, 2) vehicle forward directions
 
         Returns:
             dict with:
-            - wave_dot: cos(船头与波浪夹角)
-            - wave_cross: sin(船头与波浪夹角)
-            - wave_height_norm: 归一化波高
-            - hs: 当前有义波高 (给centralized critic用)
-            - tp: 当前谱峰周期
+            - wave_dot: cosine of the bow-to-wave angle
+            - wave_cross: sine of the bow-to-wave angle
+            - wave_height_norm: normalized significant wave height
+            - hs: current significant wave height for a centralized critic
+            - tp: current peak period
         """
         wave_dot = (forward_2d[:, 0] * self.wave_dir[:, 0]
                     + forward_2d[:, 1] * self.wave_dir[:, 1])
         wave_cross = (forward_2d[:, 0] * self.wave_dir[:, 1]
                       - forward_2d[:, 1] * self.wave_dir[:, 0])
-        wave_height_norm = self.hs / self.hs_range[1]  # 归一化到[0,1]
+        wave_height_norm = self.hs / self.hs_range[1]  #  [0,1]
 
         return {
             "wave_dot": wave_dot.unsqueeze(-1),
@@ -218,38 +218,38 @@ class JONSWAPWaveField:
 
 
 # ============================================
-# 配置类（和Isaac Lab的configclass风格一致）
+# Configuration class following the Isaac Lab configclass style.
 # ============================================
 
 class JONSWAPWaveCfg:
-    """JONSWAP波浪配置，替换原有的WavePhysicsCfg"""
+    """JONSWAP wave configuration replacing WavePhysicsCfg."""
     enable_wave: bool = True
-    # JONSWAP谱参数范围 (训练时随机化)
-    hs_min: float = 0.3        # 最小有义波高 (m)
-    hs_max: float = 1.0        # 最大有义波高 (m)
-    tp_min: float = 4.0        # 最小谱峰周期 (s)
-    tp_max: float = 7.0        # 最大谱峰周期 (s)
-    gamma_min: float = 1.0     # 最小峰增强因子
-    gamma_max: float = 5.0     # 最大峰增强因子
-    # 离散化
-    n_components: int = 30     # 谐波分量数
-    f_min: float = 0.04        # 最小频率 (Hz)
-    f_max: float = 0.5         # 最大频率 (Hz)
+    # JONSWAP spectrum ranges randomized during training.
+    hs_min: float = 0.3        # Minimum significant wave height (m)
+    hs_max: float = 1.0        # Maximum significant wave height (m)
+    tp_min: float = 4.0        # Minimum peak period (s)
+    tp_max: float = 7.0        # Maximum peak period (s)
+    gamma_min: float = 1.0     # Minimum peak enhancement factor
+    gamma_max: float = 5.0     # Maximum peak enhancement factor
+    # Frequency discretization.
+    n_components: int = 30     # Harmonic component count
+    f_min: float = 0.04        # Minimum frequency (Hz)
+    f_max: float = 0.5         # Maximum frequency (Hz)
 
 
 # ============================================
-# 工具函数: 用于验证和调试
+# Validation helper for debugging and regression checks.
 # ============================================
 
 def validate_spectrum(hs: float = 1.0, tp: float = 5.0, gamma: float = 3.3, n_components: int = 30):
-    """验证JONSWAP谱实现的正确性。
+    """Validate the JONSWAP spectrum implementation.
 
-    检查:
-    1. 4√m₀ ≈ Hs (谱的零阶矩应满足)
-    2. 谱峰位置在 fp = 1/Tp 附近
-    3. 波面时间序列的统计特性
+    Checks:
+    1. 4√m₀ ≈ Hs (zeroth-moment normalization)
+    2. The spectral peak is near fp = 1/Tp
+    3. The wave-surface time-series statistics
 
-    用法:
+    Usage:
         python -c "from jonswap_wave import validate_spectrum; validate_spectrum()"
     """
     device = torch.device("cpu")
@@ -263,7 +263,7 @@ def validate_spectrum(hs: float = 1.0, tp: float = 5.0, gamma: float = 3.3, n_co
         n_components=n_components,
     )
 
-    # 检查谱
+    # Evaluate the spectrum.
     S = wave._compute_jonswap_spectrum(
         torch.tensor([hs]),
         torch.tensor([tp]),
@@ -283,12 +283,12 @@ def validate_spectrum(hs: float = 1.0, tp: float = 5.0, gamma: float = 3.3, n_co
     print(f"4√m0 = {hs_check:.3f} m (should ≈ {hs} m)")
     print(f"Error: {abs(hs_check - hs)/hs*100:.1f}%")
 
-    # 谱峰
+    # Locate the spectral peak.
     peak_idx = S[0].argmax().item()
     peak_freq = wave.freqs[peak_idx].item()
     print(f"Peak freq: {peak_freq:.3f} Hz (should ≈ {1/tp:.3f} Hz)")
 
-    # 时间序列
+    # Check the time series.
     dt = 0.1
     t_max = 600.0
     etas = []
