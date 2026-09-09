@@ -1,0 +1,82 @@
+seed: 42
+
+
+# Models are instantiated using skrl's model instantiator utility
+# https://skrl.readthedocs.io/en/latest/api/utils/model_instantiators.html
+models:
+  separate: False
+  policy:
+    class: GaussianMixin
+    clip_actions: True
+    clip_log_std: True
+    min_log_std: -20.0
+    max_log_std: 2.0
+    initial_log_std: -1.9
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ACTIONS
+  value:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+
+
+memory:
+  class: RandomMemory
+  memory_size: -1
+
+
+agent:
+  class: PPO
+  rollouts: 32
+  learning_epochs: 8
+  mini_batches: 8
+  discount_factor: 0.997
+  lambda: 0.95
+  # V7: V6 proved success is samplable and learnable (training success hit
+  # 0.99-1.00 twice) but the policy oscillated in and out of it under
+  # KLAdaptiveLR at 5e-4; lower LR keeps updates inside the stable region.
+  learning_rate: 1.5e-04
+  learning_rate_scheduler: KLAdaptiveLR
+  learning_rate_scheduler_kwargs:
+    kl_threshold: 0.008
+  state_preprocessor: RunningStandardScaler
+  state_preprocessor_kwargs: null
+  value_preprocessor: RunningStandardScaler
+  value_preprocessor_kwargs: null
+  random_timesteps: 0
+  learning_starts: 0
+  grad_norm_clip: 1.0
+  ratio_clip: 0.2
+  value_clip: 0.2
+  clip_predicted_values: True
+  # V6: no entropy bonus --it pushes log_std back up, re-breaking the
+  # speed<=0.3 hold condition that requires sigma to stay small.
+  entropy_loss_scale: 0.0
+  value_loss_scale: 2.0
+  kl_threshold: 0.0
+  # V7: keep value targets small alongside the 500 terminal bonus.
+  rewards_shaper_scale: 0.1
+  time_limit_bootstrap: False
+  experiment:
+    directory: "usvbench"
+    experiment_name: "dock_v1"
+    write_interval: auto
+    checkpoint_interval: auto
+    wandb: true
+    wandb_kwargs:
+      project: "usv-navigation"
+
+
+trainer:
+  class: SequentialTrainer
+  timesteps: 300000
+  environment_info: log

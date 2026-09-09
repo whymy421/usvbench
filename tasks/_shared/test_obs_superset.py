@@ -16,6 +16,7 @@ except ImportError:  # Direct execution from the repository root.
 EXPECTED_DIMS = {
     "Isaac-My-First-Task-Calm-Direct-v1": 3,
     "Isaac-My-First-Task-Calm-Boat-Direct-v1": 3,
+    "Isaac-USVBench-Boat-Calm-Direct-v1": 3,
     "Isaac-USV-BlueBoat-Calm-Direct-v1": 3,
     "Isaac-USV-StationKeep-Direct-v1": 3,
     "Isaac-USV-StationKeep-BlueBoat-Direct-v1": 3,
