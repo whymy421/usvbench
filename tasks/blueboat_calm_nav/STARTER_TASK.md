@@ -34,7 +34,7 @@ concept and clipping critic values would change value learning.
 | COM and inertia | USD-authored | official BlueBoat CAD-derived asset; intentionally not overridden by task configuration |
 | Hull form | displacement catamaran | official BlueBoat product/CAD geometry |
 | Hull spacing | 0.7214 m | official BlueBoat CAD mapped bounds |
-| Bow/body axis | `+X` | committed USD mapped bounds show length along X and bow on +X; both `forward_vec` and surge-force sign use this convention |
+| Bow/body axis | `+X` | hull shape puts the bow on +X (keel rise, deepest stern point at -X), checked by `scripts/check_blueboat_orientation.py`; a bounding box cannot tell bow from stern. Both `forward_vec` and surge-force sign use this convention. See [`docs/BLUEBOAT_ASSET.md`](../../docs/BLUEBOAT_ASSET.md) |
 | Total forward thrust | 80.0 N | two official M200 thrusters, approximately 40 N each |
 | Total reverse thrust | 48.0 N | two M200 reverse limits at approximately 60% of forward due to propeller asymmetry |
 | Maximum yaw torque | 23.0 N·m | CAD half-spacing lever arm: `0.3607 * (40.2 + 24) = 23.16 N·m`, rounded |
