@@ -209,7 +209,9 @@ def test_level_sampling_and_zero_wave_factory() -> None:
         gamma_levels=(3.3,),
         seed=77,
     )
-    assert set(field.hs.tolist()) <= {0.06, 0.12, 0.18}
+    # hs is float32, so compare against the levels with a tolerance.
+    hs_levels = torch.tensor((0.06, 0.12, 0.18), dtype=field.hs.dtype, device=field.hs.device)
+    assert torch.isclose(field.hs.unsqueeze(-1), hs_levels).any(dim=-1).all()
     assert set(field.tp.tolist()) <= {2.0, 3.0, 4.0}
     assert torch.equal(field.gamma, torch.full_like(field.gamma, 3.3))
     cfg = SimpleNamespace(
