@@ -80,6 +80,13 @@ stations and relative-water drag, with no authored wave-force gains. See
 [`docs/WAVE_PARAMETER_ALIGNMENT.md`](docs/WAVE_PARAMETER_ALIGNMENT.md) for the unified
 `Hs`/`Tp` definitions and reporting fields. No wave-trained baseline is claimed yet.
 
+## BlueBoat asset
+
+The BlueBoat USD was corrected on 2026-10-13: the previous asset had bow and stern reversed, the two
+hulls swapped port/starboard and a hand-set 4.7 cm lateral centre-of-mass offset. Task hydrodynamics
+do not read the hull mesh and are unchanged. See [`docs/BLUEBOAT_ASSET.md`](docs/BLUEBOAT_ASSET.md)
+for the details, the checks and how to restore the previous asset.
+
 ## Repository layout
 
 ```
