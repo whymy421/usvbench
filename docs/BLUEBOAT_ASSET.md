@@ -50,6 +50,15 @@ python scripts/validate_blueboat_visual.py      # visual layer composes the phys
 
 `check_blueboat_orientation.py` passes on the corrected asset and fails all six checks on the previous one.
 
+## Official render model
+
+`assets/BB120_official_visual_only.usd` (38.6 MB) is the official Blue Robotics BB120 model, converted for
+rendering only: no collision, mass or physics schemas. HazardNav overlays it on the physics body when
+`use_official_blueboat_visual=True`; the gray physics mesh stays authoritative for mass, inertia, collision,
+buoyancy and drag. With the configured placement it matches the corrected hulls (bow on +x, same keel
+heights at both ends, length within 1 cm). Its only external dependency is the `gltf/pbr.mdl` material
+that ships with Isaac Sim.
+
 ## Still open
 
 - The centre-of-mass height and the inertia are still hand-set, not measured.
