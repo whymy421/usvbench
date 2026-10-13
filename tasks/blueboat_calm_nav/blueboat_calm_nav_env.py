@@ -240,7 +240,8 @@ class BlueBoatCalmNavEnv(DirectRLEnv):
                 current_yaws.unsqueeze(1),
                 self.up_dir
             ).reshape(self.num_envs, 4)
-        # BlueBoat USD mapped bounds place the long axis on X and the bow on +X.
+        # The BlueBoat hull shape puts the long axis on X and the bow on +X
+        # (scripts/check_blueboat_orientation.py; bounds alone cannot tell bow from stern).
         # Keep one sign for thrust, heading, and forward-speed projection: a
         # positive action applies +X force and scores +X body velocity.
         self._fwd_x = +1.0
