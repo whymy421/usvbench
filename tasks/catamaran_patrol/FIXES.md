@@ -1,4 +1,4 @@
-# Catamaran P1 — physics review at commit `3f2d799`
+# Catamaran P1 — physics review at commit `e5519e4`
 
 Everything below was reproduced locally on a clean clone of the branch
 (RTX 5080, Isaac Lab 2.7.0+cu128, skrl 1.4.3) before any change was made.
@@ -209,7 +209,7 @@ rose from 1520 to 6065 and was still climbing at the end.
 
 Same standardized evaluation, 64 envs x 6000 steps, evaluation seed 2026:
 
-| metric | before (`3f2d799`) | after the bug fixes | after the physics port |
+| metric | before (`e5519e4`) | after the bug fixes | after the physics port |
 |---|---|---|---|
 | targets_per_episode | 0.000 | 19.406 | **20.175** |
 | total targets | 0 | 1035 | 1076 |

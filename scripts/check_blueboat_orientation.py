@@ -1,6 +1,6 @@
 """Regression check for the BlueBoat hull orientation in assets/blueboat_physics.usd.
 
-The first CAD-derived asset (commit 1cac168) kept the hull meshes in the CAD frame: bow on -x and the two
+The first CAD-derived asset (commit 977a96d) kept the hull meshes in the CAD frame: bow on -x and the two
 hulls swapped port/starboard, while every task drives the boat along +x. A bounding box cannot tell bow
 from stern, so this script checks the hull shape itself:
 

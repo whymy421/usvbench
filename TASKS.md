@@ -24,7 +24,7 @@ python scripts/eval_benchmark.py --task <task-id> --checkpoint <shipped .pt> \
 | boat | `boat_calm_v26_s42.pt` | 8.681 / 8.494 / 8.719 | **8.63 ± 0.12** | 1.87–1.90 m/s | 0.00 |
 | catamaran | `catamaran_p1_s42_fixed_256k.pt` | 20.175 / 19.444 / 19.538 | **19.72 ± 0.40** | 2.45–2.47 m/s | 0.00 |
 
-*Measured 2026-10-15, main c78400a, eval seed 2026. Each value is the final checkpoint of a fixed
+*Measured 2026-10-15, main 50e1f29, eval seed 2026. Each value is the final checkpoint of a fixed
 3000-iteration run (catamaran: 4000 iterations, 64 rollouts) per training seed; the shipped file is
 the seed-42 run. Training logs and per-seed evaluations: `results/retrain_2026-10/`. The catamaran
 seed-42 retrain is byte-identical to the previously shipped file.*

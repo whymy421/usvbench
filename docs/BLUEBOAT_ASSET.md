@@ -1,7 +1,7 @@
 # BlueBoat asset: hull orientation fix
 
 `assets/blueboat_physics.usd` and `assets/blueboat_visual.usd` were replaced on 2026-10-13.
-The previous physics asset (commit `1cac168`, "BlueBoat USD from official CAD") had three defects
+The previous physics asset (commit `977a96d`, "BlueBoat USD from official CAD") had three defects
 that came from the CAD-to-USD conversion, not from the official Blue Robotics files:
 
 | | Previous asset | Corrected asset |
@@ -37,8 +37,8 @@ Results trained or evaluated with the previous asset stay valid as results of th
 them exactly, restore it from history:
 
 ```bash
-git checkout 1cac168 -- assets/blueboat_physics.usd
-git checkout a9362d3 -- assets/blueboat_visual.usd
+git checkout 977a96d -- assets/blueboat_physics.usd
+git checkout d57dad1 -- assets/blueboat_visual.usd
 ```
 
 ## Checks
