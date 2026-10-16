@@ -157,5 +157,4 @@ balance hack, non-standard body axes) and the fact that the simple ROV reward fa
 **If you have ideas to make the boat navigate more cleanly/efficiently** (better reward,
 obs, or physics), feel free to try — it'd be a welcome contribution. But this is
 **optional**: it's not a required task, so don't sink days into it. Reproducing the
-V26 baseline is the current reference target; use [`docs/STUDENTS_TASKS.md`](../../docs/STUDENTS_TASKS.md)
-for the active task list.
+V26 baseline is the current reference target; see [`TASKS.md`](../../TASKS.md) for the roadmap.
