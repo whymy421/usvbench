@@ -18,13 +18,20 @@ python scripts/eval_benchmark.py --task <task-id> --checkpoint <shipped .pt> \
     --num_envs 64 --eval_steps 6000 --seed 2026 --headless
 ```
 
-| vehicle | checkpoint | targets/episode | mean speed | oob/episode |
-|---|---|---|---|---|
-| ROV  | `rov_calm_s42.pt` | **4.48** | 1.48 m/s | 0.02 |
-| boat | `boat_calm_v26_s42.pt` | **3.75** | 1.33 m/s | 0.00 |
+| vehicle | checkpoint | targets/episode (seeds 42 / 123 / 456) | mean ± std | mean speed | oob/episode |
+|---|---|---|---|---|---|
+| ROV  | `rov_calm_s42.pt` | 6.056 / 6.169 / 6.225 | **6.15 ± 0.09** | 1.52 m/s | 0.00 |
+| boat | `boat_calm_v26_s42.pt` | 8.681 / 8.494 / 8.719 | **8.63 ± 0.12** | 1.87–1.90 m/s | 0.00 |
+| catamaran | `catamaran_p1_s42_fixed_256k.pt` | 20.175 / 19.444 / 19.538 | **19.72 ± 0.40** | 2.45–2.47 m/s | 0.00 |
 
-*Measured 2026-07-31 on the realistic-dynamics physics, eval seed 2026, single seed (42);
-3-seed means still pending for both.*
+*Measured 2026-10-15, main c78400a, eval seed 2026. Each value is the final checkpoint of a fixed
+3000-iteration run (catamaran: 4000 iterations, 64 rollouts) per training seed; the shipped file is
+the seed-42 run. Training logs and per-seed evaluations: `results/retrain_2026-10/`. The catamaran
+seed-42 retrain is byte-identical to the previously shipped file.*
+
+> The 2026-07-31 figures (ROV 4.48, boat 3.75) are superseded. Re-evaluated on the current code with
+> the command above, the 2026-07-31 checkpoints score 5.18 (ROV) and 3.38 (boat), so the task code
+> changed after that measurement; the retrained checkpoints replace them.
 
 > **These replace the old 27.1 / 5.1 figures and are not comparable to them.** Those were
 > measured before the physics merge, on a model where the drag actually acting on the ROV

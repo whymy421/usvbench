@@ -1,6 +1,6 @@
 # =============================================================
 # USVBench — Train: Boat calm-water navigation (reference task B)
-# Reference: V26 = 4.76 targets/episode @ 3000 iter, seed 42 (RTX 5080, ~1.5 h)
+# Reference: V26 = 8.63 +/- 0.12 targets/episode @ 3000 iter, seeds 42/123/456 (see TASKS.md)
 # wandb: https://wandb.ai/whymysong321-university-of-southampton/usvbench/runs/si1f8sq1
 # =============================================================
 #
