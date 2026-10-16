@@ -1,0 +1,12 @@
+key,task,vehicle,metric,value,per_seed,train_seeds,eval,checkpoint,source,zero_action
+rov_calm,Isaac-My-First-Task-Calm-Direct-v1,Doc Ricketts ROV,targets per episode,6.15 ± 0.09,6.056 / 6.169 / 6.225,"42, 123, 456","eval_benchmark.py, 64 envs x 6000 steps, seed 2026",rov_calm_s42.pt,"retrain 2026-10-15, final checkpoint",
+boat_calm,Isaac-USVBench-Boat-Calm-Direct-v1,5.5 m monohull,targets per episode,8.63 ± 0.12,8.681 / 8.494 / 8.719,"42, 123, 456","eval_benchmark.py, 64 envs x 6000 steps, seed 2026",boat_calm_v26_s42.pt,"retrain 2026-10-15, final checkpoint",
+catamaran,Isaac-Catamaran-Patrol-Direct-v1,catamaran,targets per episode,19.72 ± 0.40,20.175 / 19.444 / 19.538,"42, 123, 456","eval_benchmark.py, 64 envs x 6000 steps, seed 2026",catamaran_p1_s42_fixed_256k.pt,"retrain 2026-10-15, final checkpoint",
+path_rov,Isaac-USV-PathFollow-Direct-v1,ROV,success rate,0.820,0.820,42,"eval_mission.py, 128 episodes, seed 42",path_v4b_s42.pt,"shipped checkpoint, re-evaluated",0.000
+path_blueboat,Isaac-USV-PathFollow-BlueBoat-Direct-v1,BlueBoat,success rate,1.000,1.000,42,"eval_mission.py, 128 episodes, seed 42",path_blueboat_s42.pt,"shipped checkpoint, re-evaluated",0.000
+path_hazard,Isaac-USV-PathHazard-Direct-v1,BlueBoat,success rate,0.125,0.125,42,"eval_mission.py, 128 episodes, seed 42",path_hazard_v2_s42.pt,"shipped checkpoint, re-evaluated",0.000
+sk_rov,Isaac-USV-StationKeep-Direct-v1,ROV,success rate,1.000,1.000,42,"eval_mission.py, 128 episodes, seed 42",sk_rov_fh_s42.pt,"shipped checkpoint, re-evaluated",0.000
+sk_blueboat,Isaac-USV-StationKeep-BlueBoat-Direct-v1,BlueBoat,success rate,0.977,0.977,42,"eval_mission.py, 128 episodes, seed 42",sk_blueboat_s42.pt,"shipped checkpoint, re-evaluated",0.000
+sk_blueboat_current,Isaac-USV-StationKeep-BlueBoat-Current-Direct-v1,BlueBoat,success rate,1.000,1.000,42,"eval_mission.py, 128 episodes, seed 42",sk_blueboat_current_s42.pt,"shipped checkpoint, re-evaluated",0.000
+sk_boat,Isaac-USV-StationKeep-Boat-Direct-v1,5.5 m monohull,success rate,1.000,1.000,42,"eval_mission.py, 128 episodes, seed 42",sk_boat_s42.pt,"retrain 2026-10-15, final checkpoint",0.000
+dock_blueboat_current,Isaac-USV-Dock-BlueBoat-Current-Direct-v1,BlueBoat,success rate,0.125,0.125,42,"eval_mission.py, 128 episodes, seed 42, spawn 25 m",dock_blueboat_current_s42.pt,"retrain 2026-10-15, final checkpoint",0.008

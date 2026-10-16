@@ -1,0 +1,11 @@
+task,train_seed,eval_seed,targets_per_episode,mean_speed,oob_per_episode,oob_fraction_completed,mean_episode_len,completed_episodes,oob_episodes,timeout_episodes,total_targets,episode_equivalents,checkpoint
+Isaac-Catamaran-Patrol-Direct-v1,123,2026,17.718750,2.421900,0.000000,,,0,0,0,315,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_06-32-49_catamaran_s123\checkpoints\agent_128000.pt
+Isaac-Catamaran-Patrol-Direct-v1,123,2026,18.225000,2.405487,0.000000,,,0,0,0,324,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_06-32-49_catamaran_s123\checkpoints\agent_102400.pt
+Isaac-Catamaran-Patrol-Direct-v1,123,2026,16.143750,2.358940,0.000000,,,0,0,0,287,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_06-32-49_catamaran_s123\checkpoints\agent_153600.pt
+Isaac-Catamaran-Patrol-Direct-v1,123,2026,16.987500,2.421800,0.000000,,,0,0,0,302,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_06-32-49_catamaran_s123\checkpoints\agent_179200.pt
+Isaac-Catamaran-Patrol-Direct-v1,123,2026,17.775000,2.421977,0.000000,,,0,0,0,316,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_06-32-49_catamaran_s123\checkpoints\agent_204800.pt
+Isaac-Catamaran-Patrol-Direct-v1,123,2026,16.762500,2.324004,0.000000,,,0,0,0,298,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_06-32-49_catamaran_s123\checkpoints\agent_230400.pt
+Isaac-Catamaran-Patrol-Direct-v1,123,2026,17.831250,2.364191,0.000000,,,0,0,0,317,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_06-32-49_catamaran_s123\checkpoints\agent_256000.pt
+Isaac-Catamaran-Patrol-Direct-v1,123,2026,17.718750,2.414046,0.000000,,,0,0,0,315,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_06-32-49_catamaran_s123\checkpoints\agent_25600.pt
+Isaac-Catamaran-Patrol-Direct-v1,123,2026,16.818750,2.249442,0.000000,,,0,0,0,299,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_06-32-49_catamaran_s123\checkpoints\agent_51200.pt
+Isaac-Catamaran-Patrol-Direct-v1,123,2026,18.393750,2.427671,0.000000,,,0,0,0,327,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_06-32-49_catamaran_s123\checkpoints\agent_76800.pt

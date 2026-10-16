@@ -3,8 +3,8 @@
 > **Vessel**: Doc Ricketts ROV (`ROV_rigged.usd`)
 > **Condition**: calm water (no waves, no current)
 > **Algorithm**: PPO (single agent)
-> **Status**: ✅ validated — **4.48** targets/episode on the deterministic eval
-> (`rov_calm_s42.pt`, final checkpoint of a 3000-iteration seed-42 run).
+> **Status**: ✅ validated — **6.15 ± 0.09** targets/episode on the deterministic eval
+> (seeds 42/123/456; shipped `rov_calm_s42.pt` is the final checkpoint of the 3000-iteration seed-42 run, retrained 2026-10-15).
 > Baselines are maintained in [`TASKS.md`](../../TASKS.md#current-baselines).
 > **Gym id**: `Isaac-My-First-Task-Calm-Direct-v1`
 
@@ -89,7 +89,7 @@ python scripts/eval_benchmark.py --task=Isaac-My-First-Task-Calm-Direct-v1 \
   --checkpoint=<repo>/tasks/rov_calm_nav/checkpoints/rov_calm_s42.pt
 ```
 Add `--seed 2026` to match [`TASKS.md`](../../TASKS.md#current-baselines).
-Reference: `targets_per_episode` = **4.48** on the shipped `rov_calm_s42.pt`.
+Reference: `targets_per_episode` = **6.056** on the shipped `rov_calm_s42.pt` (seed 42; 3-seed mean 6.15 ± 0.09).
 (The old `27.1 ± 2.4` predates the realistic-dynamics merge and is not comparable.)
 
 ---

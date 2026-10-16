@@ -1,0 +1,11 @@
+task,train_seed,eval_seed,targets_per_episode,mean_speed,oob_per_episode,oob_fraction_completed,mean_episode_len,completed_episodes,oob_episodes,timeout_episodes,total_targets,episode_equivalents,checkpoint
+Isaac-USVBench-Boat-Calm-Direct-v1,456,2026,7.706250,1.855845,0.000000,,,0,0,0,137,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_08-01-49_boat_calm_s456\checkpoints\agent_19200.pt
+Isaac-USVBench-Boat-Calm-Direct-v1,456,2026,9.281250,1.859389,0.000000,,,0,0,0,165,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_08-01-49_boat_calm_s456\checkpoints\agent_28800.pt
+Isaac-USVBench-Boat-Calm-Direct-v1,456,2026,8.043750,1.777691,0.000000,,,0,0,0,143,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_08-01-49_boat_calm_s456\checkpoints\agent_38400.pt
+Isaac-USVBench-Boat-Calm-Direct-v1,456,2026,8.831250,1.863317,0.000000,,,0,0,0,157,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_08-01-49_boat_calm_s456\checkpoints\agent_57600.pt
+Isaac-USVBench-Boat-Calm-Direct-v1,456,2026,9.000000,1.872584,0.000000,,,0,0,0,160,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_08-01-49_boat_calm_s456\checkpoints\agent_48000.pt
+Isaac-USVBench-Boat-Calm-Direct-v1,456,2026,8.831250,1.830245,0.000000,,,0,0,0,157,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_08-01-49_boat_calm_s456\checkpoints\agent_67200.pt
+Isaac-USVBench-Boat-Calm-Direct-v1,456,2026,9.056250,1.840817,0.000000,,,0,0,0,161,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_08-01-49_boat_calm_s456\checkpoints\agent_76800.pt
+Isaac-USVBench-Boat-Calm-Direct-v1,456,2026,9.112500,1.840760,0.000000,,,0,0,0,162,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_08-01-49_boat_calm_s456\checkpoints\agent_86400.pt
+Isaac-USVBench-Boat-Calm-Direct-v1,456,2026,8.606250,1.861618,0.000000,,,0,0,0,153,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_08-01-49_boat_calm_s456\checkpoints\agent_9600.pt
+Isaac-USVBench-Boat-Calm-Direct-v1,456,2026,9.225000,1.845595,0.000000,,,0,0,0,164,17.777778,C:\Users\Yutong\usvbench_retrain_20261014\logs\skrl\usvbench\2026-10-15_08-01-49_boat_calm_s456\checkpoints\agent_96000.pt
