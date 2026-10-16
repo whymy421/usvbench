@@ -3,8 +3,8 @@
 > **Vessel**: 5 m monohull (`boat_physics.usdc`)
 > **Condition**: calm water (no waves, no current)
 > **Algorithm**: PPO (single agent)
-> **Status**: ✅ validated — V26 = **3.75** targets/episode on the deterministic eval
-> (`boat_calm_v26_s42.pt`, final checkpoint of a 3000-iteration seed-42 run).
+> **Status**: ✅ validated — V26 = **8.63 ± 0.12** targets/episode on the deterministic eval
+> (seeds 42/123/456; shipped `boat_calm_v26_s42.pt` is the final checkpoint of the 3000-iteration seed-42 run, retrained 2026-10-15).
 > Baselines are maintained in [`TASKS.md`](../../TASKS.md#current-baselines).
 > **Gym id**: `Isaac-My-First-Task-Calm-Boat-Direct-v1`
 > **wandb**: https://wandb.ai/whymysong321-university-of-southampton/usvbench/runs/si1f8sq1
@@ -110,8 +110,7 @@ python scripts/eval_benchmark.py --task=Isaac-My-First-Task-Calm-Boat-Direct-v1 
   --checkpoint=<repo>/tasks/boat_calm_nav/checkpoints/boat_calm_v26_s42.pt
 ```
 Add `--seed 2026` to match [`TASKS.md`](../../TASKS.md#current-baselines).
-Reference: `targets_per_episode` = **3.75** (seed 42). Note: the boat has higher
-seed-variance than the ROV — see *Known limitation* below.
+Reference: `targets_per_episode` = **8.681** (seed 42; 3-seed mean 8.63 ± 0.12).
 
 ---
 
@@ -148,7 +147,8 @@ Reproduce within ~20%. With V26 the boat navigates **bow-first** toward targets
 
 ## Known limitation — an open problem (optional to improve)
 
-The boat is the **weak spot** of the benchmark: 3.75 targets/ep vs the ROV's 4.48. It
+The 2026-07-31 reference scored 3.75 targets/ep (3.38 when re-evaluated on the current code);
+the 2026-10-15 retrain of the same V26 recipe scores 8.63 ± 0.12. Getting here
 took a lot of reward tuning (V11→V26→V40) just to get here, and neither baseline is
 clean: V26 navigates bow-first but is slow/modest, V40 scores higher but reverses into
 targets. Root causes are the boat's non-marine-grade physics (mass/volume are a float-
