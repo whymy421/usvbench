@@ -2,7 +2,7 @@
 
 > How we work together on the USVBench repo. Read this once before your first commit.
 
-Repo: **https://github.com/whymy421/usvbench** (private)
+Repo: **https://github.com/whymy421/usvbench** (public)
 
 ---
 
