@@ -1,6 +1,6 @@
 # USVBench
 
-> **Status**: Active development (private). Open-source release targeted for 2026.
+> **Status**: Active development. Public repository; licence to be announced.
 
 USVBench is a reinforcement-learning benchmark for unmanned surface vehicles (USVs), built on
 [Isaac Lab](https://github.com/isaac-sim/IsaacLab): **11 task modules, 22 gym ids, 4 vessels** (Doc Ricketts
