@@ -99,5 +99,5 @@ Deterministic policy (mean action); report mean ± std over training seeds 42 / 
 - [Task roadmap and measured baselines](TASKS.md) ·
   [Wave tasks](tasks/hazard_nav/WAVES.md) · [Wave parameters](docs/WAVE_PARAMETER_ALIGNMENT.md) ·
   [BlueBoat asset fix (2026-10-13)](docs/BLUEBOAT_ASSET.md) ·
-  [Collaboration guide](docs/GITHUB_COLLABORATION.md) · [Student tasks](docs/STUDENTS_TASKS.md)
+  [Collaboration guide](docs/GITHUB_COLLABORATION.md)
 - **License**: TBD (MIT or Apache-2.0 on public release). **Citation**: TBD (ICRA Datasets & Benchmarks 2026, in preparation).
