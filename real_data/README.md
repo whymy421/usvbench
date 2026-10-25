@@ -44,12 +44,14 @@ python real_data/r4_select_periods.py <data folder>
 
 ## Notes
 
-- These scripts were rewritten for the repository; the original one-off
-  analysis code was not kept. Two filters were chosen because they reproduce
-  the recorded numbers exactly and are stated in the scripts: a wave record is
-  valid when Hs, Tp, Tz, peak direction and spread are all present (the QC flag
-  is not a filter for the wave distribution), and the gust factor uses
-  10-minute records with mean wind above 3 m/s.
+- These scripts were rewritten for the repository and apply the QC rules of
+  the original 2026-10-25 analysis. Waves: Hs (and Tz) kept when the CCO
+  flag is 0, 2, 3, 4, 6 or 8 and Hs < 50 m; Tp kept when the flag is 0, 3, 4,
+  6 or 8 and Tp < 50 s. Wind: a record is kept when its flag (last column) is
+  0, wind < 90 and gust < 90 m/s; the gust factor uses kept records with mean
+  wind above 3 m/s. R4 uses flag 0 for both wave records and the wind records
+  (with the same value bounds; flag 0 alone would let a few 9999 wave heights
+  through and give 7,706 hours instead of 7,627).
 - The current CSV files hold the hourly speed of the chosen cell, rounded to
   4 decimals; `--netcdf` recomputes the cell choice (largest annual mean speed
   in each subset) and the speeds from the `.nc` files (largest difference

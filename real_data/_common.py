@@ -19,6 +19,13 @@ from pathlib import Path
 import numpy as np
 
 MISSING = 9000.0          # CCO writes 9999 / 9999.0 for a missing value; anything >= this is treated as missing
+
+# QC rules used on 2026-10-25 (CCO flag column; values at or above the bound are missing / invalid):
+WAVE_HS_FLAGS = (0, 2, 3, 4, 6, 8)   # Hs (and Tz) kept for these flags and Hs < WAVE_MAX_M
+WAVE_TP_FLAGS = (0, 3, 4, 6, 8)      # Tp kept for these flags and Tp < WAVE_MAX_S
+WAVE_MAX_M = 50.0
+WAVE_MAX_S = 50.0
+MET_MAX_MPS = 90.0                   # wind records kept when flag == 0, wind < 90 and gust < 90
 YEAR_START = dt.datetime(2025, 1, 1)
 HOURS_2025 = 8760
 

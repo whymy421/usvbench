@@ -7,8 +7,8 @@ The rules were written down on 2026-10-25 before any real-condition case was run
 be changed after the runs:
 
 Eligible hour h (GMT, [h:00, h+1:00)) of 2025 -- all three sources present:
-  waves    both half-hour records of the hour have QC flag 0 and Hs, Tp, Tz present;
-  wind     Lymington has at least 6 ten-minute records in the hour with QC flag 0 and wind present;
+  waves    both half-hour records of the hour have QC flag 0 (and Hs < 50 m, Tp < 50 s);
+  wind     Lymington has at least 6 ten-minute records in the hour with flag 0 (wind, gust < 90 m/s);
   current  the Copernicus Hayling cell has a value for the hour.
 Hourly values: Hs and Tp = mean of the two half-hour records; wind = mean of the 10-minute means;
 gust = maximum gust in the hour; current = the hourly model value.
@@ -49,17 +49,15 @@ def hourly_table(data):
         wk = waves.get(h, [])
         if len(wk) != 2:
             continue
-        if not all(w["flag"][k] == 0 and w["hs"][k] < C.MISSING and w["tp"][k] < C.MISSING and w["tz"][k] < C.MISSING
-                   for k in wk):
+        if not all(w["flag"][k] == 0 and w["hs"][k] < C.WAVE_MAX_M and w["tp"][k] < C.WAVE_MAX_S for k in wk):
             continue
-        mk = [k for k in met.get(h, []) if m["flag"][k] == 0 and m["wind"][k] < C.MISSING]
+        mk = [k for k in met.get(h, []) if m["flag"][k] == 0 and m["wind"][k] < C.MET_MAX_MPS and m["gust"][k] < C.MET_MAX_MPS]
         if len(mk) < MIN_WIND_RECORDS or not np.isfinite(cur[h]):
             continue
         u = m["wind"][mk]
         gust = m["gust"][mk]
-        gust = gust[gust < C.MISSING]
         rows.append({"h": h, "hs": float(np.mean(w["hs"][wk])), "tp": float(np.mean(w["tp"][wk])),
-                     "u": float(np.mean(u)), "u_min": float(u.min()), "gust": float(gust.max()) if len(gust) else np.nan,
+                     "u": float(np.mean(u)), "u_min": float(u.min()), "gust": float(gust.max()),
                      "cur": float(cur[h])})
     return rows
 
