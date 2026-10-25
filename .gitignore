@@ -18,22 +18,23 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Training artifacts (Wandb runs are remote, no need to commit local cache)
-wandb/
-logs/
-runs/
-outputs/
-*.log
-
-# Large model files (use Git LFS or external storage)
-*.pt
-*.pth
-*.ckpt
-
-# Local environment
+# Local environment and credentials (never commit)
 .env
+.env.*
 .venv
 venv/
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*_ed25519
+known_hosts*
+.copernicusmarine/
+*credentials*
+hosts_*.json
+!campaign/hosts.example.json
 
 # Jupyter
 .ipynb_checkpoints/
@@ -44,7 +45,59 @@ venv/
 # Local-only draft (not for GitHub)
 docs/EMAIL_TO_ARIF.md
 
-# Reference checkpoints (small, shipped for reproduction)
-!tasks/*/checkpoints/
-!tasks/*/checkpoints/*.pt
+# Training artefacts and checkpoints (keep them out of git; publish as release attachments if needed)
+wandb/
+outputs/
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+tasks/*/checkpoints/
 tasks/*/videos/
+
+# Campaign run state, pulls, certificates and logs (stay on the controller PC / cloud storage)
+run/
+runs/
+pulls/
+pulled/
+logs/
+*.log
+*.nohup
+*.jsonl
+*.lock
+dose_*_a[0-9]*/
+certificates/
+certs/
+*.VALIDATED.*
+*.cell.json
+status/
+wake/
+dryrun/
+
+# Pool bundles and other archives (pool bundles are release attachments, not git content)
+*.xz
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+
+# Data (the real-data checks read it from a folder outside the repository)
+*.nc
+*.nc4
+*.grib
+*.grib2
+*.h5
+*.hdf5
+real_data/data/
+real_data/**/*.txt
+real_data/**/*.csv
+real_data/**/*.pdf
+
+# Videos
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm

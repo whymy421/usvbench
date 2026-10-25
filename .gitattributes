@@ -1,0 +1,7 @@
+# The release trees are hash-pinned (releases/<version>/*.manifest): check them out byte for byte,
+# whatever core.autocrlf is set to on the cloning machine.
+assets_v2/** -text
+scripts/** -text
+tasks/** -text
+releases/** -text
+campaign/** -text
