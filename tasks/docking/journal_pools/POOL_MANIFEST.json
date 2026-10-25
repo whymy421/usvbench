@@ -1,6 +1,23 @@
 {
  "family": "docking",
  "pools": {
+  "docking_blueboat_v2_g2_s11001_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 1196484,
+   "eval_seed": 11001,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "ad993e62115b2db6827a3eb44be09b695ed778753338fd11cafafd7936266bd3",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "50b1fb643eb074e1080e67bb65bcddb9d2f3ce306b2b8489f258099db7ee2213",
+   "vessel": "blueboat_v2"
+  },
   "docking_blueboat_v2_g2_s11002_64x2.json.xz": {
    "berth_walls": true,
    "bytes": 1193788,
@@ -102,6 +119,23 @@
    "schema": "usvbench.docking.d7_pool/2",
    "sha256": "a28e85bd2426fa675015642b1ad057921cb37f3137ba7929f5a6959f894e4f4d",
    "vessel": "blueboat_v2"
+  },
+  "docking_wamv_vrx_v2_opt1_g2_s11001_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 3358604,
+   "eval_seed": 11001,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "69b5a3d53cd6965fb52428ea1192d31a28d7c8737c75d86f6293c930e0b80002",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "e7e9c2ca9df9dbda32e7ca4130e8f0d584fb528904a1d9afa5243875bd6a898e",
+   "vessel": "wamv_vrx_v2_opt1"
   },
   "docking_wamv_vrx_v2_opt1_g2_s11002_64x2.json.xz": {
    "berth_walls": true,

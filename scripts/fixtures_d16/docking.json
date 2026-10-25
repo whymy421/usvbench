@@ -212,7 +212,7 @@
    }
   ],
   "pool_digest": "a973562bc42704a27895fe8541bb71bbd678bd9928964cd74a69d319ceb9dc43",
-  "pool_manifest_sha256": "45b14f85be9027dfc15df193b05ddf1cb75af8f1b00b821a8bc194d73c08a57e",
+  "pool_manifest_sha256": "632b072493ada0163109f234ca9d97598e17c2ae82772c7929f19301a1d940d3",
   "runtime_rule": {
    "causes": [
     "ttc_reveal",

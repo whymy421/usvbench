@@ -1,6 +1,6 @@
 {
  "family": "harbor_mission",
- "family_total_bytes": 176250320,
+ "family_total_bytes": 205601650,
  "pool_schema": "usvbench.harbour_d7_pool/2",
  "pools": [
   {
@@ -559,6 +559,105 @@
    "pool_digest": "665ed58c414c931dec359c0de65450c00188bb95dc73613d03f9dc367e49366c",
    "seed": 41057,
    "size_bytes": 21016576,
+   "tier": 2,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  {
+   "file": "harbour_mission_blueboat_v2_seed11001.json.gz",
+   "file_sha256": "c2dc6aad5234ebdea19ac346ef0ec74b783433d658c4b349050cde0f210d317d",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 127,
+   "keys_by_failing_reason": {
+    "nominal_prefix_unsafe": 1
+   },
+   "keys_not_admitted": 1,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_blueboat_v2_seed11001.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [
+    [
+     7,
+     1
+    ]
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ]
+   ],
+   "pool_digest": "caddcda8a9089d3572f953779f102749b64571903089e6352747e3749aac6239",
+   "seed": 11001,
+   "size_bytes": 8268923,
+   "tier": 2,
+   "vessel": "blueboat_v2"
+  },
+  {
+   "file": "harbour_mission_wamv_vrx_v2_opt1_seed11001.json.gz",
+   "file_sha256": "f6de0e1aedf084f284c9cb2efe7c85ec8fbfd9c54fc78680fc43703fd714dbe4",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_wamv_vrx_v2_opt1_seed11001.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "308a49a263da705da516f3bb91c0b04c1ee10dec90ae498a2c4fad64aa7bc969",
+   "seed": 11001,
+   "size_bytes": 21082407,
    "tier": 2,
    "vessel": "wamv_vrx_v2_opt1"
   }

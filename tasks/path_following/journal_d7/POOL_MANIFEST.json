@@ -2,6 +2,48 @@
  "note": "D19: the pool files ship in this folder; the runtime variable USVBENCH_D7_POOL_DIR (or cfg.journal_d7_pool_path) may point the loader at another folder; pools found by their default name must be pinned here",
  "pool_schema": "usvbench.f3.d7_admission_pool/2",
  "pools": {
+  "d7_pool_path_following_blueboat_v2_seed11001.d7pool.xz": {
+   "bytes": 1297520,
+   "container_sha256": "2120b3d41d87cf6e83a4edaa235835ed5229bfb9e75fec2ce10bcc413124a713",
+   "episodes": 2,
+   "file_sha256": "5b0a0b48a45768895f4dfd4fe412db8d2c550eb4879bc6e66fcfca1ebe319993",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 119,
+   "keys_not_admitted": 9,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     119,
+     9
+    ],
+    [
+     128,
+     119,
+     9
+    ],
+    [
+     128,
+     119,
+     9
+    ],
+    [
+     128,
+     119,
+     9
+    ],
+    [
+     128,
+     119,
+     9
+    ]
+   ],
+   "pool_digest": "73436e66fe44c645b94eb18e5be5b8114b46bd5037dc4b434f99598711be30be",
+   "seed": 11001,
+   "vessel": "blueboat_v2"
+  },
   "d7_pool_path_following_blueboat_v2_seed11002.d7pool.xz": {
    "bytes": 1384156,
    "container_sha256": "a046067f2b1556c23f06d1b6421c2a1c2d5bc11f29c021c4cb86a1395bcbe4cc",
@@ -253,6 +295,48 @@
    "pool_digest": "f26e342cfa19337a20102de6974cca2989d2af4fd11fca3759e98edfefa09529",
    "seed": 42,
    "vessel": "blueboat_v2"
+  },
+  "d7_pool_path_following_wamv_vrx_v2_opt1_seed11001.d7pool.xz": {
+   "bytes": 3002328,
+   "container_sha256": "694d44b80820a62fdfb2addd8c071a7d099ada664c3d7d6f6011f8f27df30fb4",
+   "episodes": 2,
+   "file_sha256": "eead26657fd87a3a85c6ceaaa21202ce176993884be95b82169381f5c97240a1",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 119,
+   "keys_not_admitted": 9,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     119,
+     9
+    ],
+    [
+     128,
+     119,
+     9
+    ],
+    [
+     128,
+     119,
+     9
+    ],
+    [
+     128,
+     119,
+     9
+    ],
+    [
+     128,
+     119,
+     9
+    ]
+   ],
+   "pool_digest": "4e539b661e9cf4ce4f00f22f3880f2a9afad1faa632a24545fb9a5f3fd4379e4",
+   "seed": 11001,
+   "vessel": "wamv_vrx_v2_opt1"
   },
   "d7_pool_path_following_wamv_vrx_v2_opt1_seed11002.d7pool.xz": {
    "bytes": 3205792,

@@ -14,6 +14,20 @@
    "witness_file": "station_keeping_blueboat_v2_tier2_seed42.witnesses.json",
    "witness_sha256": "26b17692d3af8be387054fe328fc9b91744f99d84562af0a6cec21aa270da74b"
   },
+  "blueboat_v2/tier2/seed11001": {
+   "file": "station_keeping_blueboat_v2_tier2_seed11001.json",
+   "grid": {
+    "episodes": 2,
+    "episodes_admitted": 3,
+    "num_envs": 64,
+    "overflow_episodes": 1
+   },
+   "pool_digest": "b0e37e11af0ec21f81297b4a58e3dcd9ed5a3b6d8ac790f123a133920f52c63f",
+   "seed": 11001,
+   "sha256": "788d3ea990c881147c376780dad457db60f4413ae8632c4cb52da85f3fddf1a8",
+   "witness_file": "station_keeping_blueboat_v2_tier2_seed11001.witnesses.json",
+   "witness_sha256": "0132f465250d2907ad12a14d2e78479fb83c4abc928e2e78e5853352b495ab45"
+  },
   "blueboat_v2/tier2/seed11002": {
    "file": "station_keeping_blueboat_v2_tier2_seed11002.json",
    "grid": {
@@ -97,6 +111,20 @@
    "sha256": "dd5df2e735a5652f02a9afe127ca8895e8cd548cf77aec0f63a490818942ecf0",
    "witness_file": "station_keeping_wamv_vrx_v2_opt1_tier2_seed42.witnesses.json",
    "witness_sha256": "c6bf14415a44c4b2538237070e38ced2d3af8e3be9e552d28300b62e8af37056"
+  },
+  "wamv_vrx_v2_opt1/tier2/seed11001": {
+   "file": "station_keeping_wamv_vrx_v2_opt1_tier2_seed11001.json",
+   "grid": {
+    "episodes": 2,
+    "episodes_admitted": 3,
+    "num_envs": 64,
+    "overflow_episodes": 1
+   },
+   "pool_digest": "bffdc74f02c438a128991a72793859d4d7e7706d8ba349a2c595cc5aa913dd27",
+   "seed": 11001,
+   "sha256": "ab53d2cef1423d0e660c1c497391c83d96cb26bf2246b83942156868d87dc8b8",
+   "witness_file": "station_keeping_wamv_vrx_v2_opt1_tier2_seed11001.witnesses.json",
+   "witness_sha256": "f224806e1cf31a66689890f16e6ff8f5e9ba0542646fb770a455c6b9bb542afa"
   },
   "wamv_vrx_v2_opt1/tier2/seed11002": {
    "file": "station_keeping_wamv_vrx_v2_opt1_tier2_seed11002.json",

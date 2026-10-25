@@ -42,7 +42,7 @@ def load(name, path):
 cfg = load("g7_pins_cfg", TASKS / "_shared" / "journal_cfg_v2.py")
 SUITE_VERSION = "d7_ttc_dose_v3"
 WINDOW_RULE = "abs_yaw_rate_lt_1e-6_rad_s_and_abs_accel_lt_1e-6_m_s2/1"
-G49_SEEDS = (42, 11002, 41041, 41047, 41051, 41057)            # G49 (J29): every pinned evaluation seed
+G49_SEEDS = (42, 11001, 11002, 41041, 41047, 41051, 41057)     # G49 (J29) + G53 gate seed 11001: every pinned D7 evaluation seed
 
 
 def sha256_bytes(data):

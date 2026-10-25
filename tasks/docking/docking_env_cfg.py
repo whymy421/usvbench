@@ -164,11 +164,14 @@ JOURNAL_D7_POOL_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__))
 # ladders + explicit not_admitted records) and of journal_pools/POOL_MANIFEST.json (stamped in the
 # certificate header as dynamic_hazards_header.pool_manifest_sha256). Rewritten by tools_f5/pin_pools.py.
 # G49 (v2.6.5, J29): + the G48 pools of seeds 11002 41041 41047 41051 41057 (names carry the seed).
+# G53 (v2.6.7): + the pools of the competence-gate seed 11001 (selection-gate-01).
 JOURNAL_D7_POOLS = {
     "docking_blueboat_v2_g2_s42_64x2.json.xz":
         "a28e85bd2426fa675015642b1ad057921cb37f3137ba7929f5a6959f894e4f4d",
     "docking_wamv_vrx_v2_opt1_g2_s42_64x2.json.xz":
         "334ececea3c23ca808a7bd96ff3cb64601fb2ae42cd2a64ba58d22cf2497bc49",
+    "docking_blueboat_v2_g2_s11001_64x2.json.xz":
+        "50b1fb643eb074e1080e67bb65bcddb9d2f3ce306b2b8489f258099db7ee2213",
     "docking_blueboat_v2_g2_s11002_64x2.json.xz":
         "7f9ba53c55fb3e9dc512389864f0aeec0e515e63fe8ab3e36a5113b10185e521",
     "docking_blueboat_v2_g2_s41041_64x2.json.xz":
@@ -179,6 +182,8 @@ JOURNAL_D7_POOLS = {
         "37b15365ee54d19013061d03744d1a61d4b04c17e0bff729e5d92b2d8f4bbc26",
     "docking_blueboat_v2_g2_s41057_64x2.json.xz":
         "7ea3a09256498685df540c097cd8bb9e095b522df05fac438b15d0abf597438c",
+    "docking_wamv_vrx_v2_opt1_g2_s11001_64x2.json.xz":
+        "e7e9c2ca9df9dbda32e7ca4130e8f0d584fb528904a1d9afa5243875bd6a898e",
     "docking_wamv_vrx_v2_opt1_g2_s11002_64x2.json.xz":
         "c8ee0204136ce80c666ea528c0f037de3b269f4f7905bf723cd3012ef80c1a28",
     "docking_wamv_vrx_v2_opt1_g2_s41041_64x2.json.xz":
@@ -190,7 +195,7 @@ JOURNAL_D7_POOLS = {
     "docking_wamv_vrx_v2_opt1_g2_s41057_64x2.json.xz":
         "54a94171c934eb71400459dad407a6b11818fd74bfc6b4f4580cbb16684f8e4b",
 }
-JOURNAL_D7_POOL_MANIFEST_SHA256 = "45b14f85be9027dfc15df193b05ddf1cb75af8f1b00b821a8bc194d73c08a57e"
+JOURNAL_D7_POOL_MANIFEST_SHA256 = "632b072493ada0163109f234ca9d97598e17c2ae82772c7929f19301a1d940d3"
 
 
 @configclass

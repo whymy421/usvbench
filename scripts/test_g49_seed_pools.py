@@ -38,6 +38,8 @@ VESSELS = ("blueboat_v2", "wamv_vrx_v2_opt1")
 HAZARD_TASKS = ("reach", "scatter", "ring", "fortress", "forced_crossing", "iceberg", "moving_basin")
 D7_TASKS = HAZARD_TASKS + ("path_hazard", "path_following", "station_keeping", "docking", "harbour_mission")
 G49_BUNDLE_MANIFEST_SHA256 = "f545aa24144aa038d40c5c7d2107ad7e620ee2bb1711b5dd3662db9488fc6274"
+# G53 (v2.6.7): the v2.6.7 bundle = the G49 bundle (every file unchanged) + the D7 pools of the gate seed 11001
+G53_BUNDLE_MANIFEST_SHA256 = "07650cdebac4347b05cc83dacbbc370f57ba3befa1ae64efd8bca359b9b62423"
 V264_SEED42 = json.loads("""{
  "appearing": {
   "docking": {
@@ -473,7 +475,7 @@ class Pins(unittest.TestCase):
         self.assertEqual(len(M.aconf.PLACEMENT_TASKS), 12)
 
     def test_a_seed_without_pins_resolves_to_nothing(self):
-        for seed in (7, 11001, 41143):
+        for seed in (7, 41143):                    # G53: 11001 has D7 pins since v2.6.7 (test_g53_gate_pools)
             self.assertEqual(f1_pin(seed, "reach", "blueboat_v2")[1], None)
             self.assertEqual(f2_table(seed), {})
             self.assertEqual(f3_pin(seed, "blueboat_v2")[1], None)
@@ -492,7 +494,7 @@ class Pins(unittest.TestCase):
                 cfg = SimpleNamespace(vehicle=vessel, seed=seed, journal_d7_pool=legacy[0],
                                       journal_d7_pool_sha256=legacy[1])
                 self.assertEqual(M.sk.journal_d7_pool_for_seed(cfg, 2), M.sk.journal_d7_pool_entry(vessel, 2, seed))
-            for seed in (7, 11001):                                              # unpinned: unchanged (check_env refuses)
+            for seed in (7,):                                                    # unpinned: unchanged (check_env refuses)
                 cfg = SimpleNamespace(vehicle=vessel, seed=seed, journal_d7_pool=legacy[0],
                                       journal_d7_pool_sha256=legacy[1])
                 self.assertEqual(M.sk.journal_d7_pool_for_seed(cfg, 2), legacy)
@@ -522,7 +524,8 @@ class Resolve(unittest.TestCase):
         self.assertEqual(Path(path).resolve().parent, self.bundle, path)
 
     def test_bundle_is_the_g49_bundle(self):
-        self.assertEqual(sha256_file(self.bundle / "BUNDLE_MANIFEST.txt"), G49_BUNDLE_MANIFEST_SHA256)
+        self.assertIn(sha256_file(self.bundle / "BUNDLE_MANIFEST.txt"),
+                      (G49_BUNDLE_MANIFEST_SHA256, G53_BUNDLE_MANIFEST_SHA256))    # G53: superset bundle
 
     def test_f1_hazard_nav(self):
         for seed in SEEDS:

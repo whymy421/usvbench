@@ -415,7 +415,7 @@ class JournalCfg(unittest.TestCase):
         # in the pool bundle only (verified by scripts/test_g49_seed_pools.py); the in-repo seed-42 pools keep the
         # 8 MB repo limit and the checks below
         self.assertEqual(sorted({entry["eval_seed"] for entry in listed.values()}),
-                         [42, 11002, 41041, 41047, 41051, 41057])
+                         [42, 11001, 11002, 41041, 41047, 41051, 41057])     # G53: + gate seed 11001
         in_repo = {name: entry for name, entry in listed.items() if entry["eval_seed"] == 42}
         self.assertEqual(len(in_repo), 2)
         self.assertLessEqual(sum(entry["bytes"] for entry in in_repo.values()), 8 * 1024 * 1024)
