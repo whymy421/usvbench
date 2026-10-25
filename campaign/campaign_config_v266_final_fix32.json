@@ -1,0 +1,159 @@
+{
+ "note": "G52 campaign config for release v2.6.6 2c04042a7a99-64e5932b737f (frozen seed registry). Basic campaign = test block final-01 only (owner 2026-10-14): classical + MPPI plan c266 (2,586 cells) + the cross-machine duplicates on the rentals (xmR-266, 16 cells; xmW-266 for the 5070 is generated but left out: no Windows FINAL port) + the 72 PPO trainings, each releasing a 54-cell final-01 test plan (seed_blocks below, read by g52_orchestrator.py). Run it with G52 work/orchestrator/g52_orchestrator.py, NOT the G51 one (that one plans PPO tests on 4 blocks).",
+ "release_id": "2c04042a7a99-64e5932b737f",
+ "record": "D:\\claude code\\codex_tasks\\20261014_g52_v266_start\\work\\records\\release_record_v2_2c04042a7a99-64e5932b737f.json",
+ "record_sha256": "FE22A2DA4A25B93B8AD9C9F74900C020B1AB9CF0B1080FC3DCE7C18B35F594CF",
+ "executor_sha256": "051918009503B2754E6DF3BA7DFCC2BF73EEEDC57E4C06FD57121BD36D23FF31",
+ "release_root": "D:\\claude code\\codex_tasks\\20261014_g52_v266_start\\work\\v266\\extract_2c04042a7a99-64e5932b737f",
+ "launcher_dir": "D:\\claude code\\codex_tasks\\20261014_g51_campaign\\work\\r3copy_g51\\launcher",
+ "dispatch_py": "D:\\claude code\\codex_tasks\\20261002_g12_dose_smoke\\work_v26\\tools\\dispatch.py",
+ "ssh_key": "C:/Users/BRADY/.ssh/usvb_rental_ed25519",
+ "known_hosts": "C:/Users/BRADY/.ssh/known_hosts_autodl",
+ "data_root": "/root/autodl-tmp",
+ "hosts_file": "E:\\Storage\\Projects\\D_Consolidated_20260929\\claude code\\codex_tasks\\20261014_g52_v266_start\\work\\orchestrator\\hosts_g52_v3.json",
+ "timing": "D:\\claude code\\codex_tasks\\20261014_g51_campaign\\work\\timing\\timing_model_g51.json",
+ "predictions": "D:\\claude code\\codex_tasks\\20261014_g51_campaign\\work\\predictions\\P_campaign_g51.txt",
+ "train_launcher": "D:/claude code/codex_tasks/20261014_g52_v266_start/work/orchestrator/linux_g59/g51_train_slot.sh",
+ "plans": [
+  {
+   "name": "c266",
+   "plan_json": "D:\\claude code\\codex_tasks\\20261014_g52_v266_start\\work\\plan\\campaign_c266.json",
+   "batch_dir": "D:\\claude code\\codex_tasks\\20261014_g52_v266_start\\work\\plan\\campaign_c266",
+   "ledger": "D:\\claude code\\codex_tasks\\20261014_g52_v266_start\\work\\dispatch\\ledger_c266.jsonl"
+  },
+  {
+   "name": "xmR-266",
+   "plan_json": "D:\\claude code\\codex_tasks\\20261014_g52_v266_start\\work\\plan\\repro_xmR-266.json",
+   "batch_dir": "D:\\claude code\\codex_tasks\\20261014_g52_v266_start\\work\\plan\\repro_xmR-266",
+   "ledger": "D:\\claude code\\codex_tasks\\20261014_g52_v266_start\\work\\dispatch\\ledger_xmR-266.jsonl",
+   "repro": "R"
+  }
+ ],
+ "planned_cells_total": 6465,
+ "ppo": {
+  "runs": [
+   "RE-BB-42",
+   "RE-BB-1001",
+   "RE-BB-2003",
+   "RE-WAMV-42",
+   "RE-WAMV-1001",
+   "RE-WAMV-2003",
+   "PF-BB-42",
+   "PF-BB-1001",
+   "PF-BB-2003",
+   "PF-WAMV-42",
+   "PF-WAMV-1001",
+   "PF-WAMV-2003",
+   "SK-BB-42",
+   "SK-BB-1001",
+   "SK-BB-2003",
+   "SK-WAMV-42",
+   "SK-WAMV-1001",
+   "SK-WAMV-2003",
+   "DK-BB-42",
+   "DK-BB-1001",
+   "DK-BB-2003",
+   "DK-WAMV-42",
+   "DK-WAMV-1001",
+   "DK-WAMV-2003",
+   "PH-BB-42",
+   "PH-BB-1001",
+   "PH-BB-2003",
+   "PH-WAMV-42",
+   "PH-WAMV-1001",
+   "PH-WAMV-2003",
+   "SC-BB-42",
+   "SC-BB-1001",
+   "SC-BB-2003",
+   "SC-WAMV-42",
+   "SC-WAMV-1001",
+   "SC-WAMV-2003",
+   "RG-BB-42",
+   "RG-BB-1001",
+   "RG-BB-2003",
+   "RG-WAMV-42",
+   "RG-WAMV-1001",
+   "RG-WAMV-2003",
+   "FO-BB-42",
+   "FO-BB-1001",
+   "FO-BB-2003",
+   "FO-WAMV-42",
+   "FO-WAMV-1001",
+   "FO-WAMV-2003",
+   "FC-BB-42",
+   "FC-BB-1001",
+   "FC-BB-2003",
+   "FC-WAMV-42",
+   "FC-WAMV-1001",
+   "FC-WAMV-2003",
+   "IB-BB-42",
+   "IB-BB-1001",
+   "IB-BB-2003",
+   "IB-WAMV-42",
+   "IB-WAMV-1001",
+   "IB-WAMV-2003",
+   "MB-BB-42",
+   "MB-BB-1001",
+   "MB-BB-2003",
+   "MB-WAMV-42",
+   "MB-WAMV-1001",
+   "MB-WAMV-2003",
+   "HM-BB-42",
+   "HM-BB-1001",
+   "HM-BB-2003",
+   "HM-WAMV-42",
+   "HM-WAMV-1001",
+   "HM-WAMV-2003"
+  ],
+  "expected_h": {
+   "BB": 3.0,
+   "WAMV": 6.5
+  }
+ },
+ "wsl": {
+  "distro": "Ubuntu-22.04",
+  "python": "/home/brady/usvb_validate/.venv/bin/python",
+  "release_root": "/mnt/e/Storage/Projects/D_Consolidated_20260929/claude code/codex_tasks/20261014_g52_v266_start/work/v266/extract_2c04042a7a99-64e5932b737f",
+  "manifest": "/mnt/e/Storage/Projects/D_Consolidated_20260929/claude code/codex_tasks/20261014_g52_v266_start/work/v266/release/usvbench-2c04042a7a99-64e5932b737f.manifest"
+ },
+ "upload": {
+  "day_start_hour": 9,
+  "day_end_hour": 1,
+  "day_scp_limit_kbit": 1000000,
+  "max_launches_per_poll_day": 14,
+  "max_launches_per_poll_night": 13
+ },
+ "wake": {
+  "unreachable_min": 60
+ },
+ "seed_blocks": "final-01",
+ "train_tools_dir": "usvb_tools_g52k",
+ "eval_par_train": 1,
+ "gate_release": "100c9ed2a8ed-dd62692601f1",
+ "rental_table": "E:/Storage/Projects/USVBench/租机/连接表_最新.md",
+ "dispatch_py_rehost": "D:/claude code/codex_tasks/20261014_g52_v266_start/work/orchestrator/tools_g54/dispatch_g54.py",
+ "exp_wamv_s": 259200,
+ "run_release_overrides": {
+  "PH-": {
+   "release_id": "304f1d3c2c5a-e2aa14a19723",
+   "record_sha256": "F11C79607074433CBD99FBE6CD88E2C2DEFCF8FB5D386FAC59846BA8B5DF7950",
+   "gate_release": "304f1d3c2c5a-e2aa14a19723",
+   "exclude_hosts": [
+    "rental10",
+    "rental13"
+   ]
+  },
+  "DK-BB-": {
+   "release_id": "230c7a5419d1-f495de421958",
+   "record_sha256": "EB4F44DE1237559145FDFCFFBF67C6373770EB7B1167B052CE033911FB25EF05",
+   "gate_release": "230c7a5419d1-f495de421958",
+   "exclude_hosts": [
+    "rental10",
+    "rental13"
+   ]
+  }
+ },
+ "eval_to_wamv_s": 43200,
+ "exp_bb_s": 129600,
+ "eval_to_bb_s": 43200
+}

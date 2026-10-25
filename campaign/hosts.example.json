@@ -1,0 +1,7 @@
+{
+ "note": "Template for the orchestrator's hosts file (config key hosts_file). The real file is not in the repository: it holds rental addresses and ports. K = parallel slots on the host; class RENTAL = Linux rental reached by ssh as root.",
+ "hosts": [
+  {"key": "rental01", "ssh_host": "<ssh gateway host>", "port": 0, "class": "RENTAL", "K": 2, "enabled": true},
+  {"key": "rental02", "ssh_host": "<ssh gateway host>", "port": 0, "class": "RENTAL", "K": 2, "enabled": false}
+ ]
+}
