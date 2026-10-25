@@ -3,6 +3,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from .._shared.vehicles import PhysicsVersionCfg, physics_version
+
 import os as _os
 
 import isaaclab.sim as sim_utils
@@ -83,7 +85,7 @@ BOAT_CONFIG = _build_robot_cfg(_DEFAULT_VEHICLE)
 
 
 @configclass
-class UnderwaterPhysicsCfg:
+class UnderwaterPhysicsCfg(PhysicsVersionCfg):
     """Calm-water hull dynamics populated from a :class:`VehicleSpec`."""
 
     water_density: float = 1000.0
@@ -191,7 +193,9 @@ class StationKeepingBoatEnvCfg(DirectRLEnvCfg):
 
         spec = get_vehicle(self.vehicle)
         self.robot_cfg = _build_robot_cfg(spec)
+        version = physics_version(self.underwater_physics_cfg)
         self.underwater_physics_cfg = _build_underwater_physics_cfg(spec)
+        self.underwater_physics_cfg.physics_version = version
         self.thrust_max_fwd = spec.thrust_fwd_n
         self.thrust_max_rev = spec.thrust_rev_n
         self.yaw_torque_max = spec.yaw_torque_nm

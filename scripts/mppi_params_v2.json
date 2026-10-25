@@ -1,0 +1,219 @@
+{
+ "format": "usvbench-mppi-params-v1",
+ "history": [
+  {
+   "model_damping": null,
+   "procedure_sha256": "8b71e20abdc8aec7bf017561c4f401be5d6ea7882a921be7ab5e8feda4bd668d",
+   "reason": "G4-A5 (controller, 2026-10-01): the superseded freeze was tuned on the registry VRX-classic WAM-V sway 40 N s/m + 0, yaw 400 N m s/rad + 0; the journal-default calm nominal model now adds Sarda 2016 cross-flow sway and strip-theory yaw quadratic terms (hydro_profiles swayyaw_damping), so the WAM-V grid was re-run under the unchanged MPPI_TUNING_PROCEDURE_V2.md (torch threads 1); BlueBoat points re-run, bit-identical to the F7 evidence",
+   "sha256": "63c8499965f68265ddb3f76863ce36403479268273c637f512d6968ce7250900",
+   "vessels": {
+    "wamv_vrx_v2_opt1": {
+     "H": 269,
+     "accepted": true,
+     "grid": {
+      "0.1": {
+       "accepted": true,
+       "mean_ess": 2.7631752260307714,
+       "objective_s": 577.1333333333333,
+       "successes": 10
+      },
+      "0.3": {
+       "accepted": true,
+       "mean_ess": 2.8676670189809434,
+       "objective_s": 608.3,
+       "successes": 10
+      },
+      "1": {
+       "accepted": true,
+       "mean_ess": 4.000146940404367,
+       "objective_s": 555.9166666666666,
+       "successes": 10
+      },
+      "10": {
+       "accepted": false,
+       "mean_ess": 113.13891999300684,
+       "objective_s": 882.2165367182813,
+       "successes": 9
+      },
+      "100": {
+       "accepted": false,
+       "mean_ess": 249.47864395131015,
+       "objective_s": 2353.089272289042,
+       "successes": 2
+      },
+      "3": {
+       "accepted": true,
+       "mean_ess": 17.847953697779825,
+       "objective_s": 476.9333333333333,
+       "successes": 10
+      },
+      "30": {
+       "accepted": false,
+       "mean_ess": 219.4238825816738,
+       "objective_s": 2292.3226056223757,
+       "successes": 2
+      }
+     },
+     "horizon_rule": "declared: mppi_params_for_vessel (H = round(60 s), s = 4.47792)",
+     "lambda": 3.0,
+     "length_scale": 4.47791504231185,
+     "r0_optimum_lambda": 3.0,
+     "rule": "R2",
+     "shipped_reference": {
+      "H": 60,
+      "lambda": 0.3
+     }
+    }
+   }
+  }
+ ],
+ "lambda_grid": [
+  0.1,
+  0.3,
+  1.0,
+  3.0,
+  10.0,
+  30.0,
+  100.0
+ ],
+ "model": "mppi_controller.VesselDynamicsV2 calm nominal (plant float64, controller float32)",
+ "model_damping": {
+  "blueboat_v2": {
+   "surge_lin": 9.1,
+   "surge_quad": 5.9,
+   "sway_lin": 27.0,
+   "sway_quad": 18.0,
+   "swayyaw_damping": "registry",
+   "yaw_lin": 4.0,
+   "yaw_quad": 6.0
+  },
+  "wamv_vrx_v2_opt1": {
+   "surge_lin": 51.3,
+   "surge_quad": 72.4,
+   "sway_lin": 40.0,
+   "sway_quad": 485.4058461856482,
+   "swayyaw_damping": "crossflow_sarda_strip",
+   "yaw_lin": 400.0,
+   "yaw_quad": 1784.6097624342294
+  }
+ },
+ "procedure": "MPPI_TUNING_PROCEDURE_V2.md",
+ "procedure_sha256": "8b71e20abdc8aec7bf017561c4f401be5d6ea7882a921be7ab5e8feda4bd668d",
+ "status": "frozen",
+ "vessels": {
+  "blueboat_v2": {
+   "H": 60,
+   "accepted": true,
+   "grid": {
+    "0.1": {
+     "accepted": true,
+     "mean_ess": 8.866416082203793,
+     "objective_s": 76.33333333333333,
+     "successes": 10
+    },
+    "0.3": {
+     "accepted": true,
+     "mean_ess": 12.474325169152142,
+     "objective_s": 72.05,
+     "successes": 10
+    },
+    "1": {
+     "accepted": true,
+     "mean_ess": 40.477948041476296,
+     "objective_s": 68.63333333333334,
+     "successes": 10
+    },
+    "10": {
+     "accepted": true,
+     "mean_ess": 239.70414572273094,
+     "objective_s": 165.1833333333333,
+     "successes": 10
+    },
+    "100": {
+     "accepted": false,
+     "mean_ess": 255.82022693313897,
+     "objective_s": 744.0,
+     "successes": 0
+    },
+    "3": {
+     "accepted": true,
+     "mean_ess": 152.10366169070107,
+     "objective_s": 83.30000000000001,
+     "successes": 10
+    },
+    "30": {
+     "accepted": false,
+     "mean_ess": 254.60519258109565,
+     "objective_s": 697.5333333333333,
+     "successes": 1
+    }
+   },
+   "horizon_rule": "declared: mppi_params_for_vessel (H = round(60 s), s = 1)",
+   "lambda": 0.3,
+   "length_scale": 1.0,
+   "r0_optimum_lambda": 1.0,
+   "rule": "R1",
+   "shipped_reference": {
+    "H": 60,
+    "lambda": 0.3
+   }
+  },
+  "wamv_vrx_v2_opt1": {
+   "H": 269,
+   "accepted": true,
+   "grid": {
+    "0.1": {
+     "accepted": true,
+     "mean_ess": 2.543026432706615,
+     "objective_s": 589.6666666666667,
+     "successes": 10
+    },
+    "0.3": {
+     "accepted": true,
+     "mean_ess": 3.069088695461523,
+     "objective_s": 602.5833333333334,
+     "successes": 10
+    },
+    "1": {
+     "accepted": false,
+     "mean_ess": 3.459917908101248,
+     "objective_s": 908.6298440619375,
+     "successes": 8
+    },
+    "10": {
+     "accepted": true,
+     "mean_ess": 52.730859274253454,
+     "objective_s": 473.26666666666665,
+     "successes": 10
+    },
+    "100": {
+     "accepted": false,
+     "mean_ess": 249.34586373854958,
+     "objective_s": 2352.6226056223754,
+     "successes": 2
+    },
+    "3": {
+     "accepted": true,
+     "mean_ess": 6.2310266190786,
+     "objective_s": 512.1666666666667,
+     "successes": 10
+    },
+    "30": {
+     "accepted": true,
+     "mean_ess": 182.9561435790594,
+     "objective_s": 666.3000000000001,
+     "successes": 10
+    }
+   },
+   "horizon_rule": "declared: mppi_params_for_vessel (H = round(60 s), s = 4.47792)",
+   "lambda": 10.0,
+   "length_scale": 4.47791504231185,
+   "r0_optimum_lambda": 10.0,
+   "rule": "R2",
+   "shipped_reference": {
+    "H": 60,
+    "lambda": 0.3
+   }
+  }
+ }
+}

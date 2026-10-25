@@ -1,0 +1,33 @@
+{
+ "pools": {
+  "blueboat_v2/tier2": {
+   "file": "station_keeping_blueboat_v2_tier2_seed42.json",
+   "grid": {
+    "episodes": 2,
+    "episodes_admitted": 3,
+    "num_envs": 64,
+    "overflow_episodes": 1
+   },
+   "pool_digest": "fd0b9aad2f6a44ef1dc45c3c9876ec7b3ca0f40c783d8d8e7ef57e09bbbb9486",
+   "seed": 42,
+   "sha256": "ba83c650871f9e69937e4e40a7c64145f7f6c240c6a93ad14e8f4be934746363",
+   "witness_file": "station_keeping_blueboat_v2_tier2_seed42.witnesses.json",
+   "witness_sha256": "4a7c569f41add2fe4feb41eb83694498737eb246577c5c640600e14496c7cb72"
+  },
+  "wamv_vrx_v2_opt1/tier2": {
+   "file": "station_keeping_wamv_vrx_v2_opt1_tier2_seed42.json",
+   "grid": {
+    "episodes": 2,
+    "episodes_admitted": 3,
+    "num_envs": 64,
+    "overflow_episodes": 1
+   },
+   "pool_digest": "9a9ec3a25eab0e1717d053feabe99d8e622d2c318a441c38b44c256ff4bbacd9",
+   "seed": 42,
+   "sha256": "20b2d3b62993c4e0ec72ac9c1f21d51cb8ec55daf459337b95fa726cd67af389",
+   "witness_file": "station_keeping_wamv_vrx_v2_opt1_tier2_seed42.witnesses.json",
+   "witness_sha256": "77610e92dd94d3a39725db03d9ad29223988fc620b24037247f2ae201731bc78"
+  }
+ },
+ "schema": "usvbench.f4.station_d7_pool_index/1"
+}

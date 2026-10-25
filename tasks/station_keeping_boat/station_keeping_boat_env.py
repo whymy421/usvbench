@@ -5,8 +5,13 @@
 
 from __future__ import annotations
 
+from .._shared.termination_reason import publish_termination_reason
+
 import math
 from collections.abc import Sequence
+
+from .._shared.vehicles import physics_version
+from .._shared.physics_v2 import add_implicit_hull_damping, WaveClock
 
 import torch
 
@@ -16,6 +21,11 @@ from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
 
 from .._shared.restoring import restoring_torque_body
+from .._shared.scenario_draws import (
+    make_scenario_rng,
+    stamp_scenario,
+    station_keeping_spawn,
+)
 from .._shared.vehicles import get_vehicle
 from .station_keeping_boat_env_cfg import StationKeepingBoatEnvCfg
 
@@ -28,6 +38,7 @@ class StationKeepingBoatEnv(DirectRLEnv):
     def __init__(self, cfg: StationKeepingBoatEnvCfg, render_mode: str | None = None, **kwargs):
         self.vehicle_spec = get_vehicle(cfg.vehicle)
         self.physics_cfg = cfg.underwater_physics_cfg
+        physics_version(self.physics_cfg)  # Reject unsupported versions before simulation.
         super().__init__(cfg, render_mode, **kwargs)
 
         self.control_step_s = self.cfg.sim.dt * self.cfg.decimation
@@ -46,6 +57,18 @@ class StationKeepingBoatEnv(DirectRLEnv):
         self.time_to_success = torch.full((self.num_envs,), torch.nan, device=self.device)
         self.episode_path_length = torch.zeros(self.num_envs, device=self.device)
         self.final_hold_timer = torch.zeros(self.num_envs, device=self.device)
+        # Longest CONTINUOUS hold achieved in the finished episode, in seconds.
+        # Success is literally a threshold on this quantity (_get_dones compares
+        # _max_hold_steps against required_hold_steps), so recording it exposes
+        # the graded metric the binary criterion hides: an episode that never
+        # once entered the hold zone and one that held for all but the final
+        # control step are both "failure", and only this number separates them.
+        # Unlike path length it is defined for EVERY episode, success or
+        # failure, so reading a dose response off it needs no conditioning on
+        # the outcome. Same export, and the same latch discipline in _reset_idx,
+        # as the sibling family one directory over
+        # (tasks/station_keeping/station_keeping_env.py:80-88).
+        self.episode_max_hold_s = torch.zeros(self.num_envs, device=self.device)
 
         self._hold_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
         self._max_hold_steps = torch.zeros(
@@ -58,6 +81,28 @@ class StationKeepingBoatEnv(DirectRLEnv):
         self._episode_finished = torch.zeros(
             self.num_envs, dtype=torch.bool, device=self.device
         )
+        # --- Controller-independent episode scenarios -----------------------
+        # Identical defect and identical fix to the sibling family one
+        # directory over (tasks/station_keeping/station_keeping_env.py:92-108).
+        # Spawn distance, spawn angle and heading used to be bare torch.rand
+        # calls on the GLOBAL torch RNG, which skrl's Runner reseeds to the
+        # constant in the agent YAML (tasks/station_keeping_boat/agents/
+        # skrl_ppo_cfg.yaml:1 is "seed: 42") AFTER the env is built, so
+        # --eval-seed 42 and --eval-seed 123 drew the SAME spawns.
+        # They now come off a stream
+        # keyed by (protocol version, cfg.seed, env index, per-env episode
+        # index, "spawn_pose"). cfg.seed None (an unseeded smoke run) ->
+        # make_scenario_rng returns None -> every draw falls back to the
+        # historical global-RNG line, bit for bit.
+        self._scenario = make_scenario_rng(self.cfg, self.num_envs, self.device)
+        # _scenario_* describe the RUNNING episode; episode_scenario_* are
+        # latched from them at reset for the episode that just ENDED, the same
+        # discipline as episode_path_length -- the evaluator reads these after
+        # _reset_idx has already started the next episode.
+        self._scenario_params = [{} for _ in range(self.num_envs)]
+        self._scenario_hashes = [{} for _ in range(self.num_envs)]
+        self.episode_scenario = [{} for _ in range(self.num_envs)]
+        self.episode_scenario_hashes = [{} for _ in range(self.num_envs)]
         self._previous_xy = self.robot.data.root_pos_w[:, :2].clone()
         self.actions = torch.zeros((self.num_envs, self.cfg.action_space), device=self.device)
 
@@ -169,31 +214,32 @@ class StationKeepingBoatEnv(DirectRLEnv):
             linear_velocity = vel_w
             angular_velocity = self.robot.data.root_ang_vel_w
 
-        vel_b = math_utils.quat_apply_inverse(quat, linear_velocity)
-        drag_b = torch.zeros_like(vel_b)
-        surge_velocity = vel_b[:, self._surge_axis_idx]
-        drag_b[:, self._surge_axis_idx] = -(
-            self.physics_cfg.surge_lin_damping
-            + self.physics_cfg.surge_quad_damping * torch.abs(surge_velocity)
-        ) * surge_velocity
-        if (
-            self.physics_cfg.sway_lin_damping is not None
-            and self.physics_cfg.sway_quad_damping is not None
-        ):
-            sway_velocity = vel_b[:, self._sway_axis_idx]
-            drag_b[:, self._sway_axis_idx] = -(
-                self.physics_cfg.sway_lin_damping
-                + self.physics_cfg.sway_quad_damping * torch.abs(sway_velocity)
-            ) * sway_velocity
-        forces[:, 0, :2] += drag_b[:, :2]
-        force_w[:, 2] += -self.physics_cfg.heave_damping * linear_velocity[:, 2]
+        if getattr(self.physics_cfg, "physics_version", 1) == 1:
+            vel_b = math_utils.quat_apply_inverse(quat, linear_velocity)
+            drag_b = torch.zeros_like(vel_b)
+            surge_velocity = vel_b[:, self._surge_axis_idx]
+            drag_b[:, self._surge_axis_idx] = -(
+                self.physics_cfg.surge_lin_damping
+                + self.physics_cfg.surge_quad_damping * torch.abs(surge_velocity)
+            ) * surge_velocity
+            if (
+                self.physics_cfg.sway_lin_damping is not None
+                and self.physics_cfg.sway_quad_damping is not None
+            ):
+                sway_velocity = vel_b[:, self._sway_axis_idx]
+                drag_b[:, self._sway_axis_idx] = -(
+                    self.physics_cfg.sway_lin_damping
+                    + self.physics_cfg.sway_quad_damping * torch.abs(sway_velocity)
+                ) * sway_velocity
+            forces[:, 0, :2] += drag_b[:, :2]
+            force_w[:, 2] += -self.physics_cfg.heave_damping * linear_velocity[:, 2]
 
-        wz = angular_velocity[:, 2]
-        torque_w[:, 2] += -(
-            self.physics_cfg.yaw_lin_damping
-            + self.physics_cfg.yaw_quad_damping * torch.abs(wz)
-        ) * wz
-        torque_w[:, :2] += -self.physics_cfg.rollpitch_rate_damping * angular_velocity[:, :2]
+            wz = angular_velocity[:, 2]
+            torque_w[:, 2] += -(
+                self.physics_cfg.yaw_lin_damping
+                + self.physics_cfg.yaw_quad_damping * torch.abs(wz)
+            ) * wz
+            torque_w[:, :2] += -self.physics_cfg.rollpitch_rate_damping * angular_velocity[:, :2]
 
         # Yaw-invariant attitude spring: restoring torque k*(up_body_in_world x
         # world_up). The previous Euler-angle form applied BODY tilt angles as
@@ -219,6 +265,8 @@ class StationKeepingBoatEnv(DirectRLEnv):
 
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_w)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
+        if getattr(self.physics_cfg, "physics_version", 1) == 2:
+            add_implicit_hull_damping(self, forces, torques, quat)
         self.robot.set_external_force_and_torque(forces, torques)
 
     def _horizontal_distance(self) -> torch.Tensor:
@@ -281,6 +329,7 @@ class StationKeepingBoatEnv(DirectRLEnv):
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         self._episode_finished.copy_(time_out)
         terminated = torch.zeros_like(time_out)
+        publish_termination_reason(self, terminated, time_out)
         return terminated, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
@@ -297,6 +346,17 @@ class StationKeepingBoatEnv(DirectRLEnv):
             self.time_to_success[completed_ids] = time_to_success
             self.episode_path_length[completed_ids] = self.path_length[completed_ids]
             self.final_hold_timer[completed_ids] = self.hold_timer[completed_ids]
+            # Latched here, alongside episode_path_length and under the same
+            # discipline: _max_hold_steps is zeroed further down in this reset,
+            # so reading it any later would report the NEXT episode's value.
+            self.episode_max_hold_s[completed_ids] = (
+                self._max_hold_steps[completed_ids].float() * self.control_step_s
+            )
+            for completed in completed_ids.tolist():
+                self.episode_scenario[completed] = self._scenario_params[completed]
+                self.episode_scenario_hashes[completed] = self._scenario_hashes[
+                    completed
+                ]
 
             self.extras.setdefault("log", {})
             self.extras["log"]["Episode/success"] = success.float().mean()
@@ -317,12 +377,27 @@ class StationKeepingBoatEnv(DirectRLEnv):
 
         super()._reset_idx(env_ids)
 
+        # A new episode for these envs: advance their per-env episode counter
+        # and reseed every primitive stream from the new key. This MUST run
+        # before the first draw below.
+        if self._scenario is not None:
+            self._scenario.reset_idx(env_ids)
+
         num_resets = len(env_ids)
-        distances = self.cfg.min_spawn_distance + torch.rand(
-            num_resets, device=self.device
-        ) * (self.cfg.max_spawn_distance - self.cfg.min_spawn_distance)
-        spawn_angles = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
-        headings = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
+        # Same uniform distance on [min_spawn_distance, max_spawn_distance) and
+        # same uniform angle/heading on [0, 2*pi), drawn in the same order
+        # (distance, angle, heading); only the stream the three uniforms come
+        # from changed. This env's own cfg fields are passed through, so it
+        # keeps its own spawn ring (5.0 m to 15.0 m in
+        # station_keeping_boat_env_cfg.py:155-156) and does not inherit the
+        # sibling family's numbers.
+        distances, spawn_angles, headings = station_keeping_spawn(
+            self._scenario,
+            env_ids,
+            self.device,
+            self.cfg.min_spawn_distance,
+            self.cfg.max_spawn_distance,
+        )
 
         root_state = self.robot.data.default_root_state[env_ids].clone()
         root_state[:, :3] += self.scene.env_origins[env_ids]
@@ -343,3 +418,24 @@ class StationKeepingBoatEnv(DirectRLEnv):
         self._success[env_ids] = False
         self._episode_finished[env_ids] = False
         self._previous_xy[env_ids] = root_state[:, :2]
+
+        # Resolved scenario for the episode that starts now, plus a hash per
+        # primitive group for the certificate. The three RAW draws are stamped,
+        # not the post-trigonometry spawn xy they become at :376-377 -- the hash
+        # has to identify the DRAW, and a derived value both re-encodes it
+        # through float32 trigonometry and welds the certificate to the kernel
+        # that produced it. Values only -- never the (seed, env, episode) key --
+        # so two eval seeds that drew the same numbers still hash the same and
+        # stay detectable by scripts/check_scenario_independence.py.
+        for env_index, resolved, hashes in stamp_scenario(
+            env_ids,
+            {
+                "spawn_pose": {
+                    "distance_m": distances,
+                    "angle_rad": spawn_angles,
+                    "heading_rad": headings,
+                }
+            },
+        ):
+            self._scenario_params[env_index] = resolved
+            self._scenario_hashes[env_index] = hashes

@@ -9,6 +9,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 import isaaclab.sim as sim_utils
+from .._shared.vehicles import PhysicsVersionCfg, physics_version
+
 import os as _os
 
 # USVBench asset directory.
@@ -20,7 +22,7 @@ _ASSET_DIR = _os.environ.get(
 )
 
 # ============================================
-# Boat  (boat_physics.usdc;RigidObject   ArticulationRootAPI)
+# Boat 配置(boat_physics.usdc;RigidObject 因无 ArticulationRootAPI)
 # ============================================
 ROV_CONFIG = RigidObjectCfg(
     prim_path="/World/envs/env_.*/Robot",
@@ -37,7 +39,7 @@ ROV_CONFIG = RigidObjectCfg(
             max_angular_velocity=573.0,  # = 10 rad/s, never reached in practice
             max_depenetration_velocity=1.0,
             disable_gravity=False,
-            linear_damping=0.0,   # PhysX  ,  Python
+            linear_damping=0.0,   # PhysX 关掉,用 Python 自定义阻尼
             angular_damping=0.0,
         ),
         mass_props=sim_utils.MassPropertiesCfg(
@@ -56,15 +58,15 @@ ROV_CONFIG = RigidObjectCfg(
 
 
 # ============================================
-#
+# 水下物理参数配置
 # ============================================
 @configclass
-class UnderwaterPhysicsCfg:
-    """ROV """
+class UnderwaterPhysicsCfg(PhysicsVersionCfg):
+    """ROV水下物理参数配置"""
     water_density: float = 1000.0
     gravity: float = 9.8
-    rov_volume: float = 0.2  # boat 100kg / 1000kg/m³ = 0.1m³  ,0.2  ( )
-    rov_height: float = 1.0   # boat
+    rov_volume: float = 0.2  # boat 100kg / 1000kg/m³ = 0.1m³ 全浸没,0.2 半浸没(平衡)
+    rov_height: float = 1.0   # boat 船体高度
     water_surface_z: float = 0.0
     buoyancy_center_offset: float = 0.0
 
@@ -96,7 +98,7 @@ class UnderwaterPhysicsCfg:
 
 
 # ============================================
-#
+# 波浪物理参数配置
 # ============================================
 @configclass
 class WavePhysicsCfg:
@@ -108,7 +110,7 @@ class WavePhysicsCfg:
 
 
 # ============================================
-#
+# 环境配置
 # ============================================
 @configclass
 class MyFirstTaskEnvCfg(DirectRLEnvCfg):
@@ -116,12 +118,10 @@ class MyFirstTaskEnvCfg(DirectRLEnvCfg):
     episode_length_s = 120.0
 
     action_space = 2
-    # 🔧   3,  STARTER_TASK.md   V26  (OBS_DIM=9 +
-    #    OBS_EXTENDED=1),   ship   checkpoint  .
-    observation_space = int(_os.environ.get('OBS_DIM', '9'))
+    observation_space = int(__import__('os').environ.get('OBS_DIM', '3'))
     state_space = 0
 
-    goal_radius: float = 3.0   # boat 5.5m  ,2m
+    goal_radius: float = 3.0   # boat 5.5m 长,2m 过紧
     max_spawn_distance: float = 30.0
     min_spawn_distance: float = 10.0
     use_learned_reward: bool = False

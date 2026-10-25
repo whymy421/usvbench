@@ -1,0 +1,1420 @@
+{
+ "pools": {
+  "path_following__blueboat_v2.json.xz": {
+   "bytes": 1390856,
+   "file": "path_following__blueboat_v2.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "f57e5bf9901409e8d50ddb0ed488a9d4ae1fb8d08e849a436a2819d8bf44a984",
+   "reason_counts": {},
+   "seed": 42,
+   "sha256": "3a4d3f98605a1038e53d78ba353561f26a1698396b6a7ed5748218bcb66f19d8",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "path_following__blueboat_v2__s11002.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 1451868,
+   "file": "path_following__blueboat_v2__s11002.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "885fa60647d57eb0f7060eef9a99aaa9faae511c6df60bb20e3a0e79e6fc628e",
+   "reason_counts": {},
+   "seed": 11002,
+   "sha256": "ce209256a12ffa09b1a2611d2a53b543af55deba5940dc3dba83aa923d10011e",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "path_following__blueboat_v2__s41041.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 1425508,
+   "file": "path_following__blueboat_v2__s41041.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "54b29e4dede1a06021c1a2511c9139a8bb22edb0249b51e053e6fee763ea2c9c",
+   "reason_counts": {},
+   "seed": 41041,
+   "sha256": "98c14f7b16927dd97eda201929e704d63a0dece67a8feeae4c496422844f5d7f",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "path_following__blueboat_v2__s41047.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 1423072,
+   "file": "path_following__blueboat_v2__s41047.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "940c52eecf14a7f12867a073151a5f81f41ab4b2c307931f0f1337adad321fb7",
+   "reason_counts": {},
+   "seed": 41047,
+   "sha256": "a208db4d1ff8823004750c1974076a4d4df9778104cbda0498e357f00dabe228",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "path_following__blueboat_v2__s41051.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 1412420,
+   "file": "path_following__blueboat_v2__s41051.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "24b329913dd7b32d2467670373744d82ebc1f66e97f4821e4636e8615c5bdb54",
+   "reason_counts": {},
+   "seed": 41051,
+   "sha256": "08147fdbc7c4a7d36666b952b0f8d3773cca1b35e0f27051a78e10b307277656",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "path_following__blueboat_v2__s41057.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 1444744,
+   "file": "path_following__blueboat_v2__s41057.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "d3211cb712d471ec061500eaf67698ace86e29b5fe6a415a857db6c649b95b44",
+   "reason_counts": {},
+   "seed": 41057,
+   "sha256": "48b7f4598d80abab9e8f164e7289852a163bcba71f1f4def8b7380da5755429e",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "path_following__blueboat_v2__s42.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 1651124,
+   "file": "path_following__blueboat_v2__s42.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "069d62202d3692337ab8fc1c46b93b6e7189b8188b35de92738398656286c960",
+   "reason_counts": {},
+   "seed": 42,
+   "sha256": "0c4a34bcc0612bb1bc9c3a8030e9d337a876237bb39d9d8c40a3d9b683939a55",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "path_following__wamv_vrx_v2_opt1.json.xz": {
+   "bytes": 5239436,
+   "file": "path_following__wamv_vrx_v2_opt1.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "c7e9de6387bd704d341418fac0842e2f09912f141ff60867ee785df645782b82",
+   "reason_counts": {},
+   "seed": 42,
+   "sha256": "6cda52ff3e9e8a50bcdf1d1c4082ba05fbc483375b204864b2f5779be50545e9",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "path_following__wamv_vrx_v2_opt1__s11002.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 5573572,
+   "file": "path_following__wamv_vrx_v2_opt1__s11002.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "3d5ed0fedf075722cbe5408738ea1eb506f8451b4b6721b92f1533a45954ef43",
+   "reason_counts": {},
+   "seed": 11002,
+   "sha256": "65b2d4ffd5edf9f0104d8e1a3e9584340f669b6fd5075092f7a5d4c1552ed25a",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "path_following__wamv_vrx_v2_opt1__s41041.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 5394172,
+   "file": "path_following__wamv_vrx_v2_opt1__s41041.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "853748b4020fc31e92fd5d45c6a44c1d856201118d6553d4140e29739e33a254",
+   "reason_counts": {},
+   "seed": 41041,
+   "sha256": "f781c72284a98bc1ea93a4c20ce9ef6c3fabeecc758c5687eb5a42abc31d34b8",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "path_following__wamv_vrx_v2_opt1__s41047.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 5379488,
+   "file": "path_following__wamv_vrx_v2_opt1__s41047.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "021152822754fe5c15b247110466fef70864f4c1f07cf10bc3101c08242175f0",
+   "reason_counts": {},
+   "seed": 41047,
+   "sha256": "b3cd711eb6474157792cc1072a2be3167a1632f8fac9813a702f2ddbdd72f792",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "path_following__wamv_vrx_v2_opt1__s41051.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 5353596,
+   "file": "path_following__wamv_vrx_v2_opt1__s41051.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "b7cabb0f36670fd88756f5f621ed51b2fe28b116d0bad65a1d88949238aafccf",
+   "reason_counts": {},
+   "seed": 41051,
+   "sha256": "b12bce4f5d89f95750fc3c739586b744a2afbf4abcb3d1fc5ada9fd3c391fccb",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "path_following__wamv_vrx_v2_opt1__s41057.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 5506652,
+   "file": "path_following__wamv_vrx_v2_opt1__s41057.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "f50401ad6b1cbfd423b1b50ab209444e2ff955131a59fbb0c01038ddc4f4a87a",
+   "reason_counts": {},
+   "seed": 41057,
+   "sha256": "558e58f5d1f3450ddb665a3265ab6c3445adf293d46183842c1ca3f52809447a",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "path_following__wamv_vrx_v2_opt1__s42.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 6383008,
+   "file": "path_following__wamv_vrx_v2_opt1__s42.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "aa9107610751883898cc194f763d44f35e4bcafa002497db69a2a2f7f06261c5",
+   "reason_counts": {},
+   "seed": 42,
+   "sha256": "1ad1e46e8721588ab9476c3a66cff60ddcfc4ad1d0c16f24fcf170fd413dc3af",
+   "task": "path_following",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  }
+ },
+ "provenance": {
+  "bundle_manifest_sha256_by_seed": {
+   "11002": "396bfd3daea679bf88401cd9462ab65e33850a6418ad4543ea43bcb1118e0ad4",
+   "41041": "ef26db8518f3f9beef7ce6b687297893d1fb2605a81686af9941ea579e9533a9",
+   "41047": "5921009bdea0c500809fcc64d3190297bc00e1acf76c9e7d6aa8200a9d772b80",
+   "41051": "e3b35627596cbc03702db8d2ca7da0e90976cf905a99d128e670627cd3b8374b",
+   "41057": "1ce8b8bc9b9fde883afa9b531e7d7acc6838b5f85f2481eb000b48dcce2bc5cb"
+  },
+  "g49_merge": "v2.6.5 (G49, J29): the v2.6.4 entries (seed 42 / legacy, listed in kept_entries_from_previous_manifest; admitted before the v7m ladder) + the G48 pools of seeds 11002 41041 41047 41051 41057 (suite g3_appearing_gap_v7m, ladder below); files in the G49 bundle",
+  "kept_entries_from_previous_manifest": [
+   "path_following__blueboat_v2.json.xz",
+   "path_following__blueboat_v2__s42.json.xz",
+   "path_following__wamv_vrx_v2_opt1.json.xz",
+   "path_following__wamv_vrx_v2_opt1__s42.json.xz"
+  ],
+  "ladder": {
+   "calibration_rung_m": {
+    "blueboat_v2": 0.76,
+    "wamv_vrx_v2_opt1": 1.25
+   },
+   "calibration_sweep_m": {
+    "blueboat_v2": [
+     0.76,
+     1.0,
+     1.4,
+     2.0,
+     2.9,
+     4.0,
+     5.0,
+     6.6,
+     7.5
+    ],
+    "wamv_vrx_v2_opt1": [
+     1.25,
+     1.4,
+     1.8,
+     2.5,
+     3.6,
+     5.0,
+     7.5,
+     11.0,
+     15.0
+    ]
+   },
+   "gap_override_min_m": {
+    "blueboat_v2": 0.76,
+    "wamv_vrx_v2_opt1": 1.25
+   },
+   "gap_ratios": null,
+   "gaps_m": {
+    "blueboat_v2": [
+     null,
+     7.5,
+     3.5,
+     1.6,
+     0.76,
+     0.76
+    ],
+    "wamv_vrx_v2_opt1": [
+     null,
+     15.0,
+     6.6,
+     2.9,
+     1.25,
+     1.25
+    ]
+   },
+   "kind": "metres",
+   "kinematic_floor_m": {
+    "blueboat_v2": 0.67,
+    "wamv_vrx_v2_opt1": 1.03
+   },
+   "option": "M",
+   "suite_version": "g3_appearing_gap_v7m"
+  },
+  "pool_files": "the flat pool bundle (G3c option B); none in the repo",
+  "previous_provenance": {
+   "bundle_manifest_sha256": "13652fea6219b93bb26a235a64afa7f89c091cee7fe0514ac7193711e56641f5",
+   "kept_entries_from_previous_manifest": [
+    "path_following__blueboat_v2.json.xz",
+    "path_following__wamv_vrx_v2_opt1.json.xz"
+   ],
+   "ladder": {
+    "calibration_rung_m": {
+     "blueboat_v2": 0.76,
+     "wamv_vrx_v2_opt1": 1.25
+    },
+    "calibration_sweep_m": {
+     "blueboat_v2": [
+      0.76,
+      1.0,
+      1.4,
+      2.0,
+      2.9,
+      4.0,
+      5.0,
+      6.6,
+      7.5
+     ],
+     "wamv_vrx_v2_opt1": [
+      1.25,
+      1.4,
+      1.8,
+      2.5,
+      3.6,
+      5.0,
+      7.5,
+      11.0,
+      15.0
+     ]
+    },
+    "gap_override_min_m": {
+     "blueboat_v2": 0.76,
+     "wamv_vrx_v2_opt1": 1.25
+    },
+    "gap_ratios": null,
+    "gaps_m": {
+     "blueboat_v2": [
+      null,
+      5.0,
+      2.9,
+      1.7,
+      1.0,
+      0.76
+     ],
+     "wamv_vrx_v2_opt1": [
+      null,
+      5.0,
+      3.6,
+      2.5,
+      1.8,
+      1.25
+     ]
+    },
+    "kind": "metres",
+    "kinematic_floor_m": {
+     "blueboat_v2": 0.67,
+     "wamv_vrx_v2_opt1": 1.03
+    },
+    "option": "M",
+    "suite_version": "g3_appearing_gap_v6m"
+   },
+   "pool_files": "the flat pool bundle (G3c option B); none in the repo",
+   "previous_provenance": {
+    "bundle_manifest_sha256": "6bbd8f2e7f17a0cb3e56f0a5eecddf9c7f76cec7496f0a1ae41aad6b85e3da40",
+    "kept_entries_from_previous_manifest": [
+     "path_following__blueboat_v2.json.xz",
+     "path_following__wamv_vrx_v2_opt1.json.xz"
+    ],
+    "ladder": {
+     "calibration_rung_m": {
+      "blueboat_v2": 0.76,
+      "wamv_vrx_v2_opt1": 1.25
+     },
+     "calibration_sweep_m": {
+      "blueboat_v2": [
+       0.76,
+       1.0,
+       1.4,
+       2.0,
+       2.9,
+       4.0,
+       5.0,
+       6.6,
+       7.5
+      ],
+      "wamv_vrx_v2_opt1": [
+       1.25,
+       1.4,
+       1.8,
+       2.5,
+       3.6,
+       5.0,
+       7.5,
+       11.0,
+       15.0
+      ]
+     },
+     "gap_override_min_m": {
+      "blueboat_v2": 0.76,
+      "wamv_vrx_v2_opt1": 1.25
+     },
+     "gap_ratios": null,
+     "gaps_m": {
+      "blueboat_v2": [
+       null,
+       5.0,
+       2.9,
+       1.7,
+       1.0,
+       0.76
+      ],
+      "wamv_vrx_v2_opt1": [
+       null,
+       5.0,
+       3.6,
+       2.5,
+       1.8,
+       1.25
+      ]
+     },
+     "kind": "metres",
+     "kinematic_floor_m": {
+      "blueboat_v2": 0.67,
+      "wamv_vrx_v2_opt1": 1.03
+     },
+     "option": "M",
+     "suite_version": "g3_appearing_gap_v6m"
+    },
+    "pool_files": "the flat pool bundle (G3c option B); none in the repo",
+    "previous_provenance": {
+     "bundle_manifest_sha256": "adeeaa7a91b9525fd64ff9bf9db44680ee14ecf26cd5b93ad63ab19ab45ba412",
+     "kept_entries_from_previous_manifest": [
+      "path_following__blueboat_v2.json.xz",
+      "path_following__wamv_vrx_v2_opt1.json.xz"
+     ],
+     "ladder": {
+      "calibration_rung_m": {
+       "blueboat_v2": 0.76,
+       "wamv_vrx_v2_opt1": 1.25
+      },
+      "calibration_sweep_m": {
+       "blueboat_v2": [
+        0.76,
+        1.0,
+        1.4,
+        2.0,
+        2.9,
+        4.0,
+        5.0,
+        6.6,
+        7.5
+       ],
+       "wamv_vrx_v2_opt1": [
+        1.25,
+        1.4,
+        1.8,
+        2.5,
+        3.6,
+        5.0,
+        7.5,
+        11.0,
+        15.0
+       ]
+      },
+      "gap_override_min_m": {
+       "blueboat_v2": 0.76,
+       "wamv_vrx_v2_opt1": 1.25
+      },
+      "gap_ratios": null,
+      "gaps_m": {
+       "blueboat_v2": [
+        null,
+        5.0,
+        2.9,
+        1.7,
+        1.0,
+        0.76
+       ],
+       "wamv_vrx_v2_opt1": [
+        null,
+        5.0,
+        3.6,
+        2.5,
+        1.8,
+        1.25
+       ]
+      },
+      "kind": "metres",
+      "kinematic_floor_m": {
+       "blueboat_v2": 0.67,
+       "wamv_vrx_v2_opt1": 1.03
+      },
+      "option": "M",
+      "suite_version": "g3_appearing_gap_v6m"
+     },
+     "pool_files": "the flat pool bundle (G3c option B); none in the repo",
+     "previous_provenance": {
+      "bundle_manifest_sha256": "1fa3323d277797838d0f313f81d82732dfaed49d8e0cf71e93f4001c54175f3e",
+      "kept_entries_from_previous_manifest": [
+       "path_following__blueboat_v2.json.xz",
+       "path_following__wamv_vrx_v2_opt1.json.xz"
+      ],
+      "ladder": {
+       "calibration_rung_m": {
+        "blueboat_v2": 0.76,
+        "wamv_vrx_v2_opt1": 1.25
+       },
+       "calibration_sweep_m": {
+        "blueboat_v2": [
+         0.76,
+         1.0,
+         1.4,
+         2.0,
+         2.9,
+         4.0,
+         5.0,
+         6.6,
+         7.5
+        ],
+        "wamv_vrx_v2_opt1": [
+         1.25,
+         1.4,
+         1.8,
+         2.5,
+         3.6,
+         5.0,
+         7.5,
+         11.0,
+         15.0
+        ]
+       },
+       "gap_override_min_m": {
+        "blueboat_v2": 0.76,
+        "wamv_vrx_v2_opt1": 1.25
+       },
+       "gap_ratios": null,
+       "gaps_m": {
+        "blueboat_v2": [
+         null,
+         5.0,
+         2.9,
+         1.7,
+         1.0,
+         0.76
+        ],
+        "wamv_vrx_v2_opt1": [
+         null,
+         5.0,
+         3.6,
+         2.5,
+         1.8,
+         1.25
+        ]
+       },
+       "kind": "metres",
+       "kinematic_floor_m": {
+        "blueboat_v2": 0.67,
+        "wamv_vrx_v2_opt1": 1.03
+       },
+       "option": "M",
+       "suite_version": "g3_appearing_gap_v5m"
+      },
+      "pool_files": "the flat pool bundle (G3c option B); none in the repo",
+      "previous_provenance": {
+       "bundle_manifest_sha256": "675295e460d88fbb5045c2a6d4c9ba98f018bd442f6d9ec2c2ae28177144267d",
+       "kept_entries_from_previous_manifest": [
+        "path_following__blueboat_v2.json.xz",
+        "path_following__wamv_vrx_v2_opt1.json.xz"
+       ],
+       "ladder": {
+        "gap_ratios": null,
+        "gaps_m": {
+         "blueboat_v2": [
+          null,
+          5.0,
+          2.9,
+          1.7,
+          1.0,
+          0.76
+         ],
+         "wamv_vrx_v2_opt1": [
+          null,
+          5.0,
+          3.6,
+          2.5,
+          1.8,
+          1.25
+         ]
+        },
+        "kind": "metres",
+        "option": "M",
+        "suite_version": "g3_appearing_gap_v4m",
+        "witness_floor_m": {
+         "blueboat_v2": 0.67,
+         "wamv_vrx_v2_opt1": 1.03
+        }
+       },
+       "pool_files": "the flat pool bundle (G3c option B); none in the repo",
+       "previous_provenance": {
+        "code_lf_sha256": {
+         "scripts/admit_appearing_pools.py": "81933f77184af07356efd76e58e50899d3436216a2db6942c567581e2b311f9e",
+         "tasks/_shared/conditions/appearing/about.py": "3d89ef0a75dba9c9802bfbe47561730abd0f06824dafd0a785dd94b5d60f8162",
+         "tasks/_shared/conditions/appearing/admission.py": "e5b13024995e4fdb46195b8a3702cab7f78dc000e5da4e78c86a0e6e46277d4e",
+         "tasks/_shared/conditions/appearing/config.py": "3646a3790386cf8d1c31b9855c23ab8b8d3815bb9a7bf1e7b58afb01cb95a116",
+         "tasks/_shared/conditions/appearing/placement.py": "ecd2cbd853798dae4fbdf21acf93ce360961378b4af80abdbf9f9e6e7285b148",
+         "tasks/_shared/conditions/appearing/pool.py": "7a9e4486512ab0938c71c95f2f8472aa4f0e017f5d8d0ad3b697665945fe75e8",
+         "tasks/_shared/conditions/appearing/runtime.py": "211cc222a253fad5d4d0e815edc0e9078d0cf8e83a7c192c07a72e76d943844e",
+         "tasks/_shared/conditions/appearing/stamp.py": "872333a666360fdc1b571b315d350de0a9f0d632ce9f7c1e51714b997622d080",
+         "tasks/_shared/conditions/dynamic/adapters.py": "aa5c84aa091ed3be1696bcc1e42a5fdf2e4c9dd96c06bc8eea98331d2858d2f8",
+         "tasks/_shared/conditions/dynamic/feasibility.py": "79fa8a2f8d59f2d2dc58ac0faa8f85e260b7f46e7578fe606291a8767c33ed66",
+         "tasks/_shared/journal_cfg_v2.py": "7fa06d9161855c6281a5abd8edbb3df0da2b0f325a87ada4b498abebe340b936",
+         "tasks/_shared/journal_layouts_v2.py": "21387d2f80601c437936a016f4fdf1e39281e648b3006889ef657201c0f1a2d8",
+         "tasks/hazard_nav/journal_hazard_nav.py": "d4c8cb7c54439e4996f60fbdf887c4c2f200e2307a77dfc677ef3eab76386ba5",
+         "tasks/path_following/journal_path_following.py": "bde43d91609cf3098374184018ce6b28bd87b4945031a75aa9a09f5d74a570fe"
+        },
+        "episodes": 2,
+        "num_envs": 64,
+        "python": "3.13.7",
+        "seed": 42,
+        "tier": 2,
+        "tool": "g3-admit-appearing-pools-v1"
+       },
+       "tool": "g20b-admit-appearing-pools-v3"
+      },
+      "tool": "g20c-admit-appearing-pools-v4"
+     },
+     "tool": "g20d-admit-appearing-pools-v5"
+    },
+    "tool": "g20d-admit-appearing-pools-v5"
+   },
+   "tool": "g20d-admit-appearing-pools-v5"
+  },
+  "tool": "g20d-admit-appearing-pools-v5"
+ },
+ "schema": "usvbench.appearing_pool_manifest/1"
+}

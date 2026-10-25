@@ -1,0 +1,1094 @@
+{
+ "pools": {
+  "harbour_mission__blueboat_v2__s11002.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 2238312,
+   "file": "harbour_mission__blueboat_v2__s11002.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 126,
+   "keys_not_admitted": 2,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     126,
+     2
+    ],
+    [
+     128,
+     126,
+     2
+    ],
+    [
+     128,
+     126,
+     2
+    ],
+    [
+     128,
+     126,
+     2
+    ],
+    [
+     128,
+     126,
+     2
+    ],
+    [
+     128,
+     126,
+     2
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "53371d3c3f14ed201c7099186ca6c2760f1447bc8bf8bc5577802933dbf59f20",
+   "reason_counts": {
+    "no_clear_site_in_route_window": 1,
+    "no_witness_in_frozen_search": 1,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 1,
+    "overlaps_static_obstacle": 1
+   },
+   "seed": 11002,
+   "sha256": "52dc310739bada2cea2bc3c0fa825764343eaebeaa6d5e4887ada2615d21d4cb",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "harbour_mission__blueboat_v2__s41041.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 2252700,
+   "file": "harbour_mission__blueboat_v2__s41041.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 127,
+   "keys_not_admitted": 1,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "6f14fa81e0558a9acee90e2d91e3cae1bb314368f6a29bec31cfee5ceeac05ba",
+   "reason_counts": {
+    "no_witness_in_frozen_search": 1,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 1
+   },
+   "seed": 41041,
+   "sha256": "4fe1c0fccb7f0aa6734a107a1237b7a041dbb18ceb06b37d8b024df2ba4e4376",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "harbour_mission__blueboat_v2__s41047.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 2161292,
+   "file": "harbour_mission__blueboat_v2__s41047.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 123,
+   "keys_not_admitted": 5,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "70fa9bb399a126ff99723e81bb97d59cbdd3c56a2126619f2045b8920996aafd",
+   "reason_counts": {
+    "no_clear_site_in_route_window": 3,
+    "no_witness_in_frozen_search": 2,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 2,
+    "overlaps_static_obstacle": 3
+   },
+   "seed": 41047,
+   "sha256": "3cea1165385cbbb404c099defeb5bb9a4a07392c2e35c8073642f8cbe559d500",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "harbour_mission__blueboat_v2__s41051.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 2076032,
+   "file": "harbour_mission__blueboat_v2__s41051.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 120,
+   "keys_not_admitted": 8,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     120,
+     8
+    ],
+    [
+     128,
+     120,
+     8
+    ],
+    [
+     128,
+     120,
+     8
+    ],
+    [
+     128,
+     120,
+     8
+    ],
+    [
+     128,
+     120,
+     8
+    ],
+    [
+     128,
+     120,
+     8
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "66e61bc9dd4465081f7569b619f614cbabb6a7636c76960bd41f13b25a4bf148",
+   "reason_counts": {
+    "no_clear_site_in_route_window": 5,
+    "no_witness_in_frozen_search": 3,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 3,
+    "overlaps_static_obstacle": 5
+   },
+   "seed": 41051,
+   "sha256": "417c49a0769a00b06f5939219703fe8344ff845af5840f119e4c350c42781aca",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "harbour_mission__blueboat_v2__s41057.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 2236516,
+   "file": "harbour_mission__blueboat_v2__s41057.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 126,
+   "keys_not_admitted": 2,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     126,
+     2
+    ],
+    [
+     128,
+     126,
+     2
+    ],
+    [
+     128,
+     126,
+     2
+    ],
+    [
+     128,
+     126,
+     2
+    ],
+    [
+     128,
+     126,
+     2
+    ],
+    [
+     128,
+     126,
+     2
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "11070d22460e2875dd82daf118db6f5f9043059e1adec54ae4f7856012b4bd83",
+   "reason_counts": {
+    "no_clear_site_in_route_window": 2,
+    "overlaps_static_obstacle": 2
+   },
+   "seed": 41057,
+   "sha256": "37d2b0e7243182f498da241a4ffed747b138ee1b026cf67cb933cb6a14dbe2f9",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "harbour_mission__blueboat_v2__s42.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 2760080,
+   "file": "harbour_mission__blueboat_v2__s42.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 125,
+   "keys_not_admitted": 3,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "23cf0dee1f3d7a929975e2fb17621d1c004c176420e8d09b9e879d89da2169c4",
+   "reason_counts": {
+    "no_witness_in_frozen_search": 1,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 3
+   },
+   "seed": 42,
+   "sha256": "9e05bb209d32a1bf83683de87f54cfe949e6389e6b92f0d801aa88cb830d3e7b",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "blueboat_v2"
+  },
+  "harbour_mission__wamv_vrx_v2_opt1__s11002.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 4915400,
+   "file": "harbour_mission__wamv_vrx_v2_opt1__s11002.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 106,
+   "keys_not_admitted": 22,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     106,
+     22
+    ],
+    [
+     128,
+     106,
+     22
+    ],
+    [
+     128,
+     106,
+     22
+    ],
+    [
+     128,
+     106,
+     22
+    ],
+    [
+     128,
+     106,
+     22
+    ],
+    [
+     128,
+     106,
+     22
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "7b5320651bcd3fb4d2b6064bbff0ded816f0523f7c76fc3c8c9b57916935c8e8",
+   "reason_counts": {
+    "no_clear_site_in_route_window": 2,
+    "no_witness_in_frozen_search": 20,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 20,
+    "overlaps_static_obstacle": 2
+   },
+   "seed": 11002,
+   "sha256": "4adec3d783533a244e255e0e90115b7ad7b2b73505a0de69751ee5e9257da875",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "harbour_mission__wamv_vrx_v2_opt1__s41041.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 4664192,
+   "file": "harbour_mission__wamv_vrx_v2_opt1__s41041.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 101,
+   "keys_not_admitted": 27,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     101,
+     27
+    ],
+    [
+     128,
+     101,
+     27
+    ],
+    [
+     128,
+     101,
+     27
+    ],
+    [
+     128,
+     101,
+     27
+    ],
+    [
+     128,
+     101,
+     27
+    ],
+    [
+     128,
+     101,
+     27
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "c654c07966034e0c27b84b7345b943dd8d53c6f3973a0e7eb7112c34e10c32cc",
+   "reason_counts": {
+    "no_witness_in_frozen_search": 26,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 27
+   },
+   "seed": 41041,
+   "sha256": "7e46ad0d2950f98655e02163b9fb8efdc63e238f38121cd489b8d8bcc844372a",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "harbour_mission__wamv_vrx_v2_opt1__s41047.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 4879632,
+   "file": "harbour_mission__wamv_vrx_v2_opt1__s41047.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 105,
+   "keys_not_admitted": 23,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     105,
+     23
+    ],
+    [
+     128,
+     105,
+     23
+    ],
+    [
+     128,
+     105,
+     23
+    ],
+    [
+     128,
+     105,
+     23
+    ],
+    [
+     128,
+     105,
+     23
+    ],
+    [
+     128,
+     105,
+     23
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "caeb904c1907ed29b418144e81d29091ddd6372e8d51cf1d359256c256274c77",
+   "reason_counts": {
+    "no_clear_site_in_route_window": 1,
+    "no_witness_in_frozen_search": 22,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 22,
+    "overlaps_static_obstacle": 1
+   },
+   "seed": 41047,
+   "sha256": "425c5f8a61dedfd31548e4dc08c9e3c366f5c5bf8c82bd7fc02bc5b33a75e79e",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "harbour_mission__wamv_vrx_v2_opt1__s41051.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 4836048,
+   "file": "harbour_mission__wamv_vrx_v2_opt1__s41051.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 105,
+   "keys_not_admitted": 23,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     105,
+     23
+    ],
+    [
+     128,
+     105,
+     23
+    ],
+    [
+     128,
+     105,
+     23
+    ],
+    [
+     128,
+     105,
+     23
+    ],
+    [
+     128,
+     105,
+     23
+    ],
+    [
+     128,
+     105,
+     23
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "8f852fac75db66095e4ab84fdc462ad912229e6023ef562dd9071bef635a65a0",
+   "reason_counts": {
+    "no_clear_site_in_route_window": 1,
+    "no_witness_in_frozen_search": 20,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 22,
+    "overlaps_static_obstacle": 1
+   },
+   "seed": 41051,
+   "sha256": "bcbf9d7b39e6b2d4a1c68348b74b7d86bf35ecf09d6124314ec6cd43bd78b729",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "harbour_mission__wamv_vrx_v2_opt1__s41057.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 5089912,
+   "file": "harbour_mission__wamv_vrx_v2_opt1__s41057.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 111,
+   "keys_not_admitted": 17,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     111,
+     17
+    ],
+    [
+     128,
+     111,
+     17
+    ],
+    [
+     128,
+     111,
+     17
+    ],
+    [
+     128,
+     111,
+     17
+    ],
+    [
+     128,
+     111,
+     17
+    ],
+    [
+     128,
+     111,
+     17
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "c1c807a94f4c284249088a574a7d4f32642d34a21302ce955fff67a2478f1589",
+   "reason_counts": {
+    "no_witness_in_frozen_search": 17,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 17
+   },
+   "seed": 41057,
+   "sha256": "4a1c72e449fd5d5aa728013feed0e822a05548f38c0fea5848ee874738f73f9d",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  },
+  "harbour_mission__wamv_vrx_v2_opt1__s42.json.xz": {
+   "admission": {
+    "monotone_stitching": false,
+    "not_applicable_doses": [],
+    "offered_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ],
+    "optional_doses": [],
+    "required_doses": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "bytes": 6182992,
+   "file": "harbour_mission__wamv_vrx_v2_opt1__s42.json.xz",
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 111,
+   "keys_not_admitted": 17,
+   "keys_offered": 128,
+   "optional_reason_counts": {},
+   "per_dose_counts": [
+    [
+     128,
+     111,
+     17
+    ],
+    [
+     128,
+     111,
+     17
+    ],
+    [
+     128,
+     111,
+     17
+    ],
+    [
+     128,
+     111,
+     17
+    ],
+    [
+     128,
+     111,
+     17
+    ],
+    [
+     128,
+     111,
+     17
+    ]
+   ],
+   "per_dose_counts_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "pool_digest": "4d24491e2e8f3f01067d8b3ef91bf8d565b67640950a0e9f4ddde8b0675e5bd9",
+   "reason_counts": {
+    "no_witness_in_frozen_search": 17,
+    "no_witness_in_frozen_search_or_fallback_beam_192": 17
+   },
+   "seed": 42,
+   "sha256": "6c986bfe816ad57b4fc49c54b9b95cc6a850cab0cc4142e36fcafdbee1ecede1",
+   "task": "harbour_mission",
+   "tier": 2,
+   "vessel_id": "wamv_vrx_v2_opt1"
+  }
+ },
+ "provenance": {
+  "bundle_manifest_sha256_by_seed": {
+   "11002": "396bfd3daea679bf88401cd9462ab65e33850a6418ad4543ea43bcb1118e0ad4",
+   "41041": "ef26db8518f3f9beef7ce6b687297893d1fb2605a81686af9941ea579e9533a9",
+   "41047": "5921009bdea0c500809fcc64d3190297bc00e1acf76c9e7d6aa8200a9d772b80",
+   "41051": "e3b35627596cbc03702db8d2ca7da0e90976cf905a99d128e670627cd3b8374b",
+   "41057": "1ce8b8bc9b9fde883afa9b531e7d7acc6838b5f85f2481eb000b48dcce2bc5cb"
+  },
+  "g49_merge": "v2.6.5 (G49, J29): the v2.6.4 entries (seed 42 / legacy, listed in kept_entries_from_previous_manifest; admitted before the v7m ladder) + the G48 pools of seeds 11002 41041 41047 41051 41057 (suite g3_appearing_gap_v7m, ladder below); files in the G49 bundle",
+  "kept_entries_from_previous_manifest": [
+   "harbour_mission__blueboat_v2__s42.json.xz",
+   "harbour_mission__wamv_vrx_v2_opt1__s42.json.xz"
+  ],
+  "ladder": {
+   "calibration_rung_m": {
+    "blueboat_v2": 0.76,
+    "wamv_vrx_v2_opt1": 1.25
+   },
+   "calibration_sweep_m": {
+    "blueboat_v2": [
+     0.76,
+     1.0,
+     1.4,
+     2.0,
+     2.9,
+     4.0,
+     5.0,
+     6.6,
+     7.5
+    ],
+    "wamv_vrx_v2_opt1": [
+     1.25,
+     1.4,
+     1.8,
+     2.5,
+     3.6,
+     5.0,
+     7.5,
+     11.0,
+     15.0
+    ]
+   },
+   "gap_override_min_m": {
+    "blueboat_v2": 0.76,
+    "wamv_vrx_v2_opt1": 1.25
+   },
+   "gap_ratios": null,
+   "gaps_m": {
+    "blueboat_v2": [
+     null,
+     7.5,
+     3.5,
+     1.6,
+     0.76,
+     0.76
+    ],
+    "wamv_vrx_v2_opt1": [
+     null,
+     15.0,
+     6.6,
+     2.9,
+     1.25,
+     1.25
+    ]
+   },
+   "kind": "metres",
+   "kinematic_floor_m": {
+    "blueboat_v2": 0.67,
+    "wamv_vrx_v2_opt1": 1.03
+   },
+   "option": "M",
+   "suite_version": "g3_appearing_gap_v7m"
+  },
+  "pool_files": "the flat pool bundle (G3c option B); none in the repo",
+  "previous_provenance": {
+   "bundle_manifest_sha256": "13652fea6219b93bb26a235a64afa7f89c091cee7fe0514ac7193711e56641f5",
+   "ladder": {
+    "calibration_rung_m": {
+     "blueboat_v2": 0.76,
+     "wamv_vrx_v2_opt1": 1.25
+    },
+    "calibration_sweep_m": {
+     "blueboat_v2": [
+      0.76,
+      1.0,
+      1.4,
+      2.0,
+      2.9,
+      4.0,
+      5.0,
+      6.6,
+      7.5
+     ],
+     "wamv_vrx_v2_opt1": [
+      1.25,
+      1.4,
+      1.8,
+      2.5,
+      3.6,
+      5.0,
+      7.5,
+      11.0,
+      15.0
+     ]
+    },
+    "gap_override_min_m": {
+     "blueboat_v2": 0.76,
+     "wamv_vrx_v2_opt1": 1.25
+    },
+    "gap_ratios": null,
+    "gaps_m": {
+     "blueboat_v2": [
+      null,
+      5.0,
+      2.9,
+      1.7,
+      1.0,
+      0.76
+     ],
+     "wamv_vrx_v2_opt1": [
+      null,
+      5.0,
+      3.6,
+      2.5,
+      1.8,
+      1.25
+     ]
+    },
+    "kind": "metres",
+    "kinematic_floor_m": {
+     "blueboat_v2": 0.67,
+     "wamv_vrx_v2_opt1": 1.03
+    },
+    "option": "M",
+    "suite_version": "g3_appearing_gap_v6m"
+   },
+   "pool_files": "the flat pool bundle (G3c option B); none in the repo",
+   "tool": "g20d-admit-appearing-pools-v5"
+  },
+  "tool": "g20d-admit-appearing-pools-v5"
+ },
+ "schema": "usvbench.appearing_pool_manifest/1"
+}

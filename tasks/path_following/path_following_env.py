@@ -5,8 +5,13 @@
 
 from __future__ import annotations
 
+from .._shared.termination_reason import publish_termination_reason
+
 import math
 from collections.abc import Sequence
+
+from .._shared.vehicles import physics_version
+from .._shared.physics_v2 import add_implicit_hull_damping, WaveClock
 
 import torch
 
@@ -16,8 +21,15 @@ from isaaclab.assets import Articulation, RigidObject
 from isaaclab.envs import DirectRLEnv
 
 from .._shared.restoring import restoring_torque_body
+from .._shared.scenario_draws import (
+    make_scenario_rng,
+    path_following_route,
+    spawn_heading,
+    stamp_scenario,
+)
 from .._shared.vehicles import get_vehicle
 from .path_following_env_cfg import PathFollowingEnvCfg
+from .journal_path_following import PathFollowingJournalMixin
 
 
 def _space_dim(space: object) -> int:
@@ -26,14 +38,21 @@ def _space_dim(space: object) -> int:
     return int(shape[0]) if shape else int(space)
 
 
-class PathFollowingEnv(DirectRLEnv):
+class PathFollowingEnv(PathFollowingJournalMixin, DirectRLEnv):
     """Calm-water ordered waypoint following with reward-independent success."""
 
     cfg: PathFollowingEnvCfg
 
     def __init__(self, cfg: PathFollowingEnvCfg, render_mode: str | None = None, **kwargs):
+        if getattr(cfg, "journal_contract_version", None) == 2:
+            # Journal cfgs only (F3, CONTEXT_R4 D15): construct through the journal
+            # mixin, which binds the _journal_* hooks on this instance; the legacy
+            # methods of this class are not touched.
+            self._journal_construct(cfg, render_mode, **kwargs)
+            return
         self.vehicle_spec = get_vehicle(cfg.vehicle)
         self.physics_cfg = cfg.underwater_physics_cfg
+        physics_version(self.physics_cfg)  # Reject unsupported versions before simulation.
         super().__init__(cfg, render_mode, **kwargs)
 
         if self.cfg.num_waypoints != 4:
@@ -86,6 +105,39 @@ class PathFollowingEnv(DirectRLEnv):
         self.actions = torch.zeros(
             (self.num_envs, _space_dim(self.cfg.action_space)), device=self.device
         )
+
+        # --- Controller-independent episode scenarios -----------------------
+        # The waypoint chain and the spawn heading used to come off the GLOBAL
+        # torch RNG, which skrl's Runner reseeds to a constant AFTER the env is
+        # built, so two --eval-seed values drew the same routes. This family is
+        # the worst-affected of the three: _get_dones returns self._success as
+        # `terminated`, so episodes end at DIFFERENT steps under different
+        # policies and the global stream is consumed in a controller-dependent
+        # order. The keyed per-(env, episode) streams remove both problems.
+        # cfg.seed None -> None -> the historical global-RNG lines, unchanged.
+        self._scenario = make_scenario_rng(self.cfg, self.num_envs, self.device)
+        # _scenario_* is the RUNNING episode; episode_scenario_* is latched at
+        # reset for the episode that just ENDED (same discipline as
+        # episode_xte_rms), because the evaluator reads them after the reset.
+        self._scenario_params = [{} for _ in range(self.num_envs)]
+        self._scenario_hashes = [{} for _ in range(self.num_envs)]
+        self.episode_scenario = [{} for _ in range(self.num_envs)]
+        self.episode_scenario_hashes = [{} for _ in range(self.num_envs)]
+
+        # Sea state (Wave variants only). Certified ids have no sea_state cfg
+        # field, so getattr returns None and nothing here runs for them. The
+        # field is a pure background force: it never touches the observation,
+        # reward, or termination paths of this env.
+        self._sea = None
+        if getattr(self.cfg, "sea_state", None) is not None and self.cfg.sea_state.enable:
+            from .._shared.sea_state import SeaState
+
+            self._sea = SeaState(
+                self.cfg.sea_state, self.num_envs, self.device,
+                physics_version=getattr(self.physics_cfg, "physics_version", 1),
+            )
+            if getattr(self.physics_cfg, "physics_version", 1) == 2:
+                self._wave_clock = WaveClock(self.num_envs, self.device, self.cfg.sim.dt)
 
     def _setup_scene(self):
         if self.vehicle_spec.asset_kind == "articulation":
@@ -392,39 +444,40 @@ class PathFollowingEnv(DirectRLEnv):
             angular_velocity = self.robot.data.root_ang_vel_w
 
         quat = self.robot.data.root_link_quat_w
-        if (
-            self.physics_cfg.sway_lin_damping is None
-            or self.physics_cfg.sway_quad_damping is None
-        ):
-            # Preserve the legacy ROV's isotropic horizontal damping exactly.
-            v_xy = linear_velocity[:, :2]
-            speed_xy = torch.norm(v_xy, dim=-1, keepdim=True)
-            force_w[:, :2] += -(
-                self.physics_cfg.surge_lin_damping
-                + self.physics_cfg.surge_quad_damping * speed_xy
-            ) * v_xy
-        else:
-            vel_b = math_utils.quat_apply_inverse(quat, linear_velocity)
-            drag_b = torch.zeros_like(vel_b)
-            surge_velocity = vel_b[:, self._surge_axis_idx]
-            drag_b[:, self._surge_axis_idx] = -(
-                self.physics_cfg.surge_lin_damping
-                + self.physics_cfg.surge_quad_damping * torch.abs(surge_velocity)
-            ) * surge_velocity
-            sway_velocity = vel_b[:, self._sway_axis_idx]
-            drag_b[:, self._sway_axis_idx] = -(
-                self.physics_cfg.sway_lin_damping
-                + self.physics_cfg.sway_quad_damping * torch.abs(sway_velocity)
-            ) * sway_velocity
-            forces[:, 0, :2] += drag_b[:, :2]
-        force_w[:, 2] += -self.physics_cfg.heave_damping * linear_velocity[:, 2]
+        if getattr(self.physics_cfg, "physics_version", 1) == 1:
+            if (
+                self.physics_cfg.sway_lin_damping is None
+                or self.physics_cfg.sway_quad_damping is None
+            ):
+                # Preserve the legacy ROV's isotropic horizontal damping exactly.
+                v_xy = linear_velocity[:, :2]
+                speed_xy = torch.norm(v_xy, dim=-1, keepdim=True)
+                force_w[:, :2] += -(
+                    self.physics_cfg.surge_lin_damping
+                    + self.physics_cfg.surge_quad_damping * speed_xy
+                ) * v_xy
+            else:
+                vel_b = math_utils.quat_apply_inverse(quat, linear_velocity)
+                drag_b = torch.zeros_like(vel_b)
+                surge_velocity = vel_b[:, self._surge_axis_idx]
+                drag_b[:, self._surge_axis_idx] = -(
+                    self.physics_cfg.surge_lin_damping
+                    + self.physics_cfg.surge_quad_damping * torch.abs(surge_velocity)
+                ) * surge_velocity
+                sway_velocity = vel_b[:, self._sway_axis_idx]
+                drag_b[:, self._sway_axis_idx] = -(
+                    self.physics_cfg.sway_lin_damping
+                    + self.physics_cfg.sway_quad_damping * torch.abs(sway_velocity)
+                ) * sway_velocity
+                forces[:, 0, :2] += drag_b[:, :2]
+            force_w[:, 2] += -self.physics_cfg.heave_damping * linear_velocity[:, 2]
 
-        wz = angular_velocity[:, 2]
-        torque_w[:, 2] += -(
-            self.physics_cfg.yaw_lin_damping
-            + self.physics_cfg.yaw_quad_damping * torch.abs(wz)
-        ) * wz
-        torque_w[:, :2] += -self.physics_cfg.rollpitch_rate_damping * angular_velocity[:, :2]
+            wz = angular_velocity[:, 2]
+            torque_w[:, 2] += -(
+                self.physics_cfg.yaw_lin_damping
+                + self.physics_cfg.yaw_quad_damping * torch.abs(wz)
+            ) * wz
+            torque_w[:, :2] += -self.physics_cfg.rollpitch_rate_damping * angular_velocity[:, :2]
 
         # Yaw-invariant attitude spring: restoring torque k*(up_body_in_world x
         # world_up). The previous Euler-angle form applied BODY tilt angles as
@@ -448,8 +501,29 @@ class PathFollowingEnv(DirectRLEnv):
                 self.physics_cfg.restoring_stiffness_pitch,
             )
 
+        if self._sea is not None:
+            # Same world-frame entry point as the buoyancy/drag wrench (and as
+            # the certified current path in the families that carry one), so
+            # the wave field and a current simply add their water velocities.
+            # Mirrors station_keeping_env.py:541-551.
+            if getattr(self.physics_cfg, "physics_version", 1) == 1:
+                t = float(self.episode_length_buf[0]) * self.control_step_s
+            else:
+                t = self._wave_clock.time()
+            wave_f, wave_t = self._sea.forces(
+                self.robot.data.root_com_pos_w[:, :2],
+                self.robot.data.root_com_vel_w[:, :2],
+                t,
+            )
+            if getattr(self.physics_cfg, "physics_version", 1) == 2:
+                self._wave_clock.advance()
+            force_w += wave_f
+            torque_w += wave_t
+
         forces[:, 0, :] += math_utils.quat_apply_inverse(quat, force_w)
         torques[:, 0, :] += math_utils.quat_apply_inverse(quat, torque_w)
+        if getattr(self.physics_cfg, "physics_version", 1) == 2:
+            add_implicit_hull_damping(self, forces, torques, quat)
         self.robot.set_external_force_and_torque(forces, torques)
 
     def _waypoint_world(self, waypoint_indices: torch.Tensor) -> torch.Tensor:
@@ -595,6 +669,9 @@ class PathFollowingEnv(DirectRLEnv):
         self._success.copy_(self.gates_passed >= self.cfg.num_waypoints)
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
+        publish_termination_reason(
+            self, self._success, time_out, success=self._success
+        )
         return self._success, time_out
 
     def _reset_idx(self, env_ids: Sequence[int] | None):
@@ -618,6 +695,11 @@ class PathFollowingEnv(DirectRLEnv):
             self.episode_gates_passed[completed_ids] = self.gates_passed[completed_ids]
             self.episode_xte_rms[completed_ids] = self.xte_rms[completed_ids]
             self.episode_route_length[completed_ids] = self.route_length[completed_ids]
+            for completed in completed_ids.tolist():
+                self.episode_scenario[completed] = self._scenario_params[completed]
+                self.episode_scenario_hashes[completed] = self._scenario_hashes[
+                    completed
+                ]
 
             self.extras.setdefault("log", {})
             self.extras["log"]["Episode/success"] = success.float().mean()
@@ -637,25 +719,34 @@ class PathFollowingEnv(DirectRLEnv):
 
         super()._reset_idx(env_ids)
 
+        # New episode for these envs: advance their per-env episode counter and
+        # reseed every primitive stream. MUST precede the first draw below.
+        if self._scenario is not None:
+            self._scenario.reset_idx(env_ids)
+
         num_resets = len(env_ids)
-        self.segment_lengths[env_ids] = self.cfg.segment_length_min + torch.rand(
-            (num_resets, self.cfg.num_waypoints), device=self.device
-        ) * (self.cfg.segment_length_max - self.cfg.segment_length_min)
+        max_change = torch.deg2rad(
+            torch.tensor(self.cfg.heading_change_max_deg, device=self.device)
+        )
+        # Identical ranges to before -- segment length uniform on
+        # [segment_length_min, segment_length_max), first heading uniform on
+        # [0, 2*pi), each heading change uniform on [-max_change, +max_change).
+        # Only the stream the three uniforms come from changed.
+        segment_lengths, first_headings, heading_changes = path_following_route(
+            self._scenario,
+            env_ids,
+            self.device,
+            self.cfg.num_waypoints,
+            self.cfg.segment_length_min,
+            self.cfg.segment_length_max,
+            max_change,
+        )
+        self.segment_lengths[env_ids] = segment_lengths
 
         headings = torch.empty(
             (num_resets, self.cfg.num_waypoints), device=self.device
         )
-        headings[:, 0] = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
-        max_change = torch.deg2rad(
-            torch.tensor(self.cfg.heading_change_max_deg, device=self.device)
-        )
-        heading_changes = (
-            torch.rand(
-                (num_resets, self.cfg.num_waypoints - 1), device=self.device
-            )
-            * 2.0
-            - 1.0
-        ) * max_change
+        headings[:, 0] = first_headings
         headings[:, 1:] = headings[:, 0:1] + torch.cumsum(heading_changes, dim=1)
 
         segment_vectors = torch.stack(
@@ -668,7 +759,8 @@ class PathFollowingEnv(DirectRLEnv):
         self.waypoints[env_ids] = torch.cumsum(segment_vectors, dim=1)
         self.route_length[env_ids] = self.segment_lengths[env_ids].sum(dim=1)
 
-        spawn_headings = torch.rand(num_resets, device=self.device) * 2.0 * torch.pi
+        # Uniform on [0, 2*pi) exactly as before; only the stream changed.
+        spawn_headings = spawn_heading(self._scenario, env_ids, self.device)
         root_state = self.robot.data.default_root_state[env_ids].clone()
         root_state[:, :3] += self.scene.env_origins[env_ids]
         body_yaws = spawn_headings + self._body_yaw_from_bow_offset
@@ -692,6 +784,72 @@ class PathFollowingEnv(DirectRLEnv):
         first_target_distance = torch.norm(first_rpos, dim=-1)
         self._prev_target_distance[env_ids] = first_target_distance
         self._pre_transition_target_distance[env_ids] = first_target_distance
+
+        # Fresh sea for the episode that starts now (Wave variants only), off
+        # the protocol's per-(env, episode) "wave" stream so eval seeds control
+        # the sea; unseeded envs fall back to the historical global-RNG line
+        # inside SeaState.resample. Stamp mirrors station_keeping_env.py:829-844
+        # (every entry is a raw draw or, for direction_rad, recoverable beside
+        # mean_direction_rad by subtraction).
+        wave_scenario: dict[str, dict[str, object]] = {}
+        if self._sea is not None:
+            self._sea.resample(env_ids, scenario=self._scenario)
+            if getattr(self.physics_cfg, "physics_version", 1) == 2:
+                self._wave_clock.reset(env_ids)
+            wave_scenario["wave"] = {
+                "hs_m": self._sea.hs[env_ids],
+                "tp_s": self._sea.tp[env_ids],
+                "gamma": self._sea.gamma[env_ids],
+                "mean_direction_rad": self._sea.mean_direction[env_ids],
+                "phase_rad": self._sea.phase[env_ids],
+                "direction_rad": self._sea.direction[env_ids],
+            }
+
+        # Resolved scenario for the episode that starts now, plus a hash per
+        # primitive group for the certificate. Values only -- never the key --
+        # so two eval seeds that happened to draw the same route still hash the
+        # same and stay visible to scripts/check_scenario_independence.py.
+        #
+        # Every entry is a RAW DRAW. The route used to stamp headings_rad, the
+        # per-waypoint ABSOLUTE heading, which is the running sum of the draws
+        # (:696-697) and not one of them. In exact arithmetic that sum is
+        # invertible, but it is computed in float32 and the accumulation is
+        # lossy: a heading change small against the ulp of the running total
+        # vanishes into it. Two checks, both reproducible:
+        #   * the hand case -- first heading 1.234 rad with changes
+        #     (0.7, 1e-9) and (0.7, 4e-9), values inside
+        #     [-heading_change_max, +heading_change_max) -- stamps the
+        #     byte-identical headings [1.234, 1.934, 1.934]. Honest caveat:
+        #     those two tails are inside the RANGE but below what this chain
+        #     can actually draw. heading_changes are (u*2 - 1) * max_change
+        #     with u a float32 unit draw, so the smallest nonzero magnitude
+        #     available is 6.2e-8 rad, not 1e-9.
+        #   * the achievable case, which is the one that decides it: perturbing
+        #     one real unit draw by a single ulp over 4e6 four-waypoint routes
+        #     changed the stamped heading_change in 3.0e6 of them, and of THOSE
+        #     25.5% still stamped byte-identical absolute headings.
+        # Two different exam papers, one hash -- at a quarter of the
+        # neighbouring draws, not as a curiosity.
+        #
+        # first_heading_rad plus heading_change_rad are what the stream actually
+        # produced, and they still reconstruct the absolute headings exactly
+        # (headings[:, 0] = first_heading; headings[:, 1:] = first_heading +
+        # cumsum(heading_change)), so recording the draw costs the certificate
+        # nothing and closes the collision.
+        for env_index, resolved, hashes in stamp_scenario(
+            env_ids,
+            {
+                "route": {
+                    "segment_lengths_m": self.segment_lengths[env_ids],
+                    "first_heading_rad": first_headings,
+                    "heading_change_rad": heading_changes,
+                },
+                "spawn_pose": {"heading_rad": spawn_headings},
+                **wave_scenario,
+            },
+        ):
+            self._scenario_params[env_index] = resolved
+            self._scenario_hashes[env_index] = hashes
 
         # This is reset-only USD authoring and has no disabled-mode or per-step cost.
         if self.cfg.visual.enable_waypoint_markers and bool((env_ids == 0).any().item()):

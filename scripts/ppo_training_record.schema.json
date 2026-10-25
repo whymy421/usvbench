@@ -1,0 +1,371 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "usvbench.ppo_training_record/1",
+ "title": "USVBench PPO training record (G19b, IMPLEMENTATION_PLAN P6)",
+ "description": "Written last by scripts/train_journal_ppo.py; validated by scripts/ppo_training_record.py validate() (which also recomputes the mixture and agent-config digests and the file hashes).",
+ "type": "object",
+ "additionalProperties": false,
+ "required": [
+  "schema",
+  "task",
+  "journal_id",
+  "vessel",
+  "vehicle",
+  "carrier_family",
+  "arm",
+  "training_seed",
+  "candidate_index",
+  "purpose",
+  "registry",
+  "release",
+  "code_tree_sha256",
+  "reference_environment",
+  "re1_match",
+  "host",
+  "host_class",
+  "concurrency",
+  "preflight_sha256",
+  "agent_config",
+  "budget_timesteps",
+  "completed_timesteps",
+  "num_envs",
+  "rollouts",
+  "iterations",
+  "mixture",
+  "hazard_admission",
+  "checkpoints",
+  "final_checkpoint",
+  "status",
+  "divergence",
+  "nonfinite_terminal",
+  "divergence_checks",
+  "wall_time_s",
+  "started_utc",
+  "finished_utc",
+  "training_returns",
+  "log_digests"
+ ],
+ "properties": {
+  "schema": {
+   "const": "usvbench.ppo_training_record/1"
+  },
+  "task": {
+   "type": "string"
+  },
+  "journal_id": {
+   "type": "string"
+  },
+  "vessel": {
+   "enum": [
+    "blueboat",
+    "wamv"
+   ]
+  },
+  "vehicle": {
+   "type": "string"
+  },
+  "carrier_family": {
+   "type": "string"
+  },
+  "arm": {
+   "enum": [
+    "mixture",
+    "calm"
+   ]
+  },
+  "training_seed": {
+   "type": "integer",
+   "minimum": 0
+  },
+  "candidate_index": {
+   "type": [
+    "integer",
+    "null"
+   ],
+   "minimum": 0
+  },
+  "purpose": {
+   "enum": [
+    "training",
+    "training_smoke"
+   ]
+  },
+  "registry": {
+   "type": "object",
+   "required": [
+    "registry_sha256",
+    "seed",
+    "purpose",
+    "namespace",
+    "registry_status"
+   ],
+   "properties": {
+    "registry_sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    },
+    "seed": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "purpose": {
+     "type": "string"
+    }
+   }
+  },
+  "release": {
+   "type": [
+    "object",
+    "null"
+   ],
+   "required": [
+    "release_id",
+    "record_sha256"
+   ],
+   "properties": {
+    "release_id": {
+     "type": "string"
+    },
+    "record_sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    }
+   }
+  },
+  "code_tree_sha256": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{64}$"
+  },
+  "reference_environment": {
+   "type": "object",
+   "required": [
+    "id",
+    "versions",
+    "match"
+   ]
+  },
+  "re1_match": {
+   "type": "boolean"
+  },
+  "host": {
+   "type": "object"
+  },
+  "host_class": {
+   "type": "string"
+  },
+  "concurrency": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "preflight_sha256": {
+   "type": "string",
+   "pattern": "^[0-9a-f]{64}$"
+  },
+  "agent_config": {
+   "type": "object",
+   "required": [
+    "entry_point",
+    "yaml_path",
+    "yaml_sha256",
+    "base_config_sha256",
+    "config",
+    "sha256",
+    "overrides"
+   ],
+   "properties": {
+    "sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    },
+    "config": {
+     "type": "object"
+    },
+    "overrides": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "path",
+       "value"
+      ]
+     }
+    },
+    "yaml_sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    },
+    "base_config_sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    }
+   }
+  },
+  "budget_timesteps": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "completed_timesteps": {
+   "type": "integer",
+   "minimum": 0
+  },
+  "num_envs": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "rollouts": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "iterations": {
+   "type": "integer",
+   "minimum": 0
+  },
+  "mixture": {
+   "type": [
+    "object",
+    "null"
+   ]
+  },
+  "hazard_admission": {
+   "type": [
+    "object",
+    "null"
+   ]
+  },
+  "checkpoints": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "timestep",
+     "path",
+     "sha256"
+    ],
+    "properties": {
+     "timestep": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "path": {
+      "type": "string"
+     },
+     "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+     }
+    }
+   }
+  },
+  "final_checkpoint": {
+   "type": [
+    "object",
+    "null"
+   ],
+   "required": [
+    "path",
+    "sha256",
+    "source_path",
+    "source_sha256"
+   ],
+   "properties": {
+    "sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    },
+    "source_sha256": {
+     "type": "string",
+     "pattern": "^[0-9a-f]{64}$"
+    }
+   }
+  },
+  "status": {
+   "enum": [
+    "completed",
+    "diverged"
+   ]
+  },
+  "divergence": {
+   "type": [
+    "object",
+    "null"
+   ]
+  },
+  "nonfinite_terminal": {
+   "type": "object",
+   "required": [
+    "rule",
+    "termination_code",
+    "replacement_reward",
+    "replacement_source",
+    "rows_replaced",
+    "episodes_finished",
+    "alarm",
+    "per_component"
+   ],
+   "properties": {
+    "termination_code": {
+     "const": 9
+    },
+    "replacement_reward": {
+     "type": "number"
+    },
+    "replacement_source": {
+     "type": "object",
+     "required": [
+      "carrier",
+      "field",
+      "cfg_value",
+      "value_rule"
+     ]
+    },
+    "rows_replaced": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "episodes_finished": {
+     "type": "integer",
+     "minimum": 0
+    },
+    "alarm": {
+     "type": "object",
+     "required": [
+      "min_rows",
+      "rate_per_episode",
+      "rule"
+     ]
+    }
+   }
+  },
+  "divergence_checks": {
+   "type": "object",
+   "required": [
+    "updates_checked",
+    "observation_check"
+   ]
+  },
+  "wall_time_s": {
+   "type": "number",
+   "minimum": 0
+  },
+  "started_utc": {
+   "type": "string"
+  },
+  "finished_utc": {
+   "type": "string"
+  },
+  "training_returns": {
+   "type": "object",
+   "required": [
+    "bins",
+    "per_component"
+   ]
+  },
+  "log_digests": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "string",
+    "pattern": "^[0-9a-f]{64}$"
+   }
+  }
+ }
+}

@@ -3,6 +3,8 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from .._shared.vehicles import PhysicsVersionCfg, physics_version
+
 import os as _os
 
 import isaaclab.sim as sim_utils
@@ -53,7 +55,7 @@ BLUEBOAT_CONFIG = RigidObjectCfg(
 
 
 @configclass
-class BlueBoatUnderwaterPhysicsCfg:
+class BlueBoatUnderwaterPhysicsCfg(PhysicsVersionCfg):
     """Calibrated calm-water physics for the displacement catamaran."""
 
     water_density: float = 1000.0

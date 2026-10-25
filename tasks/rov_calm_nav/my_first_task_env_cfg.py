@@ -9,6 +9,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 import isaaclab.sim as sim_utils
+from .._shared.vehicles import PhysicsVersionCfg, physics_version
+
 import os as _os
 
 # USVBench asset directory.
@@ -20,7 +22,7 @@ _ASSET_DIR = _os.environ.get(
 )
 
 # ============================================
-# ROV  ( )
+# ROV配置 (原始模型)
 # ============================================
 ROV_CONFIG = ArticulationCfg(
     prim_path="/World/envs/env_.*/Robot",
@@ -67,11 +69,11 @@ ROV_CONFIG = ArticulationCfg(
 
 
 # ============================================
-#
+# 水下物理参数配置
 # ============================================
 @configclass
-class UnderwaterPhysicsCfg:
-    """ROV underwater physics configuration.
+class UnderwaterPhysicsCfg(PhysicsVersionCfg):
+    """ROV水下物理参数配置
 
     Damping structure (per-DOF linear + quadratic) follows the experimentally
     validated BlueROV2 model of von Benzon et al. 2022 (JMSE 10(12):1898).
@@ -84,7 +86,7 @@ class UnderwaterPhysicsCfg:
     """
     water_density: float = 1000.0
     gravity: float = 9.8
-    rov_volume: float = 0.5  # m^3 ( , )
+    rov_volume: float = 0.5  # m^3 (增大排水体积，确保波浪下不沉)
     rov_height: float = 0.6
     water_surface_z: float = 0.0
     buoyancy_center_offset: float = -0.1
@@ -104,18 +106,18 @@ class UnderwaterPhysicsCfg:
     attitude_spring: float = 5000.0         # N·m/rad
     rollpitch_rate_damping: float = 2000.0  # N·m·s/rad (overdamped on purpose)
 
-    enable_current: bool = False   # CALM:
+    enable_current: bool = False   # CALM: 关掉洋流
     current_speed_min: float = 0.2
     current_speed_max: float = 0.3
     current_drag_coeff: float = 8.0
 
 
 # ============================================
-#
+# 波浪物理参数配置
 # ============================================
 @configclass
 class WavePhysicsCfg:
-    enable_wave: bool = False   # CALM:
+    enable_wave: bool = False   # CALM: 关掉波浪物理
     wave_height: float = 0.5
     wave_period: float = 5.0
     wave_dir_x: float = 1.0
@@ -123,7 +125,7 @@ class WavePhysicsCfg:
 
 
 # ============================================
-#
+# 环境配置
 # ============================================
 @configclass
 class MyFirstTaskEnvCfg(DirectRLEnvCfg):
@@ -131,9 +133,7 @@ class MyFirstTaskEnvCfg(DirectRLEnvCfg):
     episode_length_s = 120.0
 
     action_space = 2
-    # 🔧   7,  STARTER_TASK.md   OBS_DIM=3,   ship
-    #    checkpoint   ——   OBS_DIM  ,  checkpoint  .
-    observation_space = int(_os.environ.get('OBS_DIM', '3'))
+    observation_space = int(__import__('os').environ.get('OBS_DIM', '7'))
     state_space = 0
 
     goal_radius: float = 2.0

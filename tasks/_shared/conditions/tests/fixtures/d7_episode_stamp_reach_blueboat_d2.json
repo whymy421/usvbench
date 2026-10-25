@@ -1,0 +1,202 @@
+{
+ "payload": {
+  "assignment": {
+   "candidate_digest": "dafc56858f7345f862e7f9a87b9f3f2257dedc028e9c30a5e62b73c0075bc85e",
+   "capacity": {
+    "appearing_reserve": 0,
+    "base_max": 0,
+    "capacity": 1,
+    "dynamic_reserve": 1
+   },
+   "deadline_s": 60.041292299999995,
+   "detection_range_m": 6.295133933500932,
+   "dose": 2,
+   "encounter_metadata": [
+    [
+     "generator_version",
+     "fixed_path_reveal_dose_v2"
+    ],
+    [
+     "key_sha256",
+     "48146915c5d3067679c3eb0bfc82db7ddafd01cf27fe3d7a4bdb6bd2a918ba8a"
+    ],
+    [
+     "vessel_id",
+     "blueboat_v2_provisional"
+    ],
+    [
+     "envelope_provenance",
+     "PROVISIONAL; D5 draft vehicles_v2.py/PARAMS.md/ANALYSIS.md; D4 TASK_CONTRACTS_v2.md:48-54"
+    ],
+    [
+     "t_avoid_method",
+     "min_brake_steer_v1"
+    ],
+    [
+     "conflict_time_s",
+     11.3
+    ],
+    [
+     "d1_window_start_s",
+     4.6078508485115455
+    ],
+    [
+     "path_type",
+     "crossing"
+    ],
+    [
+     "side",
+     1
+    ],
+    [
+     "intruder_speed_mps",
+     0.5
+    ],
+    [
+     "intruder_size_beams",
+     0.5
+    ],
+    [
+     "size_definition",
+     "diameter_in_vessel_beams"
+    ],
+    [
+     "aim_offset_fraction",
+     0.0
+    ],
+    [
+     "reveal_kind",
+     "detection_horizon"
+    ],
+    [
+     "dose_axis",
+     "TTC_over_t_avoid"
+    ],
+    [
+     "ttc_ratio",
+     3.0
+    ],
+    [
+     "relative_heading_rad",
+     1.5707963267948966
+    ],
+    [
+     "closing_speed_mps",
+     1.118033988749895
+    ],
+    [
+     "reference_x_m",
+     6.280888136383659
+    ],
+    [
+     "reference_y_m",
+     0.0
+    ],
+    [
+     "reference_yaw_rad",
+     0.0
+    ],
+    [
+     "reference_speed_mps",
+     1.0
+    ]
+   ],
+   "envelope_provenance": "PROVISIONAL; D5 draft vehicles_v2.py/PARAMS.md/ANALYSIS.md; D4 TASK_CONTRACTS_v2.md:48-54",
+   "footprint": [
+    -0.594,
+    0.606825846,
+    -0.418000002,
+    0.511999998
+   ],
+   "geometry_id": "",
+   "intruders": [
+    {
+     "path_type": "crossing",
+     "radius_m": 0.23249999999999998,
+     "reveal_kind": "detection_horizon",
+     "reveal_s": 6.280888136383659,
+     "speed_bound_mps": 0.5,
+     "start_s": 0.0,
+     "stop_s": null,
+     "vx": 3.061616997868383e-17,
+     "vy": 0.5,
+     "x0": 12.139325846,
+     "y0": -6.0194564635
+    }
+   ],
+   "key": {
+    "env": 0,
+    "episode": 0,
+    "eval_seed": 42,
+    "hazard_group": "d7_reach"
+   },
+   "nominal_ttc_s": 5.019111863616342,
+   "perceivable": true,
+   "pool_digest": "29bd047e403eadfb63a2eda5fb5b18139bd75b65dc377e2a00c9526ac6e5b411",
+   "sensor": {
+    "max_range_m": 30.0,
+    "ray_count": 36
+   },
+   "settled_phase_start_s": 0.0,
+   "site": "transit_corridor",
+   "stage": "",
+   "t_avoid_components": [
+    [
+     "reaction_s",
+     0.5
+    ],
+    [
+     "clearance_m",
+     0.9299999999999999
+    ],
+    [
+     "brake_s",
+     1.1730372878721138
+    ],
+    [
+     "steer_s",
+     2.1362474141404877
+    ]
+   ],
+   "t_avoid_method": "min_brake_steer_v1",
+   "t_avoid_s": 1.6730372878721138,
+   "task": "reach",
+   "vessel_id": "blueboat_v2_provisional",
+   "witness_digest": "e7d10c04f637465e0b33c2799c06100c00e67d3e76aa06cfee0026784e92a226",
+   "witness_min_clearance_m": 0.40487710918735553,
+   "witness_reason": "finite_library_witness"
+  },
+  "model_version": "d7-kinematic-2",
+  "runtime": {
+   "assigned": true,
+   "bridge": null,
+   "contact_note": "endpoint samples only; the env bridge latches swept contact",
+   "detected_samples": 0,
+   "env": 0,
+   "first_detection_s": null,
+   "itt_count": 1,
+   "last_time_s": 0.0,
+   "min_sampled_surface_clearance_m": null,
+   "non_exposure_reason": "sensor_observations_missing",
+   "observer_updates": 0,
+   "realized_ttc_at_first_detection_s": null,
+   "realized_ttc_definition": "constant-velocity extrapolation along observer heading",
+   "sampled_contact": false,
+   "termination_reason": "success"
+  },
+  "schema_version": 2,
+  "semantics": {
+   "admission": "finite-search kinematic witness, replay-validated; joint across doses by default",
+   "collision": "physical before and after reveal; swept contact latched by the env bridge",
+   "denominator": "every_assigned_episode (intention to treat)",
+   "dose": "TTC/t_avoid at the nominal first detection (D1..D4 = 4, 3, 2, 1.25); D0 = no intruder",
+   "feasibility": "finite_search_kinematic_witness_not_simulator_proof",
+   "moving_basin": "native motion ratio is the dose; no added intruder",
+   "reveal": "physical detectability through the task's existing range sensor; no time gate",
+   "schedule": "pre-generated from (eval_seed, env, episode, hazard_group); exogenous episode seconds",
+   "t_avoid": "frozen per vessel: reaction + min(brake, max-rate turn) time to displace one beam",
+   "vessel_values": "PROVISIONAL until D5 freezes the vessel profiles"
+  }
+ },
+ "sha256": "57963e2d6697778dfa23be49b91051c7bd850532ddb0c138ad6633aa54000a29"
+}

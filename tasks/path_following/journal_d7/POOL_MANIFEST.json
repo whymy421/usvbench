@@ -1,0 +1,513 @@
+{
+ "note": "D19: the pool files ship in this folder; the runtime variable USVBENCH_D7_POOL_DIR (or cfg.journal_d7_pool_path) may point the loader at another folder; pools found by their default name must be pinned here",
+ "pool_schema": "usvbench.f3.d7_admission_pool/2",
+ "pools": {
+  "d7_pool_path_following_blueboat_v2_seed11002.d7pool.xz": {
+   "bytes": 1384156,
+   "container_sha256": "a046067f2b1556c23f06d1b6421c2a1c2d5bc11f29c021c4cb86a1395bcbe4cc",
+   "episodes": 2,
+   "file_sha256": "c8e7e12cbc5c692c30fd34b6057a80ef3d4c23720b749c94a23f33c7778be832",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 125,
+   "keys_not_admitted": 3,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ]
+   ],
+   "pool_digest": "2acd771b4915e61adf51b5a80b937a258439b1e16caddcc1d23005ea8e73790d",
+   "seed": 11002,
+   "vessel": "blueboat_v2"
+  },
+  "d7_pool_path_following_blueboat_v2_seed41041.d7pool.xz": {
+   "bytes": 1378020,
+   "container_sha256": "4eb8fd1484ffff51713ce50b209162d2e644e1b28ac29a92f5e13940ba28bd14",
+   "episodes": 2,
+   "file_sha256": "270d96d00f983eaf75d776cd27c3c43433dfca3be7ba8576e16d666b311fbd47",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 127,
+   "keys_not_admitted": 1,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ]
+   ],
+   "pool_digest": "418890f7fed02fa8e09891c41983d1ceedab901e55078a205a2435a0a63eb693",
+   "seed": 41041,
+   "vessel": "blueboat_v2"
+  },
+  "d7_pool_path_following_blueboat_v2_seed41047.d7pool.xz": {
+   "bytes": 1352924,
+   "container_sha256": "3042c7292e00b097872334c0670a13a6a8070c4fee90895595dce859767e6982",
+   "episodes": 2,
+   "file_sha256": "cab6b26c77261d0dd6f481728eb7659196d76a7921594511f06bbb05128f01ca",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 124,
+   "keys_not_admitted": 4,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ]
+   ],
+   "pool_digest": "d8bd8108fd4267142e067843a9951ca5d71e69e79264ecd9eaffc664b4bcecdd",
+   "seed": 41047,
+   "vessel": "blueboat_v2"
+  },
+  "d7_pool_path_following_blueboat_v2_seed41051.d7pool.xz": {
+   "bytes": 1332536,
+   "container_sha256": "4aec00da6b570232e3c7f60a56c401240cf214509d7fc9078ffe8973eaf7138a",
+   "episodes": 2,
+   "file_sha256": "16fc11de335020b6dfb8e8d681c82ec77cfc172fb48317fe798c1a548a962f96",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 123,
+   "keys_not_admitted": 5,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ]
+   ],
+   "pool_digest": "52da65519a5f8874f63135b03e3097669f8a22026fc33b92365e3876cd0dcb63",
+   "seed": 41051,
+   "vessel": "blueboat_v2"
+  },
+  "d7_pool_path_following_blueboat_v2_seed41057.d7pool.xz": {
+   "bytes": 1367620,
+   "container_sha256": "ccd24961a914519b0908bd0f11bfad8d3caa4f804875d073ed9ead3bb6c648b7",
+   "episodes": 2,
+   "file_sha256": "d83fb2156fc2cc91c6f1b0d8434a985c77624cbe3685712bc1534db11853d96c",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 124,
+   "keys_not_admitted": 4,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ]
+   ],
+   "pool_digest": "f6aec68d35fde07d3994a1d583293e348220efdc8b75aa6bfd3704d3a50f980a",
+   "seed": 41057,
+   "vessel": "blueboat_v2"
+  },
+  "d7_pool_path_following_blueboat_v2_seed42.d7pool.xz": {
+   "bytes": 1345100,
+   "container_sha256": "b8a2e10bc14f8a78c952882ca05abc03b0fbf73b87c59fcc81c1b45281792a7d",
+   "episodes": 2,
+   "file_sha256": "401881ce09b7f9327a45a93dff7d46df393278c12f8cfe65a072da17ea8fe44a",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 123,
+   "keys_not_admitted": 5,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ]
+   ],
+   "pool_digest": "f26e342cfa19337a20102de6974cca2989d2af4fd11fca3759e98edfefa09529",
+   "seed": 42,
+   "vessel": "blueboat_v2"
+  },
+  "d7_pool_path_following_wamv_vrx_v2_opt1_seed11002.d7pool.xz": {
+   "bytes": 3205792,
+   "container_sha256": "991ae7d117bfc0195ce6dc1794680f0a642fcca6283fbeb44f375b97c8642656",
+   "episodes": 2,
+   "file_sha256": "c2f6f3f3b8cf07069e79ad4dff4cff5c67fd764559e080e3db9186701d7b3cc7",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 125,
+   "keys_not_admitted": 3,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ],
+    [
+     128,
+     125,
+     3
+    ]
+   ],
+   "pool_digest": "79085901c3d8f3b8f6261beef812155122ea50b937a464c7cfacd4acb79e1f33",
+   "seed": 11002,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  "d7_pool_path_following_wamv_vrx_v2_opt1_seed41041.d7pool.xz": {
+   "bytes": 3172980,
+   "container_sha256": "69d4c8eb392448191d6dff46fb9fe0e3450d1d4762d5ef1a3e5fd4042f7988eb",
+   "episodes": 2,
+   "file_sha256": "cd38c7ff0336a6f8cb602b912736397ea1f8abb9c4ad7921db4a346953f10cf8",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 127,
+   "keys_not_admitted": 1,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ]
+   ],
+   "pool_digest": "2ccdc357c534a5584d6cb0289664b7c25417feaa5d0b0d8818b290cf21ea6841",
+   "seed": 41041,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  "d7_pool_path_following_wamv_vrx_v2_opt1_seed41047.d7pool.xz": {
+   "bytes": 3108992,
+   "container_sha256": "894c2c034c49ecc938229071f9372a4f3cb4d0dc30731f7bdae54d535eeee294",
+   "episodes": 2,
+   "file_sha256": "aecb4fdd4c71b450126b3bd12f931b14b1618408d373ac9142b5200646c6b842",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 124,
+   "keys_not_admitted": 4,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ]
+   ],
+   "pool_digest": "17621543f3d88ad4bee39f97c38a59c910d0a46ee8ff5398d84333fb604e75a6",
+   "seed": 41047,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  "d7_pool_path_following_wamv_vrx_v2_opt1_seed41051.d7pool.xz": {
+   "bytes": 3083384,
+   "container_sha256": "8af2461f0c777a25e925b772e45611517e151e5e7a2780e287aaa835f0836440",
+   "episodes": 2,
+   "file_sha256": "06bc8be350a2c7c8e6220129ca894f4536b3a6931a90ffc341a271a89bb05a7e",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 123,
+   "keys_not_admitted": 5,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ]
+   ],
+   "pool_digest": "248a9679acfff445c79d8f0f7ca180ec48e27f7d9824d5ef54332fa278841335",
+   "seed": 41051,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  "d7_pool_path_following_wamv_vrx_v2_opt1_seed41057.d7pool.xz": {
+   "bytes": 3156024,
+   "container_sha256": "a4bd70d5e75bd41d66ea96d7726797f669b0d9b515788dec8efaeec487a6fb30",
+   "episodes": 2,
+   "file_sha256": "13746d704029c08757dff7d49b4b6e2215b359c8a33fce85b5f604cd8738103a",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 124,
+   "keys_not_admitted": 4,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ]
+   ],
+   "pool_digest": "1a83864d33b21f63067e4328c5b24fea2fadfef273f47af8bf65db1f447f04fa",
+   "seed": 41057,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  "d7_pool_path_following_wamv_vrx_v2_opt1_seed42.d7pool.xz": {
+   "bytes": 3098476,
+   "container_sha256": "e6e99548782bbdaf7ca9813ec350f84f112727a20a17ca70a2f88e76cc284aa7",
+   "episodes": 2,
+   "file_sha256": "e37e464f7191f3bcf59b2d705a3a8183d58aa56d014feb347059f7b3a518c9df",
+   "geometry_tier": 2,
+   "geometry_version_digest": "91c4a6d69f66c6118e90b23b06043e0609232e252636445b78ab139c444fffa1",
+   "keys_admitted": 123,
+   "keys_not_admitted": 5,
+   "keys_offered": 128,
+   "num_envs": 64,
+   "per_dose_counts": [
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ],
+    [
+     128,
+     123,
+     5
+    ]
+   ],
+   "pool_digest": "6260b190b1b5d839e952ae93419dd95d6a353e74dbb2d36ed45ae629364a3fd4",
+   "seed": 42,
+   "vessel": "wamv_vrx_v2_opt1"
+  }
+ },
+ "rule": "CONTEXT_R4 D16: the scenario of key (seed, env, episode) is ALWAYS the E5 layout of that key (scenario protocol 2, route stream 'route'; never redrawn, no attempt streams). The pool stores, per offered key, either the jointly admitted D0..D4 assignment ladder or an explicit not_admitted record with E4's rejection reasons. A not-admitted key runs the dynamic suite at D0 at every requested level (no D7 object; the bridge row carries an empty assignment) and its episode stamp carries exposure 'not_admitted' with the reasons (unexposed for the dynamic treatment, paired for every other suite)",
+ "schema": "usvbench.f3.d7_pool_manifest/1",
+ "task": "path_following"
+}

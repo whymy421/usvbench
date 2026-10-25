@@ -1,0 +1,458 @@
+{
+  "registry_version": 3,
+  "study_version": "usvbench-nc-journal-seeds-v1",
+  "status": "frozen",
+  "status_rule": "'proposal' until the owner freezes this file (set status to 'frozen' and record its registry_sha256 in the study log) BEFORE any journal training run starts. run_cell refuses final_test cells unless status is 'frozen'.",
+  "owner_decisions_encoded": {
+    "date": "2026-09-30",
+    "trained_controllers": [
+      "ppo"
+    ],
+    "note_untrained_controllers": "MPPI and the classical controllers have no training seeds. MPPI's sampling seed is a fixed controller parameter (controller_seeds.mppi), never chosen by performance.",
+    "ppo_seeds_per_task_and_vessel": 3,
+    "ppo_seed_rule": "candidates are trained in the declared candidate_order; the declared competence gate is evaluated on the selection namespace; the first 3 candidates that pass are used; failed (dead) candidates are recorded in the gate ledger and reported, never silently dropped",
+    "seed_42": "42 stays a candidate (first in the proposed order) but must be retrained on the new physics; no checkpoint produced before the freeze is admissible",
+    "test_seed_rule": "evaluation (test) seed blocks are never chosen by performance; only validity checks apply: scenarios generate, and no integer overlap with training, selection, pilot or calibration namespaces",
+    "crossmachine_rule": "cross-machine calibration uses a stratified sample, not the full table",
+    "ppo_selection_update": "owner, 2026-10-01 10:1x (NC 09_decision record line 40): 'train 3, deliver 3' (no selection; candidates that do not learn are reported as such), confirmed by the owner on 2026-10-03 17:0x (owner decision record C:/Users/BRADY/usvbench_gazebo/NC\u671f\u520a/09_\u51b3\u7b56\u8bb0\u5f55.md, entry '2026-10-03 17:0x (owner, reply to decision pack 02)', item 6: PPO train 3 deliver 3, no picking, registry selection_mode = fixed_first_n). Encoded as ppo_training.selection_mode = 'fixed_first_n'; 'first_passing' (first 3 passing, B9 fallback) stays selectable. The registry itself stays a proposal until the owner freezes it."
+  },
+  "historical_nonuse_verified": false,
+  "historical_note": "7, 42 and 123 were used as legacy evaluation/training seeds. 7 and 123 are excluded from every namespace; 42 is a training candidate only and therefore can never be a journal evaluation seed.",
+  "legacy_seeds_excluded": [
+    7,
+    123
+  ],
+  "ppo_training": {
+    "candidate_order": [
+      42,
+      1001,
+      2003,
+      3001,
+      4001,
+      5003,
+      6007,
+      7001,
+      8009,
+      9001
+    ],
+    "admit_first_passing": 3,
+    "selection_mode": "fixed_first_n",
+    "selection_mode_status": "owner confirmed 2026-10-03 17:0x (decision record 09, decision pack 02 item 6)",
+    "selection_mode_confirmation": {
+      "status": "owner_confirmed",
+      "confirmed_mode": "fixed_first_n",
+      "rule": "train 3, deliver 3, no picking: the first admit_first_passing (3) candidates of candidate_order are trained and all of them are delivered; the competence gate only flags each one (pass / below_gate / diverged); no candidate is replaced, skipped or chosen by performance",
+      "by": "owner",
+      "date": "2026-10-03",
+      "source": "NC 09 decision record, entry '2026-10-03 17:0x (owner, reply to decision pack 02)', item 6 (first stated 2026-10-01 10:1x, decision record line 40); restated in CONTEXT_R6 section 3 (PPO)",
+      "freeze_implied": false,
+      "freeze_note": "the confirmation fixes the selection rule only: status stays 'proposal' and competence_gate.status stays 'OWNER_DECISION_PENDING' until the owner freezes both; campaign ('training') seeds stay refused until then (resolve_training_block); training-smoke seeds stay usable"
+    },
+    "selection_modes": {
+      "first_passing": "Mode A: candidates are trained in candidate_order; the first admit_first_passing candidates whose final checkpoint passes the competence gate are delivered (flag 'pass'); if the declared candidates are exhausted with fewer passes, fallback_rule applies",
+      "fixed_first_n": "Mode B: the first admit_first_passing candidates of candidate_order are trained and delivered; the competence gate is still run on each and only flags it 'pass' or 'below_gate' ('diverged' when training diverged); no candidate is replaced"
+    },
+    "fallback_rule": "first_in_order_flagged",
+    "fallback_rule_text": "Mode A only (owner B9, 2026-10-01 00:0x): if fewer than admit_first_passing of the declared candidates pass, the first admit_first_passing candidates in declared order whose training completed are delivered, each flagged 'pass' or 'below_gate' by its own gate verdict; the gate is never relaxed after outcomes are seen",
+    "retraining_required": true,
+    "failed_seed_policy": "a candidate whose training diverged or whose final checkpoint fails the gate is DEAD: it keeps its ledger record, is reported in the coverage table, and is never retried or replaced out of order",
+    "infrastructure_failure_policy": "a run interrupted by host/driver/queue failure is not a learning outcome: it is rerun with the SAME seed and later candidates are not considered until it is resolved"
+  },
+  "competence_gate": {
+    "gate_version": 1,
+    "status": "frozen",
+    "threshold_is_proposed_default": false,
+    "checkpoint": "final",
+    "checkpoint_rule": "owner 2026-10-14: the gate is evaluated on the DELIVERED checkpoint of the fixed, predeclared training budget, which is the checkpoint best on the validation block selection-02 (seed 11002, calm, 64 x 1): checkpoints every 2 % of the budget plus the untrained network, ties -> the later checkpoint (ppo_checkpoint_eval.py select); the last checkpoint is also evaluated and reported. Test seeds never take part in the choice. The field 'checkpoint' keeps the value 'final' only because the gate code implements one mode (validate_gate_definition); it means the delivered checkpoint of the run, chosen by this rule",
+    "seed_namespace": "selection",
+    "seed_block": "selection-gate-01",
+    "episodes": 128,
+    "num_envs": 64,
+    "condition": "nominal task condition (no dose preset, no --set) at the task's frozen main-table geometry level",
+    "statistic": "successes on the complete 64 x 2 grid",
+    "min_success_rate": 0.2,
+    "rationale": "FROZEN by the owner 2026-10-14 (threshold 0.2 kept). A low absolute bar detects collapsed (dead) training runs without ranking healthy seeds by performance; it is the same for every task and vessel and is declared before any campaign training run."
+  },
+  "controller_seeds": {
+    "mppi": 0
+  },
+  "namespaces": {
+    "training": {
+      "purpose": "training",
+      "blocks": [
+        {
+          "id": "train-0042",
+          "seed": 42
+        },
+        {
+          "id": "train-1001",
+          "seed": 1001
+        },
+        {
+          "id": "train-2003",
+          "seed": 2003
+        },
+        {
+          "id": "train-3001",
+          "seed": 3001
+        },
+        {
+          "id": "train-4001",
+          "seed": 4001
+        },
+        {
+          "id": "train-5003",
+          "seed": 5003
+        },
+        {
+          "id": "train-6007",
+          "seed": 6007
+        },
+        {
+          "id": "train-7001",
+          "seed": 7001
+        },
+        {
+          "id": "train-8009",
+          "seed": 8009
+        },
+        {
+          "id": "train-9001",
+          "seed": 9001
+        }
+      ]
+    },
+    "training_smoke": {
+      "purpose": "training_smoke",
+      "rule": "diagnostic training-smoke runs only (TRAINING_DESIGN section 7); never a campaign candidate, never an evaluation seed; allowed while the registry is a proposal",
+      "blocks": [
+        {
+          "id": "smoke-90001",
+          "seed": 90001
+        },
+        {
+          "id": "smoke-90002",
+          "seed": 90002
+        }
+      ]
+    },
+    "selection": {
+      "purpose": "selection",
+      "blocks": [
+        {
+          "id": "selection-gate-01",
+          "seed": 11001,
+          "role": "competence_gate"
+        },
+        {
+          "id": "selection-02",
+          "seed": 11002,
+          "role": "reserve"
+        },
+        {
+          "id": "selection-03",
+          "seed": 11003,
+          "role": "reserve"
+        },
+        {
+          "id": "selection-04",
+          "seed": 11004,
+          "role": "reserve"
+        }
+      ]
+    },
+    "dose_pilots": {
+      "purpose": "pilot",
+      "blocks": [
+        {
+          "id": "pilot-01",
+          "seed": 21001
+        },
+        {
+          "id": "pilot-02",
+          "seed": 21002
+        },
+        {
+          "id": "pilot-03",
+          "seed": 21003
+        },
+        {
+          "id": "pilot-04",
+          "seed": 21004
+        },
+        {
+          "id": "pilot-05",
+          "seed": 21005
+        },
+        {
+          "id": "pilot-06",
+          "seed": 21006
+        },
+        {
+          "id": "pilot-07",
+          "seed": 21007
+        },
+        {
+          "id": "pilot-08",
+          "seed": 21008
+        },
+        {
+          "id": "pilot-09",
+          "seed": 21009
+        },
+        {
+          "id": "pilot-10",
+          "seed": 21010
+        },
+        {
+          "id": "pilot-11",
+          "seed": 21011
+        },
+        {
+          "id": "pilot-12",
+          "seed": 21012
+        },
+        {
+          "id": "pilot-13",
+          "seed": 21013
+        },
+        {
+          "id": "pilot-14",
+          "seed": 21014
+        },
+        {
+          "id": "pilot-15",
+          "seed": 21015
+        },
+        {
+          "id": "pilot-16",
+          "seed": 21016
+        },
+        {
+          "id": "pilot-17",
+          "seed": 21017
+        },
+        {
+          "id": "pilot-18",
+          "seed": 21018
+        },
+        {
+          "id": "pilot-19",
+          "seed": 21019
+        },
+        {
+          "id": "pilot-20",
+          "seed": 21020
+        },
+        {
+          "id": "pilot-21",
+          "seed": 21021
+        },
+        {
+          "id": "pilot-22",
+          "seed": 21022
+        },
+        {
+          "id": "pilot-23",
+          "seed": 21023
+        },
+        {
+          "id": "pilot-24",
+          "seed": 21024
+        },
+        {
+          "id": "pilot-25",
+          "seed": 21025
+        },
+        {
+          "id": "pilot-26",
+          "seed": 21026
+        },
+        {
+          "id": "pilot-27",
+          "seed": 21027
+        },
+        {
+          "id": "pilot-28",
+          "seed": 21028
+        },
+        {
+          "id": "pilot-29",
+          "seed": 21029
+        },
+        {
+          "id": "pilot-30",
+          "seed": 21030
+        },
+        {
+          "id": "pilot-31",
+          "seed": 21031
+        },
+        {
+          "id": "pilot-32",
+          "seed": 21032
+        }
+      ]
+    },
+    "crossmachine_calibration": {
+      "purpose": "calibration",
+      "blocks": [
+        {
+          "id": "calibration-01",
+          "seed": 31001
+        },
+        {
+          "id": "calibration-02",
+          "seed": 31002
+        },
+        {
+          "id": "calibration-03",
+          "seed": 31003
+        },
+        {
+          "id": "calibration-04",
+          "seed": 31004
+        },
+        {
+          "id": "calibration-05",
+          "seed": 31005
+        },
+        {
+          "id": "calibration-06",
+          "seed": 31006
+        },
+        {
+          "id": "calibration-07",
+          "seed": 31007
+        },
+        {
+          "id": "calibration-08",
+          "seed": 31008
+        }
+      ]
+    },
+    "final_test": {
+      "purpose": "final_test",
+      "recommended_episodes_per_block": 128,
+      "planned_main_blocks": 1,
+      "planned_interaction_blocks": 16,
+      "replacement_rule": "a block that fails a validity check for a task is replaced, for that task only, by the first unused 'reserve' block in declared order; outcomes are never inspected",
+      "blocks": [
+        {
+          "id": "final-01",
+          "seed": 41041,
+          "cohort": "main"
+        },
+        {
+          "id": "final-02",
+          "seed": 41047,
+          "cohort": "reserve"
+        },
+        {
+          "id": "final-03",
+          "seed": 41051,
+          "cohort": "reserve"
+        },
+        {
+          "id": "final-04",
+          "seed": 41057,
+          "cohort": "reserve"
+        },
+        {
+          "id": "final-05",
+          "seed": 41061,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-06",
+          "seed": 41071,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-07",
+          "seed": 41077,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-08",
+          "seed": 41081,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-09",
+          "seed": 41087,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-10",
+          "seed": 41093,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-11",
+          "seed": 41101,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-12",
+          "seed": 41113,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-13",
+          "seed": 41117,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-14",
+          "seed": 41123,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-15",
+          "seed": 41131,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-16",
+          "seed": 41141,
+          "cohort": "predeclared_topup"
+        },
+        {
+          "id": "final-reserve-01",
+          "seed": 41143,
+          "cohort": "reserve"
+        },
+        {
+          "id": "final-reserve-02",
+          "seed": 41149,
+          "cohort": "reserve"
+        },
+        {
+          "id": "final-reserve-03",
+          "seed": 41153,
+          "cohort": "reserve"
+        },
+        {
+          "id": "final-reserve-04",
+          "seed": 41161,
+          "cohort": "reserve"
+        }
+      ],
+      "main_set_rule": "owner 2026-10-14: the main test set is the single block final-01 (seed 41041); final-02, final-03 and final-04 are unused reserves (cohort 'reserve'; with the replacement_rule they are the first reserves in declared order). Seeds and block ids are unchanged."
+    }
+  },
+  "freeze_record": {
+    "date": "2026-10-14",
+    "by": "owner",
+    "source": "NC 09 decision record, entry '10-14 15:xx' (owner: run the basic campaign first; freeze the seed registry with allocations unchanged, competence-gate threshold 0.2 unchanged, gate on the checkpoint chosen on the validation scenarios) and the controller's 10-14 update (final-01 is the only main test block; the other test blocks are unused reserves); listed for re-confirmation at the group meeting",
+    "release": "v2.6.6 (= v2.6.5 dbf7ef6e4747-f9eded95d095 + this file)",
+    "allocations_changed": false,
+    "changes": [
+      "status proposal -> frozen",
+      "competence_gate.status -> frozen (threshold 0.2 unchanged)",
+      "competence_gate.checkpoint_rule -> delivered checkpoint = best on selection-02 (owner 10-14)",
+      "final_test: main cohort = final-01 only; final-02..04 cohort reserve; planned_main_blocks 4 -> 1"
+    ]
+  }
+}

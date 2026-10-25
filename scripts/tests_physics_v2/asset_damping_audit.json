@@ -1,0 +1,38 @@
+[
+  {
+    "source": "C:\\Users\\BRADY\\usvbench\\assets\\blueboat_physics.usd",
+    "sha256": "9acfd39ed31cad557ac701d57b7d56f9a420b773ffe2af01b4081dcba32a2865",
+    "prim": "/World/BlueBoat",
+    "mass_kg": 17.260000228881836,
+    "diagonal_inertia_kgm2": [
+      1.7890000343322754,
+      1.093999981880188,
+      2.375999927520752
+    ],
+    "principal_axes_wxyz": [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "note": "Read-only authored metadata; zero inertia means PhysX computation is UNVERIFIED."
+  },
+  {
+    "source": "C:\\Users\\BRADY\\usvbench\\assets\\boat_physics.usdc",
+    "sha256": "a265d2155e4fbac84155071ae7d25436c0d2b5926fa4654e39b0ee419a688b74",
+    "prim": "/root",
+    "mass_kg": 100.0,
+    "diagonal_inertia_kgm2": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "principal_axes_wxyz": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "note": "Read-only authored metadata; zero inertia means PhysX computation is UNVERIFIED."
+  }
+]

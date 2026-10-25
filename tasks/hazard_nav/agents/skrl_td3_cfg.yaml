@@ -1,0 +1,108 @@
+# TD3 arm of the baseline matrix. Deterministic-policy sibling of the SAC
+# config next door; network sizes match PPO and SAC so capacity is never the
+# explanation for a difference between algorithms.
+seed: 42
+
+
+models:
+  separate: True
+  policy:
+    class: DeterministicMixin
+    clip_actions: True
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ACTIONS
+  target_policy:
+    class: DeterministicMixin
+    clip_actions: True
+    network:
+      - name: net
+        input: OBSERVATIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ACTIONS
+  critic_1:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+  critic_2:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+  target_critic_1:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+  target_critic_2:
+    class: DeterministicMixin
+    clip_actions: False
+    network:
+      - name: net
+        input: OBSERVATIONS_ACTIONS
+        layers: [128, 128, 64]
+        activations: elu
+    output: ONE
+
+
+memory:
+  class: RandomMemory
+  memory_size: 16384
+
+
+agent:
+  class: TD3
+  gradient_steps: 1
+  batch_size: 4096
+  discount_factor: 0.999
+  polyak: 0.005
+  actor_learning_rate: 5.0e-04
+  critic_learning_rate: 5.0e-04
+  random_timesteps: 800
+  learning_starts: 800
+  grad_norm_clip: 1.0
+  exploration:
+    noise: GaussianNoise
+    noise_kwargs:
+      mean: 0.0
+      std: 0.1
+    initial_scale: 1.0
+    final_scale: 0.05
+    timesteps: 40000
+  policy_delay: 2
+  smooth_regularization_noise: GaussianNoise
+  smooth_regularization_noise_kwargs:
+    mean: 0.0
+    std: 0.2
+  smooth_regularization_clip: 0.5
+  state_preprocessor: RunningStandardScaler
+  state_preprocessor_kwargs: null
+  experiment:
+    directory: "usvbench"
+    experiment_name: "td3_pathfinder"
+    write_interval: auto
+    checkpoint_interval: 256
+    wandb: false
+
+
+trainer:
+  class: SequentialTrainer
+  timesteps: 48000
+  environment_info: log

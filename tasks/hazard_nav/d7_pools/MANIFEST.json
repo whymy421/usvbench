@@ -1,0 +1,5502 @@
+{
+ "grid": {
+  "episodes": [
+   0,
+   1
+  ],
+  "num_envs": 64,
+  "seed": 42,
+  "tier": 2
+ },
+ "pool_schema": "usvbench.f1.d7_pool/2",
+ "pools": {
+  "forced_crossing__blueboat_v2.json.gz": {
+   "bytes": 4226091,
+   "envs_with_admitted_episode": 64,
+   "file": "forced_crossing__blueboat_v2.json.gz",
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "16be1a45572620dbff69af0f67884815775987750a495ca507fa87e99908a0c3",
+   "rejections": [],
+   "sha256": "8ca014ca49e6f37b79e77278f36c185a7f0c67cdee89b13fa007796370c79f9c",
+   "top_primary_rejection_reasons": []
+  },
+  "forced_crossing__wamv_vrx_v2_opt1.json.gz": {
+   "bytes": 11925012,
+   "envs_with_admitted_episode": 63,
+   "file": "forced_crossing__wamv_vrx_v2_opt1.json.gz",
+   "keys_admitted": 108,
+   "keys_not_admitted": 20,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     108,
+     20
+    ],
+    [
+     128,
+     108,
+     20
+    ],
+    [
+     128,
+     108,
+     20
+    ],
+    [
+     128,
+     108,
+     20
+    ],
+    [
+     128,
+     108,
+     20
+    ]
+   ],
+   "pool_digest": "1e5ea6a272d453098ca766e75ee14c1919cb48920709ffb69108350d7087d179",
+   "rejections": [
+    [
+     4,
+     "no_witness_in_frozen_search",
+     20
+    ]
+   ],
+   "sha256": "15a5791d9cfee3f6cd351124225bd0b01ba5a16f1925cb6239345e55e97e83c8",
+   "top_primary_rejection_reasons": [
+    [
+     "no_witness_in_frozen_search",
+     20
+    ]
+   ]
+  },
+  "fortress__blueboat_v2.json.gz": {
+   "bytes": 3143569,
+   "envs_with_admitted_episode": 46,
+   "file": "fortress__blueboat_v2.json.gz",
+   "keys_admitted": 62,
+   "keys_not_admitted": 66,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     62,
+     66
+    ],
+    [
+     128,
+     62,
+     66
+    ],
+    [
+     128,
+     62,
+     66
+    ],
+    [
+     128,
+     62,
+     66
+    ],
+    [
+     128,
+     62,
+     66
+    ]
+   ],
+   "pool_digest": "4291f2303f211f31d5dde89d1aefd0ea26ec18c91f863608941260de1b1cbe30",
+   "rejections": [
+    [
+     1,
+     "intruder_path_intersects_static_geometry",
+     56
+    ],
+    [
+     2,
+     "intruder_path_intersects_static_geometry",
+     56
+    ],
+    [
+     3,
+     "intruder_path_intersects_static_geometry",
+     56
+    ],
+    [
+     3,
+     "no_witness_in_frozen_search",
+     2
+    ],
+    [
+     3,
+     "nominal_prefix_unsafe",
+     3
+    ],
+    [
+     4,
+     "intruder_path_intersects_static_geometry",
+     56
+    ],
+    [
+     4,
+     "nominal_prefix_unsafe",
+     10
+    ]
+   ],
+   "sha256": "d46123a17aab157fb331070f183f0ff14b978f090722110d113920578d199d65",
+   "top_primary_rejection_reasons": [
+    [
+     "intruder_path_intersects_static_geometry",
+     56
+    ],
+    [
+     "nominal_prefix_unsafe",
+     8
+    ],
+    [
+     "no_witness_in_frozen_search",
+     2
+    ]
+   ]
+  },
+  "fortress__wamv_vrx_v2_opt1.json.gz": {
+   "bytes": 7839273,
+   "envs_with_admitted_episode": 40,
+   "file": "fortress__wamv_vrx_v2_opt1.json.gz",
+   "keys_admitted": 52,
+   "keys_not_admitted": 76,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     52,
+     76
+    ],
+    [
+     128,
+     52,
+     76
+    ],
+    [
+     128,
+     52,
+     76
+    ],
+    [
+     128,
+     52,
+     76
+    ],
+    [
+     128,
+     52,
+     76
+    ]
+   ],
+   "pool_digest": "a3d867f7094fb1eff069013d388592e2e6380078eb96084bc95eb5b1125b73e1",
+   "rejections": [
+    [
+     1,
+     "intruder_path_intersects_static_geometry",
+     53
+    ],
+    [
+     1,
+     "no_witness_in_frozen_search",
+     2
+    ],
+    [
+     2,
+     "intruder_path_intersects_static_geometry",
+     53
+    ],
+    [
+     2,
+     "no_witness_in_frozen_search",
+     5
+    ],
+    [
+     2,
+     "nominal_prefix_unsafe",
+     6
+    ],
+    [
+     3,
+     "intruder_path_intersects_static_geometry",
+     53
+    ],
+    [
+     3,
+     "no_witness_in_frozen_search",
+     8
+    ],
+    [
+     3,
+     "nominal_prefix_unsafe",
+     9
+    ],
+    [
+     4,
+     "intruder_path_intersects_static_geometry",
+     53
+    ],
+    [
+     4,
+     "no_witness_in_frozen_search",
+     10
+    ],
+    [
+     4,
+     "nominal_prefix_unsafe",
+     9
+    ]
+   ],
+   "sha256": "b68f2790a933937ec350837ecf20f049e683d6fcc736ecc2bb6c1f5d9adbbbd2",
+   "top_primary_rejection_reasons": [
+    [
+     "intruder_path_intersects_static_geometry",
+     53
+    ],
+    [
+     "no_witness_in_frozen_search",
+     14
+    ],
+    [
+     "nominal_prefix_unsafe",
+     9
+    ]
+   ]
+  },
+  "iceberg__blueboat_v2.json.gz": {
+   "bytes": 5271290,
+   "envs_with_admitted_episode": 64,
+   "file": "iceberg__blueboat_v2.json.gz",
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "95bf5ff12b1947e4a4346eeab3139765713da519cb98f64e631d0090e2f93a10",
+   "rejections": [],
+   "sha256": "bd7cda8ba8e7022f29a3c4069c9e5944508c578faa64775f21f50a7eaa61f925",
+   "top_primary_rejection_reasons": []
+  },
+  "iceberg__wamv_vrx_v2_opt1.json.gz": {
+   "bytes": 18790647,
+   "envs_with_admitted_episode": 64,
+   "file": "iceberg__wamv_vrx_v2_opt1.json.gz",
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "040c4ac145cf5a4f1f282453c48f3f937dd23e014c9651d0895b2d8d3075bfc0",
+   "rejections": [],
+   "sha256": "cbc21bb3714469b5effcfdc7b749a46204a8854bbd4a99a972f9304c96b23394",
+   "top_primary_rejection_reasons": []
+  },
+  "moving_basin__blueboat_v2.json.gz": {
+   "bytes": 3705654,
+   "envs_with_admitted_episode": 64,
+   "file": "moving_basin__blueboat_v2.json.gz",
+   "keys_admitted": 127,
+   "keys_not_admitted": 1,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ]
+   ],
+   "pool_digest": "331cbd051a1bbbd162603e08c066609cb7d94a6a3ca2dc27ef9c571ebc2604f6",
+   "rejections": [
+    [
+     4,
+     "no_witness_in_frozen_search",
+     1
+    ]
+   ],
+   "sha256": "e8fd8844d468ee7e877dd69471d2199ace8f14e233c843ef8966ea92fd639e28",
+   "top_primary_rejection_reasons": [
+    [
+     "no_witness_in_frozen_search",
+     1
+    ]
+   ]
+  },
+  "moving_basin__wamv_vrx_v2_opt1.json.gz": {
+   "bytes": 12729441,
+   "envs_with_admitted_episode": 64,
+   "file": "moving_basin__wamv_vrx_v2_opt1.json.gz",
+   "keys_admitted": 124,
+   "keys_not_admitted": 4,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ],
+    [
+     128,
+     124,
+     4
+    ]
+   ],
+   "pool_digest": "94b451a15742bdd64780b53a29fab7ef73100460591f8987bc3226b60693359d",
+   "rejections": [
+    [
+     4,
+     "no_witness_in_frozen_search",
+     4
+    ]
+   ],
+   "sha256": "db3fcdaa92766633f8b35fb8838be61a0442890a98ac90834d3e05fd25abb109",
+   "top_primary_rejection_reasons": [
+    [
+     "no_witness_in_frozen_search",
+     4
+    ]
+   ]
+  },
+  "reach__blueboat_v2.json.gz": {
+   "bytes": 1231210,
+   "envs_with_admitted_episode": 64,
+   "file": "reach__blueboat_v2.json.gz",
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "264e6b0d85fa10ed7ee14020104303b632ca5cac5c752f9d8fea914605a9ab5f",
+   "rejections": [],
+   "sha256": "275f06ff83207f3a2f366e26d0c7a5c2a8f94d95aaf665e9c3e9ff702a22b94f",
+   "top_primary_rejection_reasons": []
+  },
+  "reach__wamv_vrx_v2_opt1.json.gz": {
+   "bytes": 8554133,
+   "envs_with_admitted_episode": 64,
+   "file": "reach__wamv_vrx_v2_opt1.json.gz",
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "35545fe0ac93bd987d6b15ecf455ff59f5112e81e0365ec7d972a6b5aa941647",
+   "rejections": [],
+   "sha256": "d1fb96c3fb38d7fe740f1492717d596c8042bd3638bc704249ffb3977d9aaea4",
+   "top_primary_rejection_reasons": []
+  },
+  "ring__blueboat_v2.json.gz": {
+   "bytes": 4437015,
+   "envs_with_admitted_episode": 64,
+   "file": "ring__blueboat_v2.json.gz",
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "339d19ab6378ef1d7c2b399b313465c1797e1fc5965e4399c03668552933bc8f",
+   "rejections": [],
+   "sha256": "c7a2ab509a753f4d82a484de762c705941994ddb21ddee37fd5084b32a08c1df",
+   "top_primary_rejection_reasons": []
+  },
+  "ring__wamv_vrx_v2_opt1.json.gz": {
+   "bytes": 6393780,
+   "envs_with_admitted_episode": 44,
+   "file": "ring__wamv_vrx_v2_opt1.json.gz",
+   "keys_admitted": 53,
+   "keys_not_admitted": 75,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     53,
+     75
+    ],
+    [
+     128,
+     53,
+     75
+    ],
+    [
+     128,
+     53,
+     75
+    ],
+    [
+     128,
+     53,
+     75
+    ],
+    [
+     128,
+     53,
+     75
+    ]
+   ],
+   "pool_digest": "6d958b0e00dd54d4468608a1250ba5eee070db2eac8937682bea9f0a1b2ce91e",
+   "rejections": [
+    [
+     3,
+     "no_witness_in_frozen_search",
+     43
+    ],
+    [
+     4,
+     "no_witness_in_frozen_search",
+     66
+    ]
+   ],
+   "sha256": "bfdefd387e32ad71f0979530d305983d50745c3e831eb4acde57d9c2bdc02913",
+   "top_primary_rejection_reasons": [
+    [
+     "no_witness_in_frozen_search",
+     75
+    ]
+   ]
+  },
+  "scatter__blueboat_v2.json.gz": {
+   "bytes": 2051212,
+   "envs_with_admitted_episode": 60,
+   "file": "scatter__blueboat_v2.json.gz",
+   "keys_admitted": 92,
+   "keys_not_admitted": 36,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     92,
+     36
+    ],
+    [
+     128,
+     92,
+     36
+    ],
+    [
+     128,
+     92,
+     36
+    ],
+    [
+     128,
+     92,
+     36
+    ],
+    [
+     128,
+     92,
+     36
+    ]
+   ],
+   "pool_digest": "e154fa79fb9f834716a56a6dd38832eba355e0c2814a05a3f8a3dac8105adb71",
+   "rejections": [
+    [
+     0,
+     "no_unforced_d1_window_before_site_end",
+     1
+    ],
+    [
+     1,
+     "intruder_path_intersects_static_geometry",
+     28
+    ],
+    [
+     1,
+     "no_unforced_d1_window_before_site_end",
+     1
+    ],
+    [
+     1,
+     "nominal_prefix_unsafe",
+     5
+    ],
+    [
+     2,
+     "intruder_path_intersects_static_geometry",
+     28
+    ],
+    [
+     2,
+     "no_unforced_d1_window_before_site_end",
+     1
+    ],
+    [
+     2,
+     "nominal_prefix_unsafe",
+     6
+    ],
+    [
+     3,
+     "intruder_path_intersects_static_geometry",
+     28
+    ],
+    [
+     3,
+     "no_unforced_d1_window_before_site_end",
+     1
+    ],
+    [
+     3,
+     "nominal_prefix_unsafe",
+     6
+    ],
+    [
+     4,
+     "intruder_path_intersects_static_geometry",
+     28
+    ],
+    [
+     4,
+     "no_unforced_d1_window_before_site_end",
+     1
+    ],
+    [
+     4,
+     "nominal_prefix_unsafe",
+     7
+    ]
+   ],
+   "sha256": "39449a6da48efdc79d86b8dccbb98c79f22178a59e086fd20ef649de998eb453",
+   "top_primary_rejection_reasons": [
+    [
+     "intruder_path_intersects_static_geometry",
+     28
+    ],
+    [
+     "nominal_prefix_unsafe",
+     7
+    ],
+    [
+     "no_unforced_d1_window_before_site_end",
+     1
+    ]
+   ]
+  },
+  "scatter__wamv_vrx_v2_opt1.json.gz": {
+   "bytes": 11725148,
+   "envs_with_admitted_episode": 62,
+   "file": "scatter__wamv_vrx_v2_opt1.json.gz",
+   "keys_admitted": 107,
+   "keys_not_admitted": 21,
+   "keys_offered": 128,
+   "per_dose_count_fields": [
+    "offered",
+    "admitted",
+    "not_admitted"
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     107,
+     21
+    ],
+    [
+     128,
+     107,
+     21
+    ],
+    [
+     128,
+     107,
+     21
+    ],
+    [
+     128,
+     107,
+     21
+    ],
+    [
+     128,
+     107,
+     21
+    ]
+   ],
+   "pool_digest": "0aa85818a58fbbd27d7d620ab63f03c757cb71978e0617fdda1da2c58469d696",
+   "rejections": [
+    [
+     1,
+     "intruder_path_intersects_static_geometry",
+     14
+    ],
+    [
+     1,
+     "nominal_prefix_unsafe",
+     6
+    ],
+    [
+     2,
+     "intruder_path_intersects_static_geometry",
+     14
+    ],
+    [
+     2,
+     "nominal_prefix_unsafe",
+     6
+    ],
+    [
+     3,
+     "intruder_path_intersects_static_geometry",
+     14
+    ],
+    [
+     3,
+     "nominal_prefix_unsafe",
+     7
+    ],
+    [
+     4,
+     "intruder_path_intersects_static_geometry",
+     14
+    ],
+    [
+     4,
+     "nominal_prefix_unsafe",
+     7
+    ]
+   ],
+   "sha256": "0378cfeb1100524cb9d4e14e312f87a8cdd489a6687d791ade9ca56b1f90e25e",
+   "top_primary_rejection_reasons": [
+    [
+     "intruder_path_intersects_static_geometry",
+     14
+    ],
+    [
+     "nominal_prefix_unsafe",
+     7
+    ]
+   ]
+  }
+ },
+ "schema": "usvbench.f1.d7_pool_manifest/2",
+ "seeds": {
+  "11002": {
+   "grid": {
+    "episodes": [
+     0,
+     1
+    ],
+    "num_envs": 64,
+    "seed": 11002,
+    "tier": 2
+   },
+   "pools": {
+    "forced_crossing__blueboat_v2__seed11002.json.gz": {
+     "bytes": 4193182,
+     "envs_with_admitted_episode": 64,
+     "file": "forced_crossing__blueboat_v2__seed11002.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "be99215e4474593f8fa87ade99fd6ed2b7674e442b3ba01f0388aec3d6e448d2",
+     "rejections": [],
+     "sha256": "746ad11fabb66eace1da2741bab809ca0f6184b9f9ce0edd49137e437680756c",
+     "top_primary_rejection_reasons": []
+    },
+    "forced_crossing__wamv_vrx_v2_opt1__seed11002.json.gz": {
+     "bytes": 12477285,
+     "envs_with_admitted_episode": 64,
+     "file": "forced_crossing__wamv_vrx_v2_opt1__seed11002.json.gz",
+     "keys_admitted": 115,
+     "keys_not_admitted": 13,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ]
+     ],
+     "pool_digest": "c9d6b6c29574015e061371548c8844135fbd5aa9a6b52288bad222a0d7b571e1",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       13
+      ]
+     ],
+     "sha256": "d53df9192d558afdc8a522724ba3a59a5d176620376fa4465c3667499a6809a8",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       13
+      ]
+     ]
+    },
+    "fortress__blueboat_v2__seed11002.json.gz": {
+     "bytes": 3100636,
+     "envs_with_admitted_episode": 44,
+     "file": "fortress__blueboat_v2__seed11002.json.gz",
+     "keys_admitted": 57,
+     "keys_not_admitted": 71,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       57,
+       71
+      ],
+      [
+       128,
+       57,
+       71
+      ],
+      [
+       128,
+       57,
+       71
+      ],
+      [
+       128,
+       57,
+       71
+      ],
+      [
+       128,
+       57,
+       71
+      ]
+     ],
+     "pool_digest": "547d16e73c049988252ab0c3589df06e15a2212e604ce20f402e22b418211f4a",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       3,
+       "no_witness_in_frozen_search",
+       2
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       2
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       12
+      ]
+     ],
+     "sha256": "2df66a7533f063b7566dedc72543e915b4993ade57d14f124f5e139714a3ffb3",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       "nominal_prefix_unsafe",
+       10
+      ],
+      [
+       "no_witness_in_frozen_search",
+       2
+      ]
+     ]
+    },
+    "fortress__wamv_vrx_v2_opt1__seed11002.json.gz": {
+     "bytes": 6382361,
+     "envs_with_admitted_episode": 33,
+     "file": "fortress__wamv_vrx_v2_opt1__seed11002.json.gz",
+     "keys_admitted": 40,
+     "keys_not_admitted": 88,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       40,
+       88
+      ],
+      [
+       128,
+       40,
+       88
+      ],
+      [
+       128,
+       40,
+       88
+      ],
+      [
+       128,
+       40,
+       88
+      ],
+      [
+       128,
+       40,
+       88
+      ]
+     ],
+     "pool_digest": "0ae2eabc34359324b903421ff47f0207fa4ec0f8aa7de474e921044c35373f5a",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       57
+      ],
+      [
+       1,
+       "no_witness_in_frozen_search",
+       1
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       57
+      ],
+      [
+       2,
+       "no_witness_in_frozen_search",
+       8
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       2
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       57
+      ],
+      [
+       3,
+       "no_witness_in_frozen_search",
+       18
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       9
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       57
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       13
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       9
+      ]
+     ],
+     "sha256": "06a871227b9374bc7dd3e9cbf46d4e03d4cfb7466d99bd156842f2bf732a2e84",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       57
+      ],
+      [
+       "no_witness_in_frozen_search",
+       22
+      ],
+      [
+       "nominal_prefix_unsafe",
+       9
+      ]
+     ]
+    },
+    "iceberg__blueboat_v2__seed11002.json.gz": {
+     "bytes": 5251177,
+     "envs_with_admitted_episode": 64,
+     "file": "iceberg__blueboat_v2__seed11002.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "2d54f26be9347058f8c7fa855c803cb5ce30e993ef80d3a07743c54cd42f36f1",
+     "rejections": [],
+     "sha256": "429d7149f5ef9a2205f2eb2202047d9236f0cdf0287d551247d7af8529df9268",
+     "top_primary_rejection_reasons": []
+    },
+    "iceberg__wamv_vrx_v2_opt1__seed11002.json.gz": {
+     "bytes": 18808921,
+     "envs_with_admitted_episode": 64,
+     "file": "iceberg__wamv_vrx_v2_opt1__seed11002.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "3446733de711bfad9f8f18eb0bcecf5d6bf88bb096caf96815c784c0885c7d05",
+     "rejections": [],
+     "sha256": "9260cbcbb05aa1fcc5d94e04748ab6bf3cde17ba9ee189a01ecbed1abd7ca160",
+     "top_primary_rejection_reasons": []
+    },
+    "moving_basin__blueboat_v2__seed11002.json.gz": {
+     "bytes": 3746106,
+     "envs_with_admitted_episode": 64,
+     "file": "moving_basin__blueboat_v2__seed11002.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "bcfbc8c825172e5dccace860cf3bb943b0952ca90a0994efeb16daeac77c2c1c",
+     "rejections": [],
+     "sha256": "f0c1dd0077b951378934ae0eb7aa2f60e719410e1828c48c45874a443726ef85",
+     "top_primary_rejection_reasons": []
+    },
+    "moving_basin__wamv_vrx_v2_opt1__seed11002.json.gz": {
+     "bytes": 12656296,
+     "envs_with_admitted_episode": 64,
+     "file": "moving_basin__wamv_vrx_v2_opt1__seed11002.json.gz",
+     "keys_admitted": 124,
+     "keys_not_admitted": 4,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       124,
+       4
+      ],
+      [
+       128,
+       124,
+       4
+      ],
+      [
+       128,
+       124,
+       4
+      ],
+      [
+       128,
+       124,
+       4
+      ],
+      [
+       128,
+       124,
+       4
+      ]
+     ],
+     "pool_digest": "434a5e6d1b368039509ea3c779e7857ede9928047d6e943fb30908ba7645ab53",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       4
+      ]
+     ],
+     "sha256": "b2c21f35553b3e760874e462d295c689821f5eb7822f5de07c0daab1eedc64f8",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       4
+      ]
+     ]
+    },
+    "reach__blueboat_v2__seed11002.json.gz": {
+     "bytes": 1230621,
+     "envs_with_admitted_episode": 64,
+     "file": "reach__blueboat_v2__seed11002.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "1b3d072958c0100d16b066f78e2bc59971ea513be4565593c3840bbac863eefc",
+     "rejections": [],
+     "sha256": "bb06cc03dca22f514c9aed9043444f36d577ba3971e9003c14f7cfae8b38345b",
+     "top_primary_rejection_reasons": []
+    },
+    "reach__wamv_vrx_v2_opt1__seed11002.json.gz": {
+     "bytes": 8523887,
+     "envs_with_admitted_episode": 64,
+     "file": "reach__wamv_vrx_v2_opt1__seed11002.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "07e8485c85ba58c785cda87c6aaec2aac83b805f906f4ce889d0ae54355efed3",
+     "rejections": [],
+     "sha256": "8d575a8cd1154e1c261fffb1d4fa98c3839ec41106066e7fad32a2a52885837d",
+     "top_primary_rejection_reasons": []
+    },
+    "ring__blueboat_v2__seed11002.json.gz": {
+     "bytes": 4383665,
+     "envs_with_admitted_episode": 64,
+     "file": "ring__blueboat_v2__seed11002.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "d1bae5f6f43084972db9791a1e5aafe44bccfde6d5fdfbbe05b35adc67cc6f73",
+     "rejections": [],
+     "sha256": "3cece94e4c641009381286d48447c8097fc09c924926a395e5c218fec79b4af3",
+     "top_primary_rejection_reasons": []
+    },
+    "ring__wamv_vrx_v2_opt1__seed11002.json.gz": {
+     "bytes": 7165648,
+     "envs_with_admitted_episode": 48,
+     "file": "ring__wamv_vrx_v2_opt1__seed11002.json.gz",
+     "keys_admitted": 61,
+     "keys_not_admitted": 67,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       61,
+       67
+      ],
+      [
+       128,
+       61,
+       67
+      ],
+      [
+       128,
+       61,
+       67
+      ],
+      [
+       128,
+       61,
+       67
+      ],
+      [
+       128,
+       61,
+       67
+      ]
+     ],
+     "pool_digest": "94cb559b594a6b699fcbe6150e78799c43486041488331ddb87e41301653a997",
+     "rejections": [
+      [
+       3,
+       "no_witness_in_frozen_search",
+       26
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       59
+      ]
+     ],
+     "sha256": "7abcd45fa6f9794b44abc1d6f31b5a4e685cb540d37ce818e34638e1705ee4cb",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       67
+      ]
+     ]
+    },
+    "scatter__blueboat_v2__seed11002.json.gz": {
+     "bytes": 2053288,
+     "envs_with_admitted_episode": 63,
+     "file": "scatter__blueboat_v2__seed11002.json.gz",
+     "keys_admitted": 92,
+     "keys_not_admitted": 36,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       92,
+       36
+      ],
+      [
+       128,
+       92,
+       36
+      ],
+      [
+       128,
+       92,
+       36
+      ],
+      [
+       128,
+       92,
+       36
+      ],
+      [
+       128,
+       92,
+       36
+      ]
+     ],
+     "pool_digest": "0f6acbf4ca1a8a323cafc108246e74a3b2d47ee579987a9d245d574229fb02be",
+     "rejections": [
+      [
+       0,
+       "no_unforced_d1_window_before_site_end",
+       1
+      ],
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       32
+      ],
+      [
+       1,
+       "no_unforced_d1_window_before_site_end",
+       1
+      ],
+      [
+       1,
+       "no_witness_in_frozen_search",
+       1
+      ],
+      [
+       1,
+       "nominal_prefix_unsafe",
+       1
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       32
+      ],
+      [
+       2,
+       "no_unforced_d1_window_before_site_end",
+       1
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       2
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       32
+      ],
+      [
+       3,
+       "no_unforced_d1_window_before_site_end",
+       1
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       3
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       32
+      ],
+      [
+       4,
+       "no_unforced_d1_window_before_site_end",
+       1
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       3
+      ]
+     ],
+     "sha256": "fbba90eb6b758a7c7a61255d9db82b8d943cc8bf95ce582913ccc3f02194adb1",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       32
+      ],
+      [
+       "nominal_prefix_unsafe",
+       2
+      ],
+      [
+       "no_unforced_d1_window_before_site_end",
+       1
+      ],
+      [
+       "no_witness_in_frozen_search",
+       1
+      ]
+     ]
+    },
+    "scatter__wamv_vrx_v2_opt1__seed11002.json.gz": {
+     "bytes": 12476835,
+     "envs_with_admitted_episode": 64,
+     "file": "scatter__wamv_vrx_v2_opt1__seed11002.json.gz",
+     "keys_admitted": 115,
+     "keys_not_admitted": 13,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ]
+     ],
+     "pool_digest": "61b7ad72979313de7de7576bf8b2a7e0132441c2cf11a2b561fe5845820f2e47",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       12
+      ],
+      [
+       1,
+       "nominal_prefix_unsafe",
+       1
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       12
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       1
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       12
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       1
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       12
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       1
+      ]
+     ],
+     "sha256": "523e6647ad8f573145ec88d47cea09a4414530f8eeae39ed900c1ab13bee1160",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       12
+      ],
+      [
+       "nominal_prefix_unsafe",
+       1
+      ]
+     ]
+    }
+   }
+  },
+  "41041": {
+   "grid": {
+    "episodes": [
+     0,
+     1
+    ],
+    "num_envs": 64,
+    "seed": 41041,
+    "tier": 2
+   },
+   "pools": {
+    "forced_crossing__blueboat_v2__seed41041.json.gz": {
+     "bytes": 4199606,
+     "envs_with_admitted_episode": 64,
+     "file": "forced_crossing__blueboat_v2__seed41041.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "3de185098b36c439a53679951f262402e33fff02b6dd1a534eb35c3fb522a437",
+     "rejections": [],
+     "sha256": "3e9f148666710a5608ffac41857d370a4eaf13273bdbee444f37c44f206daada",
+     "top_primary_rejection_reasons": []
+    },
+    "forced_crossing__wamv_vrx_v2_opt1__seed41041.json.gz": {
+     "bytes": 12689872,
+     "envs_with_admitted_episode": 63,
+     "file": "forced_crossing__wamv_vrx_v2_opt1__seed41041.json.gz",
+     "keys_admitted": 117,
+     "keys_not_admitted": 11,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       117,
+       11
+      ],
+      [
+       128,
+       117,
+       11
+      ],
+      [
+       128,
+       117,
+       11
+      ],
+      [
+       128,
+       117,
+       11
+      ],
+      [
+       128,
+       117,
+       11
+      ]
+     ],
+     "pool_digest": "58a19a306032b70c57128cd7bee0381004f8f9368a67f52b7f395cd13f26d90a",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       11
+      ]
+     ],
+     "sha256": "db7f915788490a428239fd280e1d50ae1a5120d18a9d9fc0d7b560b2013d7fb8",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       11
+      ]
+     ]
+    },
+    "fortress__blueboat_v2__seed41041.json.gz": {
+     "bytes": 3119061,
+     "envs_with_admitted_episode": 47,
+     "file": "fortress__blueboat_v2__seed41041.json.gz",
+     "keys_admitted": 58,
+     "keys_not_admitted": 70,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       58,
+       70
+      ],
+      [
+       128,
+       58,
+       70
+      ],
+      [
+       128,
+       58,
+       70
+      ],
+      [
+       128,
+       58,
+       70
+      ],
+      [
+       128,
+       58,
+       70
+      ]
+     ],
+     "pool_digest": "1758b74bd5ec7387d205a1642e190d645a736fc431d86e66f2c3e839f5840da6",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       58
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       58
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       58
+      ],
+      [
+       3,
+       "no_witness_in_frozen_search",
+       1
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       1
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       58
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       12
+      ]
+     ],
+     "sha256": "5770203f4e7dcc1ef138c8c4a8652e8a508ee4d6856802d32034bf51a3813df8",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       58
+      ],
+      [
+       "nominal_prefix_unsafe",
+       11
+      ],
+      [
+       "no_witness_in_frozen_search",
+       1
+      ]
+     ]
+    },
+    "fortress__wamv_vrx_v2_opt1__seed41041.json.gz": {
+     "bytes": 7517983,
+     "envs_with_admitted_episode": 40,
+     "file": "fortress__wamv_vrx_v2_opt1__seed41041.json.gz",
+     "keys_admitted": 48,
+     "keys_not_admitted": 80,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       48,
+       80
+      ],
+      [
+       128,
+       48,
+       80
+      ],
+      [
+       128,
+       48,
+       80
+      ],
+      [
+       128,
+       48,
+       80
+      ],
+      [
+       128,
+       48,
+       80
+      ]
+     ],
+     "pool_digest": "afad653b885d8d1653a37f70973993f89673189de18e912cda8f5c7c4ddc5df3",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       55
+      ],
+      [
+       1,
+       "no_witness_in_frozen_search",
+       1
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       55
+      ],
+      [
+       2,
+       "no_witness_in_frozen_search",
+       5
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       4
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       55
+      ],
+      [
+       3,
+       "no_witness_in_frozen_search",
+       8
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       11
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       55
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       8
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       11
+      ]
+     ],
+     "sha256": "9854c2981bb5cb112e57a32e6750f0a0a5b7fb43d40dadd90366f93e2e03abb4",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       55
+      ],
+      [
+       "no_witness_in_frozen_search",
+       14
+      ],
+      [
+       "nominal_prefix_unsafe",
+       11
+      ]
+     ]
+    },
+    "iceberg__blueboat_v2__seed41041.json.gz": {
+     "bytes": 5276340,
+     "envs_with_admitted_episode": 64,
+     "file": "iceberg__blueboat_v2__seed41041.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "22ab395751605fb457e42ea6662620494026fdf3b29d40c173fc7556c13e9d04",
+     "rejections": [],
+     "sha256": "3f9e6abac2db1e0707c368557dda3c2f43dd3d17750b65cbfdf22126ddf8481d",
+     "top_primary_rejection_reasons": []
+    },
+    "iceberg__wamv_vrx_v2_opt1__seed41041.json.gz": {
+     "bytes": 18762530,
+     "envs_with_admitted_episode": 64,
+     "file": "iceberg__wamv_vrx_v2_opt1__seed41041.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "89a9160b15ed428f7448ac3c6cb499e0bfcd71e9c5bbb3dc4baa5ae112e5145b",
+     "rejections": [],
+     "sha256": "e43001855146e07e71558bfaa639af369382accf7a7d3d6a73920a77a8ca5183",
+     "top_primary_rejection_reasons": []
+    },
+    "moving_basin__blueboat_v2__seed41041.json.gz": {
+     "bytes": 3659231,
+     "envs_with_admitted_episode": 64,
+     "file": "moving_basin__blueboat_v2__seed41041.json.gz",
+     "keys_admitted": 125,
+     "keys_not_admitted": 3,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       125,
+       3
+      ],
+      [
+       128,
+       125,
+       3
+      ],
+      [
+       128,
+       125,
+       3
+      ],
+      [
+       128,
+       125,
+       3
+      ],
+      [
+       128,
+       125,
+       3
+      ]
+     ],
+     "pool_digest": "737fdd4c79c6111ceacc7e3f197aa4cf1e440970ccf42716c38e0d71ec564d42",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       3
+      ]
+     ],
+     "sha256": "c454da27082c9be308efb2dd9ebef1e9d0d343b6058287c2f3dbf1a6982c934d",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       3
+      ]
+     ]
+    },
+    "moving_basin__wamv_vrx_v2_opt1__seed41041.json.gz": {
+     "bytes": 12485623,
+     "envs_with_admitted_episode": 64,
+     "file": "moving_basin__wamv_vrx_v2_opt1__seed41041.json.gz",
+     "keys_admitted": 122,
+     "keys_not_admitted": 6,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       122,
+       6
+      ],
+      [
+       128,
+       122,
+       6
+      ],
+      [
+       128,
+       122,
+       6
+      ],
+      [
+       128,
+       122,
+       6
+      ],
+      [
+       128,
+       122,
+       6
+      ]
+     ],
+     "pool_digest": "ef863c3278e6f11349cb887fac6bafe1c6c36c7ef1b760a3c1513a8059f731f8",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       6
+      ]
+     ],
+     "sha256": "c1ce3b609b64215e48c079b545b638c09e16ff5f6bbda71777a080c3f2cf0d2a",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       6
+      ]
+     ]
+    },
+    "reach__blueboat_v2__seed41041.json.gz": {
+     "bytes": 1227222,
+     "envs_with_admitted_episode": 64,
+     "file": "reach__blueboat_v2__seed41041.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "42bc4fef93961d2f3ba3af331447ba722d719d29dd6652e1046784d7bd86062c",
+     "rejections": [],
+     "sha256": "85d03fbf7550d2c7b755e9047127e7b1b4a860966a1dbf7258f6a67032ab5fb3",
+     "top_primary_rejection_reasons": []
+    },
+    "reach__wamv_vrx_v2_opt1__seed41041.json.gz": {
+     "bytes": 8480850,
+     "envs_with_admitted_episode": 64,
+     "file": "reach__wamv_vrx_v2_opt1__seed41041.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "150734e16ba438c3d89c846edd0bdf126ea8ad252b7fbd2209dde611b1aa2866",
+     "rejections": [],
+     "sha256": "fe9d82cc0f1aba40bdd63a9c64ffe276779deaa62c6f9374262f4a39bfd45392",
+     "top_primary_rejection_reasons": []
+    },
+    "ring__blueboat_v2__seed41041.json.gz": {
+     "bytes": 4418386,
+     "envs_with_admitted_episode": 64,
+     "file": "ring__blueboat_v2__seed41041.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "307778309f5c3c32fc349265319e6679e4188d3c981dd527563d7d3e257c4f71",
+     "rejections": [],
+     "sha256": "ec0facba899c94fde20bcb8871e14bec8530df8c891ab9105ac8a345e8c25e02",
+     "top_primary_rejection_reasons": []
+    },
+    "ring__wamv_vrx_v2_opt1__seed41041.json.gz": {
+     "bytes": 7634685,
+     "envs_with_admitted_episode": 50,
+     "file": "ring__wamv_vrx_v2_opt1__seed41041.json.gz",
+     "keys_admitted": 64,
+     "keys_not_admitted": 64,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       64,
+       64
+      ],
+      [
+       128,
+       64,
+       64
+      ],
+      [
+       128,
+       64,
+       64
+      ],
+      [
+       128,
+       64,
+       64
+      ],
+      [
+       128,
+       64,
+       64
+      ]
+     ],
+     "pool_digest": "d9d1d3f781f3627486b43221a5c31f0c0b26a2dec341aa7f37f09a18622e9ae5",
+     "rejections": [
+      [
+       3,
+       "no_witness_in_frozen_search",
+       31
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       56
+      ]
+     ],
+     "sha256": "8d74a7c07219c379af579662fb7afd502f669bdc687e44a50d347c0d711ec47d",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       64
+      ]
+     ]
+    },
+    "scatter__blueboat_v2__seed41041.json.gz": {
+     "bytes": 2018395,
+     "envs_with_admitted_episode": 58,
+     "file": "scatter__blueboat_v2__seed41041.json.gz",
+     "keys_admitted": 91,
+     "keys_not_admitted": 37,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       91,
+       37
+      ],
+      [
+       128,
+       91,
+       37
+      ],
+      [
+       128,
+       91,
+       37
+      ],
+      [
+       128,
+       91,
+       37
+      ],
+      [
+       128,
+       91,
+       37
+      ]
+     ],
+     "pool_digest": "089e27f4411ccad3390715a096fa273f0428ee716d3121fb16da3d126c77db55",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       33
+      ],
+      [
+       1,
+       "nominal_prefix_unsafe",
+       3
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       33
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       4
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       33
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       4
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       33
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       4
+      ]
+     ],
+     "sha256": "17921562c46e28f559d505d5b75501aee978fd6992ea706f4a5498df98c30642",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       33
+      ],
+      [
+       "nominal_prefix_unsafe",
+       4
+      ]
+     ]
+    },
+    "scatter__wamv_vrx_v2_opt1__seed41041.json.gz": {
+     "bytes": 11740700,
+     "envs_with_admitted_episode": 62,
+     "file": "scatter__wamv_vrx_v2_opt1__seed41041.json.gz",
+     "keys_admitted": 108,
+     "keys_not_admitted": 20,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       108,
+       20
+      ],
+      [
+       128,
+       108,
+       20
+      ],
+      [
+       128,
+       108,
+       20
+      ],
+      [
+       128,
+       108,
+       20
+      ],
+      [
+       128,
+       108,
+       20
+      ]
+     ],
+     "pool_digest": "293b116b3b34fed5734c7026bf3c88103a66e96a2334d110e8147b19806d71d1",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       14
+      ],
+      [
+       1,
+       "nominal_prefix_unsafe",
+       5
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       14
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       5
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       14
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       5
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       14
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       1
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       5
+      ]
+     ],
+     "sha256": "b3ce8a8036bd37eee774c56451f1b84067efbb58e228b36f75f8bf2c7826c254",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       14
+      ],
+      [
+       "nominal_prefix_unsafe",
+       5
+      ],
+      [
+       "no_witness_in_frozen_search",
+       1
+      ]
+     ]
+    }
+   }
+  },
+  "41047": {
+   "grid": {
+    "episodes": [
+     0,
+     1
+    ],
+    "num_envs": 64,
+    "seed": 41047,
+    "tier": 2
+   },
+   "pools": {
+    "forced_crossing__blueboat_v2__seed41047.json.gz": {
+     "bytes": 4197297,
+     "envs_with_admitted_episode": 64,
+     "file": "forced_crossing__blueboat_v2__seed41047.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "e4d2d3460d8a28889530506c461b7141d961ec9399e24660c21461e902bdc5a6",
+     "rejections": [],
+     "sha256": "b10566542b232536aea3bf9b7a9c57f3db6ccff17c9567225bd47b3c28eda86b",
+     "top_primary_rejection_reasons": []
+    },
+    "forced_crossing__wamv_vrx_v2_opt1__seed41047.json.gz": {
+     "bytes": 12620108,
+     "envs_with_admitted_episode": 61,
+     "file": "forced_crossing__wamv_vrx_v2_opt1__seed41047.json.gz",
+     "keys_admitted": 116,
+     "keys_not_admitted": 12,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       116,
+       12
+      ],
+      [
+       128,
+       116,
+       12
+      ],
+      [
+       128,
+       116,
+       12
+      ],
+      [
+       128,
+       116,
+       12
+      ],
+      [
+       128,
+       116,
+       12
+      ]
+     ],
+     "pool_digest": "b141324db30042df66c3e130eb534349ab1daa9aac8faaa175ba2e504c1598b9",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       12
+      ]
+     ],
+     "sha256": "4135181bc0aeee64fd9ebf089b1b697385bfd051f12a237430bd1b4d3890dff9",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       12
+      ]
+     ]
+    },
+    "fortress__blueboat_v2__seed41047.json.gz": {
+     "bytes": 2783010,
+     "envs_with_admitted_episode": 40,
+     "file": "fortress__blueboat_v2__seed41047.json.gz",
+     "keys_admitted": 54,
+     "keys_not_admitted": 74,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       54,
+       74
+      ],
+      [
+       128,
+       54,
+       74
+      ],
+      [
+       128,
+       54,
+       74
+      ],
+      [
+       128,
+       54,
+       74
+      ],
+      [
+       128,
+       54,
+       74
+      ]
+     ],
+     "pool_digest": "305ae904197e0360d683a2d117497ff8c14d5b0d78bda8f6c64f5c06380f8f28",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       66
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       66
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       66
+      ],
+      [
+       3,
+       "no_witness_in_frozen_search",
+       1
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       3
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       66
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       8
+      ]
+     ],
+     "sha256": "b167f64f5334bcacafa56dc9a34f49912ad80fe8a34dda1265001f2ac6fdab8a",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       66
+      ],
+      [
+       "nominal_prefix_unsafe",
+       7
+      ],
+      [
+       "no_witness_in_frozen_search",
+       1
+      ]
+     ]
+    },
+    "fortress__wamv_vrx_v2_opt1__seed41047.json.gz": {
+     "bytes": 6235355,
+     "envs_with_admitted_episode": 33,
+     "file": "fortress__wamv_vrx_v2_opt1__seed41047.json.gz",
+     "keys_admitted": 41,
+     "keys_not_admitted": 87,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       41,
+       87
+      ],
+      [
+       128,
+       41,
+       87
+      ],
+      [
+       128,
+       41,
+       87
+      ],
+      [
+       128,
+       41,
+       87
+      ],
+      [
+       128,
+       41,
+       87
+      ]
+     ],
+     "pool_digest": "d33690e4e053fdb0eac92f43da4abed98c087f64f3a24a890a56a5913db4b3ee",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       1,
+       "no_witness_in_frozen_search",
+       4
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       2,
+       "no_witness_in_frozen_search",
+       4
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       9
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       3,
+       "no_witness_in_frozen_search",
+       11
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       13
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       11
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       13
+      ]
+     ],
+     "sha256": "ae5fe92f7683b1c1a5b1809ec7a521f2549d7b5d6fabf0f7c9ad6fd6c86474dd",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       "no_witness_in_frozen_search",
+       15
+      ],
+      [
+       "nominal_prefix_unsafe",
+       13
+      ]
+     ]
+    },
+    "iceberg__blueboat_v2__seed41047.json.gz": {
+     "bytes": 5304120,
+     "envs_with_admitted_episode": 64,
+     "file": "iceberg__blueboat_v2__seed41047.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "3efa684a874a3de488c5dd52b8f3df87811a6229be8bb0b28e14afafe71c1505",
+     "rejections": [],
+     "sha256": "7c1528eab0e09628d4566e2a4a4d18d1337a5b851dd6677d1930d8a11c34a426",
+     "top_primary_rejection_reasons": []
+    },
+    "iceberg__wamv_vrx_v2_opt1__seed41047.json.gz": {
+     "bytes": 19022380,
+     "envs_with_admitted_episode": 64,
+     "file": "iceberg__wamv_vrx_v2_opt1__seed41047.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "baf5780240cad5f4fd108f6a8f503c377bdef0e7a41748a0780a174c28c8e1e2",
+     "rejections": [],
+     "sha256": "30675c2581ad7b3a7db50f44944d8b09e1bf9591a2770957dea10b1b801fa040",
+     "top_primary_rejection_reasons": []
+    },
+    "moving_basin__blueboat_v2__seed41047.json.gz": {
+     "bytes": 3637483,
+     "envs_with_admitted_episode": 64,
+     "file": "moving_basin__blueboat_v2__seed41047.json.gz",
+     "keys_admitted": 124,
+     "keys_not_admitted": 4,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       124,
+       4
+      ],
+      [
+       128,
+       124,
+       4
+      ],
+      [
+       128,
+       124,
+       4
+      ],
+      [
+       128,
+       124,
+       4
+      ],
+      [
+       128,
+       124,
+       4
+      ]
+     ],
+     "pool_digest": "e6220a61dbc25ff9600ed39d2229b1218458e0d8b6cc576157747cf0474e2d63",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       4
+      ]
+     ],
+     "sha256": "0b17ad18dbcf7c3e0ea34277e1e8b8c64a69446380b2cd9ff4d6a2303e9cc920",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       4
+      ]
+     ]
+    },
+    "moving_basin__wamv_vrx_v2_opt1__seed41047.json.gz": {
+     "bytes": 12517439,
+     "envs_with_admitted_episode": 64,
+     "file": "moving_basin__wamv_vrx_v2_opt1__seed41047.json.gz",
+     "keys_admitted": 122,
+     "keys_not_admitted": 6,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       122,
+       6
+      ],
+      [
+       128,
+       122,
+       6
+      ],
+      [
+       128,
+       122,
+       6
+      ],
+      [
+       128,
+       122,
+       6
+      ],
+      [
+       128,
+       122,
+       6
+      ]
+     ],
+     "pool_digest": "b1427280f92510daac09a8aaabb2b9c394f3ed9101c29a2fd00c645227c7a8a9",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       6
+      ]
+     ],
+     "sha256": "f6cc86d481e0253d469216c22b1456589bb0244af28f844f55078468cd1ad23e",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       6
+      ]
+     ]
+    },
+    "reach__blueboat_v2__seed41047.json.gz": {
+     "bytes": 1235776,
+     "envs_with_admitted_episode": 64,
+     "file": "reach__blueboat_v2__seed41047.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "e5c5751ed865f59e15b6b1eccd51d59425dc0a30e52be1382ec217793c2fb7b0",
+     "rejections": [],
+     "sha256": "dd9cc43b730e41c4b47efe596199395dbff48f32ade9089ec3b364b30d6b5fad",
+     "top_primary_rejection_reasons": []
+    },
+    "reach__wamv_vrx_v2_opt1__seed41047.json.gz": {
+     "bytes": 8566352,
+     "envs_with_admitted_episode": 64,
+     "file": "reach__wamv_vrx_v2_opt1__seed41047.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "7b56c21701e076a7426496b56c7e0246645833cb95545dd0b6e77fa511fd1aa1",
+     "rejections": [],
+     "sha256": "29a075bf290182a198cc6041719fe35773ccc2fbe659823d94ab2735ea856b2f",
+     "top_primary_rejection_reasons": []
+    },
+    "ring__blueboat_v2__seed41047.json.gz": {
+     "bytes": 4416662,
+     "envs_with_admitted_episode": 64,
+     "file": "ring__blueboat_v2__seed41047.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "df6565e45f5496453a6a87518aabcfb28b7317b019a5625c55ffd6dfc8f9de7f",
+     "rejections": [],
+     "sha256": "1abb63d7898b61ad476381967620b1a83cc558f1226b639d5ef5260c5b2aded2",
+     "top_primary_rejection_reasons": []
+    },
+    "ring__wamv_vrx_v2_opt1__seed41047.json.gz": {
+     "bytes": 8612372,
+     "envs_with_admitted_episode": 54,
+     "file": "ring__wamv_vrx_v2_opt1__seed41047.json.gz",
+     "keys_admitted": 72,
+     "keys_not_admitted": 56,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       72,
+       56
+      ],
+      [
+       128,
+       72,
+       56
+      ],
+      [
+       128,
+       72,
+       56
+      ],
+      [
+       128,
+       72,
+       56
+      ],
+      [
+       128,
+       72,
+       56
+      ]
+     ],
+     "pool_digest": "ef7fff86ecd343222074b07602e97c514c8d98875570bdd81770fae0ad7bd5c4",
+     "rejections": [
+      [
+       3,
+       "no_witness_in_frozen_search",
+       28
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       49
+      ]
+     ],
+     "sha256": "8287114a3656efae102511ce7f965598b478c31bd525aa30312d2a6bb268d0aa",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       56
+      ]
+     ]
+    },
+    "scatter__blueboat_v2__seed41047.json.gz": {
+     "bytes": 2023325,
+     "envs_with_admitted_episode": 58,
+     "file": "scatter__blueboat_v2__seed41047.json.gz",
+     "keys_admitted": 91,
+     "keys_not_admitted": 37,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       91,
+       37
+      ],
+      [
+       128,
+       91,
+       37
+      ],
+      [
+       128,
+       91,
+       37
+      ],
+      [
+       128,
+       91,
+       37
+      ],
+      [
+       128,
+       91,
+       37
+      ]
+     ],
+     "pool_digest": "6fb29a69a503bf95a7ec7e00895ca4fdb77091ad5f5469d40a82fc17dfe98753",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       36
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       36
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       1
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       36
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       1
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       36
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       1
+      ]
+     ],
+     "sha256": "0e6c4fc506f2f769c3040ece900981395cbcd5e58ff091a548dafa18cc6a32f0",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       36
+      ],
+      [
+       "nominal_prefix_unsafe",
+       1
+      ]
+     ]
+    },
+    "scatter__wamv_vrx_v2_opt1__seed41047.json.gz": {
+     "bytes": 11132413,
+     "envs_with_admitted_episode": 62,
+     "file": "scatter__wamv_vrx_v2_opt1__seed41047.json.gz",
+     "keys_admitted": 102,
+     "keys_not_admitted": 26,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       102,
+       26
+      ],
+      [
+       128,
+       102,
+       26
+      ],
+      [
+       128,
+       102,
+       26
+      ],
+      [
+       128,
+       102,
+       26
+      ],
+      [
+       128,
+       102,
+       26
+      ]
+     ],
+     "pool_digest": "2c279de70126bc8fb43e1377846ed67d14694875083060ef6db81407e33743e1",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       22
+      ],
+      [
+       1,
+       "nominal_prefix_unsafe",
+       4
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       22
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       4
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       22
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       4
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       22
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       4
+      ]
+     ],
+     "sha256": "7e063822bba7c42c17ded6691cb1c6c2862c21954a83eca6729b188bb502e0e9",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       22
+      ],
+      [
+       "nominal_prefix_unsafe",
+       4
+      ]
+     ]
+    }
+   }
+  },
+  "41051": {
+   "grid": {
+    "episodes": [
+     0,
+     1
+    ],
+    "num_envs": 64,
+    "seed": 41051,
+    "tier": 2
+   },
+   "pools": {
+    "forced_crossing__blueboat_v2__seed41051.json.gz": {
+     "bytes": 4212823,
+     "envs_with_admitted_episode": 64,
+     "file": "forced_crossing__blueboat_v2__seed41051.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "9ef5e381c8889dbf884f29b8deba60d6d1a76e31e9ddf432b29c3d1a3a7ece5c",
+     "rejections": [],
+     "sha256": "4aa746d6ae2ebfbcf24af382748d48ab1771e134aa6f83ff01a70caf7bedf500",
+     "top_primary_rejection_reasons": []
+    },
+    "forced_crossing__wamv_vrx_v2_opt1__seed41051.json.gz": {
+     "bytes": 12417774,
+     "envs_with_admitted_episode": 62,
+     "file": "forced_crossing__wamv_vrx_v2_opt1__seed41051.json.gz",
+     "keys_admitted": 114,
+     "keys_not_admitted": 14,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       114,
+       14
+      ],
+      [
+       128,
+       114,
+       14
+      ],
+      [
+       128,
+       114,
+       14
+      ],
+      [
+       128,
+       114,
+       14
+      ],
+      [
+       128,
+       114,
+       14
+      ]
+     ],
+     "pool_digest": "9fcc683ee73f157c9c0640144f1616cf9e660f8e641d16fa4a1af2178e7b79ff",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       14
+      ]
+     ],
+     "sha256": "e26e2cbe6015a2de2de5e27abfcbeeaa64db003e3b83ff12ee846669538cb5f7",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       14
+      ]
+     ]
+    },
+    "fortress__blueboat_v2__seed41051.json.gz": {
+     "bytes": 2732392,
+     "envs_with_admitted_episode": 40,
+     "file": "fortress__blueboat_v2__seed41051.json.gz",
+     "keys_admitted": 52,
+     "keys_not_admitted": 76,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       52,
+       76
+      ],
+      [
+       128,
+       52,
+       76
+      ],
+      [
+       128,
+       52,
+       76
+      ],
+      [
+       128,
+       52,
+       76
+      ],
+      [
+       128,
+       52,
+       76
+      ]
+     ],
+     "pool_digest": "22a90b4825aaa8a88fb31b12db696a928d606fffd58a2edf1c706b4484165dfa",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       69
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       69
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       69
+      ],
+      [
+       3,
+       "no_witness_in_frozen_search",
+       2
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       1
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       69
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       7
+      ]
+     ],
+     "sha256": "10216f6d5d58aa038cc44be4c635c8ec190cd0afeb6d03a760f485ee6f238141",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       69
+      ],
+      [
+       "nominal_prefix_unsafe",
+       5
+      ],
+      [
+       "no_witness_in_frozen_search",
+       2
+      ]
+     ]
+    },
+    "fortress__wamv_vrx_v2_opt1__seed41051.json.gz": {
+     "bytes": 5734915,
+     "envs_with_admitted_episode": 33,
+     "file": "fortress__wamv_vrx_v2_opt1__seed41051.json.gz",
+     "keys_admitted": 38,
+     "keys_not_admitted": 90,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       38,
+       90
+      ],
+      [
+       128,
+       38,
+       90
+      ],
+      [
+       128,
+       38,
+       90
+      ],
+      [
+       128,
+       38,
+       90
+      ],
+      [
+       128,
+       38,
+       90
+      ]
+     ],
+     "pool_digest": "275c1ced8d2c47b05d62aec1b4df1ba7f51008626b31baebd4f3da9970925ab3",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       62
+      ],
+      [
+       1,
+       "no_witness_in_frozen_search",
+       1
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       62
+      ],
+      [
+       2,
+       "no_witness_in_frozen_search",
+       6
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       7
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       62
+      ],
+      [
+       3,
+       "no_witness_in_frozen_search",
+       10
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       12
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       62
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       11
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       12
+      ]
+     ],
+     "sha256": "1f8d06438dbb2815894222bbcff13c23082c5bcbafde910674c8c335e9dadc92",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       62
+      ],
+      [
+       "no_witness_in_frozen_search",
+       16
+      ],
+      [
+       "nominal_prefix_unsafe",
+       12
+      ]
+     ]
+    },
+    "iceberg__blueboat_v2__seed41051.json.gz": {
+     "bytes": 5285798,
+     "envs_with_admitted_episode": 64,
+     "file": "iceberg__blueboat_v2__seed41051.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "fb1fe6fd661e198c009876625a0ff70434a5f32312a02344060ab5518b0f9438",
+     "rejections": [],
+     "sha256": "c033dfc0246c5762ebe9f807f4e8527c008d267e16e35053b3dba2a1eb5aeaf1",
+     "top_primary_rejection_reasons": []
+    },
+    "iceberg__wamv_vrx_v2_opt1__seed41051.json.gz": {
+     "bytes": 18961804,
+     "envs_with_admitted_episode": 64,
+     "file": "iceberg__wamv_vrx_v2_opt1__seed41051.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "31f0ec3d6e53807dbff9de2f05807791ee3c4a614842fa3cb1328d91bb2fdc25",
+     "rejections": [],
+     "sha256": "badf349ac3d250b78a602d2b5e100b59830a55ebf19e954f427b280829814927",
+     "top_primary_rejection_reasons": []
+    },
+    "moving_basin__blueboat_v2__seed41051.json.gz": {
+     "bytes": 3633897,
+     "envs_with_admitted_episode": 64,
+     "file": "moving_basin__blueboat_v2__seed41051.json.gz",
+     "keys_admitted": 125,
+     "keys_not_admitted": 3,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       125,
+       3
+      ],
+      [
+       128,
+       125,
+       3
+      ],
+      [
+       128,
+       125,
+       3
+      ],
+      [
+       128,
+       125,
+       3
+      ],
+      [
+       128,
+       125,
+       3
+      ]
+     ],
+     "pool_digest": "c78385c317662fa7da59242241c460ca3f34f333569d304a669aa2895fdbf81c",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       3
+      ]
+     ],
+     "sha256": "31bb77fda761f3021f64fd3ac872d99b0fed097adfbfaa8472549270f7784491",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       3
+      ]
+     ]
+    },
+    "moving_basin__wamv_vrx_v2_opt1__seed41051.json.gz": {
+     "bytes": 12810294,
+     "envs_with_admitted_episode": 64,
+     "file": "moving_basin__wamv_vrx_v2_opt1__seed41051.json.gz",
+     "keys_admitted": 126,
+     "keys_not_admitted": 2,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       126,
+       2
+      ],
+      [
+       128,
+       126,
+       2
+      ],
+      [
+       128,
+       126,
+       2
+      ],
+      [
+       128,
+       126,
+       2
+      ],
+      [
+       128,
+       126,
+       2
+      ]
+     ],
+     "pool_digest": "c59f420aef9ebec98a3b08bb7da859725330fea30386fb1ad4d8371b66c58f38",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       2
+      ]
+     ],
+     "sha256": "db68093f4ada65d57ead96f29faa1bac3b2c1d3f3193c3fb266d9939f38d7579",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       2
+      ]
+     ]
+    },
+    "reach__blueboat_v2__seed41051.json.gz": {
+     "bytes": 1227378,
+     "envs_with_admitted_episode": 64,
+     "file": "reach__blueboat_v2__seed41051.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "5f025d7c9c0f0a85fece7a8c57978f84d7a2e4e1efe3824ff6a953dbc5eac906",
+     "rejections": [],
+     "sha256": "375232f006092e3cdecec7605a31a19ab7aacc6abbca6ba4ee4fb56f0eae06d0",
+     "top_primary_rejection_reasons": []
+    },
+    "reach__wamv_vrx_v2_opt1__seed41051.json.gz": {
+     "bytes": 8404908,
+     "envs_with_admitted_episode": 64,
+     "file": "reach__wamv_vrx_v2_opt1__seed41051.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "a64135e879dd9f29e4cd7bdc46534e6228eea46e3a3850f1c30302b06294d583",
+     "rejections": [],
+     "sha256": "692aab82111cf4688c657dcb490441020e81c76256aae2f5adfd0fa601a76cd2",
+     "top_primary_rejection_reasons": []
+    },
+    "ring__blueboat_v2__seed41051.json.gz": {
+     "bytes": 4392444,
+     "envs_with_admitted_episode": 64,
+     "file": "ring__blueboat_v2__seed41051.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "2cee5f703abf1e85768fa3882bcb49850753ac125f92acb1d8be221f6f48ec89",
+     "rejections": [],
+     "sha256": "66b96baa495f5444ecf7cafd43f650191a190083e6e664823398388a1497c79a",
+     "top_primary_rejection_reasons": []
+    },
+    "ring__wamv_vrx_v2_opt1__seed41051.json.gz": {
+     "bytes": 7529846,
+     "envs_with_admitted_episode": 46,
+     "file": "ring__wamv_vrx_v2_opt1__seed41051.json.gz",
+     "keys_admitted": 63,
+     "keys_not_admitted": 65,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       63,
+       65
+      ],
+      [
+       128,
+       63,
+       65
+      ],
+      [
+       128,
+       63,
+       65
+      ],
+      [
+       128,
+       63,
+       65
+      ],
+      [
+       128,
+       63,
+       65
+      ]
+     ],
+     "pool_digest": "f202b937d761d2f7775ff02be456e807b2381cba56c03108145941ab04f50e7e",
+     "rejections": [
+      [
+       3,
+       "no_witness_in_frozen_search",
+       25
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       60
+      ]
+     ],
+     "sha256": "845f30209d915d9f1de81fb1e56fe6191033bc583d747b2db2cdd5339e64a1e2",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       65
+      ]
+     ]
+    },
+    "scatter__blueboat_v2__seed41051.json.gz": {
+     "bytes": 2411954,
+     "envs_with_admitted_episode": 63,
+     "file": "scatter__blueboat_v2__seed41051.json.gz",
+     "keys_admitted": 106,
+     "keys_not_admitted": 22,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       106,
+       22
+      ],
+      [
+       128,
+       106,
+       22
+      ],
+      [
+       128,
+       106,
+       22
+      ],
+      [
+       128,
+       106,
+       22
+      ],
+      [
+       128,
+       106,
+       22
+      ]
+     ],
+     "pool_digest": "c39415af0ca887560a0994b29a8ec936d9bcdde1715ab4de8c55515c67214d05",
+     "rejections": [
+      [
+       0,
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       1,
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       1,
+       "nominal_prefix_unsafe",
+       1
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       2,
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       3
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       3,
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       4
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       4,
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       4
+      ]
+     ],
+     "sha256": "057acfea5fc053a190bd9b0fe4a212765e7961c34522208ab3dca37d0ef65466",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       "nominal_prefix_unsafe",
+       4
+      ],
+      [
+       "no_unforced_d1_window_before_site_end",
+       2
+      ]
+     ]
+    },
+    "scatter__wamv_vrx_v2_opt1__seed41051.json.gz": {
+     "bytes": 11442735,
+     "envs_with_admitted_episode": 62,
+     "file": "scatter__wamv_vrx_v2_opt1__seed41051.json.gz",
+     "keys_admitted": 104,
+     "keys_not_admitted": 24,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       104,
+       24
+      ],
+      [
+       128,
+       104,
+       24
+      ],
+      [
+       128,
+       104,
+       24
+      ],
+      [
+       128,
+       104,
+       24
+      ],
+      [
+       128,
+       104,
+       24
+      ]
+     ],
+     "pool_digest": "3cdde2e357435d80180de25eaa3b6cdb81cffac9b31260be0a0bead45559bd44",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       1,
+       "nominal_prefix_unsafe",
+       6
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       8
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       8
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       8
+      ]
+     ],
+     "sha256": "01422daed664966f9be6da5614fda65e6cd05803483f8613a618bb551471107a",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       "nominal_prefix_unsafe",
+       8
+      ]
+     ]
+    }
+   }
+  },
+  "41057": {
+   "grid": {
+    "episodes": [
+     0,
+     1
+    ],
+    "num_envs": 64,
+    "seed": 41057,
+    "tier": 2
+   },
+   "pools": {
+    "forced_crossing__blueboat_v2__seed41057.json.gz": {
+     "bytes": 4213657,
+     "envs_with_admitted_episode": 64,
+     "file": "forced_crossing__blueboat_v2__seed41057.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "cd9d552f94181836ff29295ed9ed5bc8787f1d7f0aa45ea7b0ebe3639650b705",
+     "rejections": [],
+     "sha256": "0317f43b06ee0880c6fed84c931e4e27ae65e0ea33f59a3a801de71b3f22e159",
+     "top_primary_rejection_reasons": []
+    },
+    "forced_crossing__wamv_vrx_v2_opt1__seed41057.json.gz": {
+     "bytes": 12632289,
+     "envs_with_admitted_episode": 63,
+     "file": "forced_crossing__wamv_vrx_v2_opt1__seed41057.json.gz",
+     "keys_admitted": 115,
+     "keys_not_admitted": 13,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ],
+      [
+       128,
+       115,
+       13
+      ]
+     ],
+     "pool_digest": "1c7d3286112274a9861a4a0766dbbf34e2b364b0ae6c95703c57f5f950433820",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       13
+      ]
+     ],
+     "sha256": "f476e9d7b4e91030bb379bba6df2a208693a3b84709aa0784aa329df3b4ffe73",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       13
+      ]
+     ]
+    },
+    "fortress__blueboat_v2__seed41057.json.gz": {
+     "bytes": 3314894,
+     "envs_with_admitted_episode": 47,
+     "file": "fortress__blueboat_v2__seed41057.json.gz",
+     "keys_admitted": 62,
+     "keys_not_admitted": 66,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       62,
+       66
+      ],
+      [
+       128,
+       62,
+       66
+      ],
+      [
+       128,
+       62,
+       66
+      ],
+      [
+       128,
+       62,
+       66
+      ],
+      [
+       128,
+       62,
+       66
+      ]
+     ],
+     "pool_digest": "b820ae97cc0f701ffd5698fec4ec5fbcd501815d8ff7d1459b19e67372b92e26",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       3,
+       "no_witness_in_frozen_search",
+       2
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       7
+      ]
+     ],
+     "sha256": "d73bca64bb6de232fb647ae9a385028c958423acb34476fb49dd1aeaa7a590f2",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       59
+      ],
+      [
+       "nominal_prefix_unsafe",
+       5
+      ],
+      [
+       "no_witness_in_frozen_search",
+       2
+      ]
+     ]
+    },
+    "fortress__wamv_vrx_v2_opt1__seed41057.json.gz": {
+     "bytes": 7423293,
+     "envs_with_admitted_episode": 40,
+     "file": "fortress__wamv_vrx_v2_opt1__seed41057.json.gz",
+     "keys_admitted": 48,
+     "keys_not_admitted": 80,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       48,
+       80
+      ],
+      [
+       128,
+       48,
+       80
+      ],
+      [
+       128,
+       48,
+       80
+      ],
+      [
+       128,
+       48,
+       80
+      ],
+      [
+       128,
+       48,
+       80
+      ]
+     ],
+     "pool_digest": "16e8cd3c295ac4d9b0e0ef94d8e28bad277e433e0dde8459810ebdaece2d2a40",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       55
+      ],
+      [
+       1,
+       "no_witness_in_frozen_search",
+       2
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       55
+      ],
+      [
+       2,
+       "no_witness_in_frozen_search",
+       7
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       2
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       55
+      ],
+      [
+       3,
+       "no_witness_in_frozen_search",
+       17
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       6
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       55
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       10
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       6
+      ]
+     ],
+     "sha256": "4e935ac0dab2a9c35b6974f3719d084d8092d48aacca1cc1afe7566b4a2d065b",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       55
+      ],
+      [
+       "no_witness_in_frozen_search",
+       19
+      ],
+      [
+       "nominal_prefix_unsafe",
+       6
+      ]
+     ]
+    },
+    "iceberg__blueboat_v2__seed41057.json.gz": {
+     "bytes": 5242139,
+     "envs_with_admitted_episode": 64,
+     "file": "iceberg__blueboat_v2__seed41057.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "f1fdbcd4c369cf68b0143622c3a666d9b3929d6a32c98885e60d8367163579fb",
+     "rejections": [],
+     "sha256": "e33c04c566d8f893be14890ff9d4ab48bcc5b650e23c744f5d84024521060542",
+     "top_primary_rejection_reasons": []
+    },
+    "iceberg__wamv_vrx_v2_opt1__seed41057.json.gz": {
+     "bytes": 18846485,
+     "envs_with_admitted_episode": 64,
+     "file": "iceberg__wamv_vrx_v2_opt1__seed41057.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "a3329c1c510af9677044af697e6783cee1249d9985207428864543b106cf754e",
+     "rejections": [],
+     "sha256": "86a0914911ebc6b6a363cac504ffedda9438e3d96f6546fd9706c15230b67833",
+     "top_primary_rejection_reasons": []
+    },
+    "moving_basin__blueboat_v2__seed41057.json.gz": {
+     "bytes": 3525523,
+     "envs_with_admitted_episode": 64,
+     "file": "moving_basin__blueboat_v2__seed41057.json.gz",
+     "keys_admitted": 121,
+     "keys_not_admitted": 7,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       121,
+       7
+      ],
+      [
+       128,
+       121,
+       7
+      ],
+      [
+       128,
+       121,
+       7
+      ],
+      [
+       128,
+       121,
+       7
+      ],
+      [
+       128,
+       121,
+       7
+      ]
+     ],
+     "pool_digest": "556a04820c94af9b4efd8a8433f8b6022422d82074387197cce5d5e905b3167e",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       7
+      ]
+     ],
+     "sha256": "cda1b93a08c25c34d4d123d8c15e69977e59092cc251fb64bce9639a6bdd752e",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       7
+      ]
+     ]
+    },
+    "moving_basin__wamv_vrx_v2_opt1__seed41057.json.gz": {
+     "bytes": 12963766,
+     "envs_with_admitted_episode": 64,
+     "file": "moving_basin__wamv_vrx_v2_opt1__seed41057.json.gz",
+     "keys_admitted": 127,
+     "keys_not_admitted": 1,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       127,
+       1
+      ],
+      [
+       128,
+       127,
+       1
+      ],
+      [
+       128,
+       127,
+       1
+      ],
+      [
+       128,
+       127,
+       1
+      ],
+      [
+       128,
+       127,
+       1
+      ]
+     ],
+     "pool_digest": "cfa6abe5ac77e53e41747fe9f7ac41643c2cc74f307375d89e2e21662f008a0c",
+     "rejections": [
+      [
+       4,
+       "no_witness_in_frozen_search",
+       1
+      ]
+     ],
+     "sha256": "bdb04ec0d33152fdddfadaad7c33faf860d562dba8bfd5f2bc6ece8e1403f9a5",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       1
+      ]
+     ]
+    },
+    "reach__blueboat_v2__seed41057.json.gz": {
+     "bytes": 1228657,
+     "envs_with_admitted_episode": 64,
+     "file": "reach__blueboat_v2__seed41057.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "fe1d17a2284d6d2bf1b3e24b4b9c7a3937d2e0612111b771f1c75af4a4dd3235",
+     "rejections": [],
+     "sha256": "3e2f0e230eeb5da9e79270cf64118296b2fcda39c8e65a8af924bd342a993385",
+     "top_primary_rejection_reasons": []
+    },
+    "reach__wamv_vrx_v2_opt1__seed41057.json.gz": {
+     "bytes": 8502399,
+     "envs_with_admitted_episode": 64,
+     "file": "reach__wamv_vrx_v2_opt1__seed41057.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "9f59b821e83821a96f3d7cfe9a698174cb9e89070904633a41e96f728ed9f4d0",
+     "rejections": [],
+     "sha256": "aa6322f4c0839be632f1666bd82157eb576e98c09759e537cda60ee20c4fde1b",
+     "top_primary_rejection_reasons": []
+    },
+    "ring__blueboat_v2__seed41057.json.gz": {
+     "bytes": 4347146,
+     "envs_with_admitted_episode": 64,
+     "file": "ring__blueboat_v2__seed41057.json.gz",
+     "keys_admitted": 128,
+     "keys_not_admitted": 0,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ],
+      [
+       128,
+       128,
+       0
+      ]
+     ],
+     "pool_digest": "4d81b1412bcbc59286205dd09271eced1ed99f984510f021f43e5364afcc6666",
+     "rejections": [],
+     "sha256": "4d2091cde733bd191fcae0e30c91090e0d210c60b3d133d4012519cda33c6475",
+     "top_primary_rejection_reasons": []
+    },
+    "ring__wamv_vrx_v2_opt1__seed41057.json.gz": {
+     "bytes": 7981973,
+     "envs_with_admitted_episode": 50,
+     "file": "ring__wamv_vrx_v2_opt1__seed41057.json.gz",
+     "keys_admitted": 68,
+     "keys_not_admitted": 60,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       68,
+       60
+      ],
+      [
+       128,
+       68,
+       60
+      ],
+      [
+       128,
+       68,
+       60
+      ],
+      [
+       128,
+       68,
+       60
+      ],
+      [
+       128,
+       68,
+       60
+      ]
+     ],
+     "pool_digest": "bbda3460c622cb03769d3385cf78c6f4ad49eb839c0fcfbf7a8f7fdcdde17b5a",
+     "rejections": [
+      [
+       3,
+       "no_witness_in_frozen_search",
+       23
+      ],
+      [
+       4,
+       "no_witness_in_frozen_search",
+       55
+      ]
+     ],
+     "sha256": "cc3a4221dc49c3f29f00aceee518b3f58e33dbcc1b1b4cca1509583de199bbbb",
+     "top_primary_rejection_reasons": [
+      [
+       "no_witness_in_frozen_search",
+       60
+      ]
+     ]
+    },
+    "scatter__blueboat_v2__seed41057.json.gz": {
+     "bytes": 2090909,
+     "envs_with_admitted_episode": 60,
+     "file": "scatter__blueboat_v2__seed41057.json.gz",
+     "keys_admitted": 92,
+     "keys_not_admitted": 36,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       92,
+       36
+      ],
+      [
+       128,
+       92,
+       36
+      ],
+      [
+       128,
+       92,
+       36
+      ],
+      [
+       128,
+       92,
+       36
+      ],
+      [
+       128,
+       92,
+       36
+      ]
+     ],
+     "pool_digest": "5cf2ee2b54ea781f761b3534ac945f535ac306450009ee9c0db5d0bfa80cd015",
+     "rejections": [
+      [
+       0,
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       31
+      ],
+      [
+       1,
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       1,
+       "no_witness_in_frozen_search",
+       1
+      ],
+      [
+       1,
+       "nominal_prefix_unsafe",
+       2
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       31
+      ],
+      [
+       2,
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       3
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       31
+      ],
+      [
+       3,
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       3
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       31
+      ],
+      [
+       4,
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       3
+      ]
+     ],
+     "sha256": "853f6894800c39ad57444265400c97801148c46338e137b8078c62d0933f462a",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       31
+      ],
+      [
+       "no_unforced_d1_window_before_site_end",
+       2
+      ],
+      [
+       "nominal_prefix_unsafe",
+       2
+      ],
+      [
+       "no_witness_in_frozen_search",
+       1
+      ]
+     ]
+    },
+    "scatter__wamv_vrx_v2_opt1__seed41057.json.gz": {
+     "bytes": 12074155,
+     "envs_with_admitted_episode": 64,
+     "file": "scatter__wamv_vrx_v2_opt1__seed41057.json.gz",
+     "keys_admitted": 109,
+     "keys_not_admitted": 19,
+     "keys_offered": 128,
+     "per_dose_count_fields": [
+      "offered",
+      "admitted",
+      "not_admitted"
+     ],
+     "per_dose_counts": [
+      [
+       128,
+       109,
+       19
+      ],
+      [
+       128,
+       109,
+       19
+      ],
+      [
+       128,
+       109,
+       19
+      ],
+      [
+       128,
+       109,
+       19
+      ],
+      [
+       128,
+       109,
+       19
+      ]
+     ],
+     "pool_digest": "30c07e512ced0e7c19d673a65e1fcb4c58bbad65c55ba9af76cf49ef1de5f2cb",
+     "rejections": [
+      [
+       1,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       1,
+       "nominal_prefix_unsafe",
+       3
+      ],
+      [
+       2,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       2,
+       "nominal_prefix_unsafe",
+       3
+      ],
+      [
+       3,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       3,
+       "nominal_prefix_unsafe",
+       3
+      ],
+      [
+       4,
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       4,
+       "nominal_prefix_unsafe",
+       3
+      ]
+     ],
+     "sha256": "d087724a9e163122aec5250ce54ac6ed4827d1641c19f4e967a235ebd69bd281",
+     "top_primary_rejection_reasons": [
+      [
+       "intruder_path_intersects_static_geometry",
+       16
+      ],
+      [
+       "nominal_prefix_unsafe",
+       3
+      ]
+     ]
+    }
+   }
+  }
+ }
+}

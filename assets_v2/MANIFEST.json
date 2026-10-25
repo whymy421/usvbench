@@ -1,0 +1,147 @@
+{
+ "deliverable": "D5 vessel assets v2 (1:1, FLU axes, actor origin = aggregate COM)",
+ "vrx_source": "https://github.com/osrf/vrx/tree/7609d1bd90ce7edb29d040a082f949e8b089c864",
+ "vrx_commit": "7609d1bd90ce7edb29d040a082f949e8b089c864",
+ "vrx_checkout_clean": true,
+ "license": "VRX files are Apache-2.0 (LICENSE_VRX.txt byte-identical to the pinned LICENSE). Modification notice is stored in each WAM-V USD root customData 'modificationNotice'. Cite Bingham et al. 2019 (VRX README.md:33-46).",
+ "artifacts": {
+  "wamv_vrx_v2_competition.usdc": {
+   "sha256": "b3f10bd9bd505e0ab8e8cd9c9710da42f53e99972da0ed9fb3629f2f96a859b2",
+   "bytes": 131890
+  },
+  "wamv_vrx_v2_bare.usdc": {
+   "sha256": "d0fc5abe954f6b15ea9e39283565f01637f0c9802a614040022466682f2e33cd",
+   "bytes": 64191
+  },
+  "blueboat_v2.usda": {
+   "sha256": "fbd0e78a2617c569bdf88006a914680124768ddea4c8f2da9214236ba86b2965",
+   "bytes": 2847568
+  },
+  "LICENSE_VRX.txt": {
+   "sha256": "d34d509a9ca66a90191e2fcb0cb01d3ddba664343d913a8ab1d1f7617d36d311",
+   "bytes": 10353
+  }
+ },
+ "assets": {
+  "wamv_vrx_v2_competition.usdc": {
+   "mass_kg": 283.3847,
+   "com_in_vrx_base_link_m": [
+    -0.26481479945812175,
+    0.00013571657185444593,
+    0.26821995541749427
+   ],
+   "inertia_com_kg_m2": [
+    [
+     262.5071730582603,
+     -0.03935477718716704,
+     3.5942427104250925
+    ],
+    [
+     -0.03935477718716704,
+     615.9304891986518,
+     -0.022360951333526502
+    ],
+    [
+     3.5942427104250925,
+     -0.022360951333526502,
+     689.9583690889045
+    ]
+   ],
+   "links": 28,
+   "colliders": 54,
+   "visuals": 25,
+   "included": "base_link, 2 batteries, 2 engines, 2 propellers, CPU cases, 3 cameras (post, arm, camera), GPS, IMU, 3-D lidar (post, arm), acoustic receiver, ball shooter (base, launcher)",
+   "excluded": "separate release platform/dummy links, projectiles, textures, Gazebo plugins, joint articulation (frozen at 0)"
+  },
+  "wamv_vrx_v2_bare.usdc": {
+   "mass_kg": 258.0,
+   "com_in_vrx_base_link_m": [
+    -0.2862992713178294,
+    2.581914010756178e-18,
+    0.14556579844961237
+   ],
+   "inertia_com_kg_m2": [
+    [
+     217.03174410633986,
+     -1.9984014443252818e-15,
+     11.403577654042106
+    ],
+    [
+     -1.9984014443252818e-15,
+     566.0832037912651,
+     5.551115123125783e-17
+    ],
+    [
+     11.403577654042106,
+     5.551115123125783e-17,
+     682.8564741282084
+    ]
+   ],
+   "links": 7,
+   "colliders": 33,
+   "visuals": 7,
+   "included": "base_link, 2 batteries, 2 engines, 2 propellers",
+   "excluded": "all optional sensors, CPU cases, shooter, platform, textures, plugins"
+  },
+  "blueboat_v2.usda": {
+   "mass_kg": 17.260000228881836,
+   "source": "C:/Users/BRADY/usvbench/assets/blueboat_physics.usd",
+   "source_sha256": "9acfd39ed31cad557ac701d57b7d56f9a420b773ffe2af01b4081dcba32a2865",
+   "transform": "rotate 180 deg about z (source bow -X) and translate COM to origin; no scaling",
+   "colliders": 2
+  }
+ },
+ "input_sha256": {
+  "C:\\Users\\BRADY\\usvbench\\assets\\blueboat_physics.usd": "9acfd39ed31cad557ac701d57b7d56f9a420b773ffe2af01b4081dcba32a2865",
+  "C:\\Users\\BRADY\\usvbench_gazebo\\blueboat_cad\\hull_set\\PUB-BR-101381-001.STL": "0715b35da7a868c624a6220657fc7fd2f65c42b234589e4fc957c24425d01e9f",
+  "D:\\claude code\\codex_tasks\\20260930_c3_wind\\work\\blueboat_front.wkt": "f9f6b91c877491a255895b962bcd726440cbd7d3a9997c4e0d073ecae339faba",
+  "D:\\claude code\\codex_tasks\\20260930_c3_wind\\work\\blueboat_side.wkt": "986b8a1a90f54768966cb5be8624a633378327c1f464ac5761ba66fce8f905a3",
+  "LICENSE": "d34d509a9ca66a90191e2fcb0cb01d3ddba664343d913a8ab1d1f7617d36d311",
+  "vrx_urdf/vrx_gazebo/models/3d_lidar/mesh/3d_lidar.dae": "f70aee9952ee1cd57ae98fa63919f2f95995d69b00a4f68527acedafbe69c912",
+  "vrx_urdf/vrx_gazebo/models/ball_shooter/meshes/ball_shooter_base.dae": "0528ba85abbe1c1f5b4b1a26cbb7ab50c193f3d20d32bc1174fea27bdb8d956a",
+  "vrx_urdf/vrx_gazebo/models/ball_shooter/meshes/ball_shooter_launcher.dae": "ed0fd407cf61ac43a007fd28c54d4145fd32d8ea73d92c1f8c1344554a28a579",
+  "vrx_urdf/vrx_gazebo/models/battery/mesh/battery.dae": "79e42ac24b9bdee7113bc52c4e33092d8103cf6b9c7634dbd9426ae0cd684c35",
+  "vrx_urdf/vrx_gazebo/models/cpu_cases/mesh/cpu_cases.dae": "092f0c6e407c3b82f47fec9e4066e38d58daaf0134ea7ca847349224ff7f30f1",
+  "vrx_urdf/vrx_gazebo/models/mono_camera/mesh/mono_camera.dae": "65061401a2e46293eff52a5192a84f30ad8acfd410d400df76328443880a8677",
+  "vrx_urdf/vrx_gazebo/models/sensor_post/mesh/sensor_post_arm.dae": "b438ed11fc10ae440b3390a6d68fbd259ce4f9c9e7cad0b3e3fbff858d0b7a03",
+  "vrx_urdf/wamv_description/models/WAM-V-Base/mesh/WAM-V-Base.dae": "229974a122905adf41b527c2526ca3c7a4e06f49e83563a8a43b86ab896765af",
+  "vrx_urdf/wamv_description/models/engine/mesh/engine.dae": "fcfb9e3de26f8f5ca0bbad9ff1a67b9c89af0a2e64ace5983d9fa39195dd55f2",
+  "vrx_urdf/wamv_description/models/propeller/mesh/propeller.dae": "bfb0dd7d33eabae408ae5e9a28148f6780ca53a397e41988e8d2f930a3a23f0c",
+  "vrx_urdf/wamv_description/urdf/battery.xacro": "a7f7bbd753a76e82a256ce432a5adcad99d6bf42bc09b1757573a3ee2e723fa8",
+  "vrx_urdf/wamv_description/urdf/cpu_cases.xacro": "4163c94c8f63e5d3f58058e09d9b52627c8ff084d7b1576592638e8f1b03665b",
+  "vrx_urdf/wamv_description/urdf/thrusters/engine.xacro": "f0060a7e1b7797cec46cf75c398c405cf0080c4dcdad5a002647f80c86f248f7",
+  "vrx_urdf/wamv_description/urdf/wamv_base.urdf.xacro": "1fa2cad0bc14f6ce3c4ec31711df3bb074e1df3daba4a3d2b9ed32541bf982b9",
+  "vrx_urdf/wamv_gazebo/models/gps/mesh/gps.dae": "66d044c6c0a066a5885430d1f3e4b254e7a0233c88c4ce85e2248f32f5cc5546",
+  "vrx_urdf/wamv_gazebo/urdf/components/ball_shooter.xacro": "f1395578e72822453d323c6c0fa55c5177d4bcefd47fa9fb2244a469a2ceef57",
+  "vrx_urdf/wamv_gazebo/urdf/components/lidar.xacro": "af37dd8d5cf48f729b3e2a3c85818f65f21c746bba38199c7a47cce42a9a22be",
+  "vrx_urdf/wamv_gazebo/urdf/components/wamv_3d_lidar.xacro": "070941c470e1132b1a1969d03232a3595986492f04d354dc04cce56931732ccf",
+  "vrx_urdf/wamv_gazebo/urdf/components/wamv_camera.xacro": "601b5a39a1ed507e27f40aa8594a2aa3e197587f5fc3011a3078df091de656b3",
+  "vrx_urdf/wamv_gazebo/urdf/components/wamv_gps.xacro": "3e41e27bfc8ee28d190f2fbe18839289d69a61f93ef4a51b0835817a0a134599",
+  "vrx_urdf/wamv_gazebo/urdf/components/wamv_imu.xacro": "437bd10ab5c646ef287c2ba21ea01250d19e210fa329f4a36ebfbfc8df697be6",
+  "vrx_urdf/wamv_gazebo/urdf/components/wamv_pinger.xacro": "2e4f7d048d1b60224511781793b4908acd75be7c1879bca27c7858e5af4f26e5",
+  "vrx_urdf/wamv_gazebo/urdf/dynamics/wamv_gazebo_dynamics_plugin.xacro": "a9fa96bb416c60e26f0c85513632da4f8c26c5843faa43739f57ed98cef0de35",
+  "vrx_urdf/wamv_gazebo/urdf/thruster_layouts/wamv_aft_thrusters.xacro": "52408ec77ff5ca6c102187e2235a42ad5439020842e68d64edd4dcf92f38359b",
+  "vrx_urdf/wamv_gazebo/urdf/wamv_gazebo.urdf.xacro": "1c965a7c6fb53aa282e842bf975b3cabc93c1bbc936572ddf7e128543d36310b"
+ },
+ "scripts_sha256": {
+  "assets/build_vessels_v2.py": "e90065e75efb7f0de8e0c4ba6cbd0c5721738a41be253443c1cf53f4c1ce00ac",
+  "assets/probe_vessels_v2.py": "d48e4cd3d32ee54cc2ebf2e185d07cdfdb20213d101864249bb3f1b7b93bc35a",
+  "evidence/gen_vehicles_v2_data.py": "14cbd2e96536d55e16b8e8daf3f3b4dbaa1fa75a91c56c4da937c8eaadc99cde",
+  "evidence/derive_blueboat.py": "2ee71ce826a3e652c0d0fd28729bf6655ed9da338a7849d27eb64f13706ac359",
+  "repo/vessel_physics_ref_v2.py": "e0a8b522a0139e7afd661cc0988723203c2904b9c1d50789deea42b6a3dc75aa"
+ },
+ "probe": {
+  "status": "PASS",
+  "c3_wamv_windage_regression_max_relative_difference": 3.912849586012492e-07
+ },
+ "superseded_not_part_of_v2": {
+  "wamv_vrx_v2.usdc": "earlier partial attempt: 258 kg, base_link origin (not COM), single configuration",
+  "build_wamv_v2.py / probe_wamv_v2.py / wamv_windage_v2.py / refresh_wamv_manifest.py / wamv_probe.json": "earlier partial attempt tooling for that asset"
+ },
+ "reproduce": [
+  "python -B assets/build_vessels_v2.py",
+  "python -B evidence/gen_vehicles_v2_data.py",
+  "python -B assets/probe_vessels_v2.py",
+  "python -B assets/write_manifest_v2.py"
+ ]
+}

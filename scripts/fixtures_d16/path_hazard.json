@@ -1,0 +1,324 @@
+{
+ "condition_runtime": {
+  "direction_offsets_rad": {
+   "current": 0.0,
+   "perception_bias": 0.0,
+   "waves": 0.0,
+   "wind": 0.0
+  },
+  "direction_stratum": {
+   "class": "stern_quartering",
+   "index": 1,
+   "name": "stern_quartering_starboard",
+   "reference_axis_rad": 0.0,
+   "relative_flow_to_rad": 0.7853981633974483,
+   "world_flow_to_rad": 0.7853981633974483
+  },
+  "elapsed_physics_s": 0.05,
+  "env_index": 0,
+  "episode_index": 0,
+  "estimates": {
+   "checked_groups": [
+    "pos",
+    "ray",
+    "vel"
+   ],
+   "counts": {
+    "pos": 3,
+    "ray": 3,
+    "vel": 3
+   },
+   "decimation": 2
+  },
+  "layer": "hydro_v2",
+  "layer_active": true,
+  "perception": {
+   "active": false,
+   "control_dt_s": 0.016666666666666666,
+   "episode_index": 0,
+   "latency_frames": 0,
+   "outage_frames": 0,
+   "protocol": "usvbench.perception.keyed.v1"
+  },
+  "runtime_ticks": 6,
+  "scenario_ordinal": 0,
+  "tensor_device_type": "cpu"
+ },
+ "dynamic_hazards_header": {
+  "envelope_top_speed_mps": 2.2589523496083515,
+  "grid": {
+   "episodes": 3,
+   "num_envs": 2
+  },
+  "hazard_group": "d7_path_hazard",
+  "joint": true,
+  "keys_admitted": 5,
+  "keys_not_admitted": 1,
+  "keys_offered": 6,
+  "not_admitted_policy": "D16: a key E4 rejects keeps its E5 layout and runs the dynamic suite at D0 (no intruder); its record carries dynamic_hazards payload exposure='not_admitted' and the E4 reasons",
+  "not_admitted_reason_counts": {
+   "nominal_prefix_unsafe": 4
+  },
+  "per_dose_counts": [
+   [
+    6,
+    5,
+    1
+   ],
+   [
+    6,
+    5,
+    1
+   ],
+   [
+    6,
+    5,
+    1
+   ],
+   [
+    6,
+    5,
+    1
+   ],
+   [
+    6,
+    5,
+    1
+   ]
+  ],
+  "per_dose_counts_columns": [
+   "offered",
+   "admitted",
+   "not_admitted"
+  ],
+  "pool_digest": "e21b09110d11dffeb2f2aa540b2f10ec42d024777c53ba0955d7794c583b2a8e",
+  "pool_manifest_sha256": null,
+  "runtime_rule": {
+   "causes": [
+    "ttc_reveal",
+    "clamped_start",
+    "clamped_late",
+    "late_contact_window",
+    "cpa_reveal",
+    "late_first_meeting",
+    "clamped_accelerating",
+    "late_reveal"
+   ],
+   "constants": {
+    "accel_guard_mps2": 0.05,
+    "accel_recent_s": 0.125,
+    "acceleration_aware": false,
+    "collinear_sin": 0.05,
+    "contact_window": "|v| * dose_ttc_ratios[0] * t_avoid + w_c",
+    "corridor_clearance_beams": 1.0,
+    "corridor_half_width": "r + hy + corridor_clearance_beams * 2 hy",
+    "corridor_heading": "asin(min(1, w_c / (u_ref * dose_ttc_ratios[0] * t_avoid)))",
+    "dose_achieved_tol": 0.05,
+    "dose_ttc_ratios": [
+     4.0,
+     3.0,
+     2.0,
+     1.25
+    ],
+    "extension_max_s": 4.0,
+    "head_on_offset": "cpa_reveal inside the corridor beyond the touch lane",
+    "independent_horizon_doses": 3.0,
+    "independent_measure": "acceleration-aware first contact along the heading (time to CPA for cpa_reveal)",
+    "independent_speed": "ls_or_recent_mean_v1",
+    "independent_step_s": 0.02,
+    "late_meeting_fraction": 0.95,
+    "late_reveal": "rule or independent TTC < late_meeting_fraction x dose",
+    "nominal_leg_speed_tol_mps": 1e-06,
+    "pace_speed_floor_mps": 0.05,
+    "pace_window_s": 0.5,
+    "reveal_decision_tol_s": 1e-06,
+    "reveal_snap_s": 0.00025,
+    "speed_estimate": "mean_unless_trend_v1",
+    "static_margin_m": 0.05,
+    "theta_c_scale": 1.0,
+    "trend_t_sig": 3.0,
+    "w_c_scale": 1.0,
+    "window_scale": 1.0
+   },
+   "motion_rule": "d7_reveal_sync_v3",
+   "text": "as d7_reveal_sync_v2, except (G23e, REV-G23d M1-M4): speed = 0.5 s window mean of the measured surge unless the window's least-squares speed slope is significant (|t| >= 3), then the latest measured surge (no nominal calibration), clipped to [0, top]; dose_achieved from the acceleration-aware first-contact time along the heading at the reveal tick (window acceleration when significant and above the guard; time to CPA for a cpa_reveal), undefined counted apart, constant-velocity TTC kept as a secondary field; clamped_accelerating when the ship accelerates and that time misses the dose; late_reveal (clamped) when the rule's or the independent TTC is below 0.95 x dose; release.cpa only for a cpa_reveal; station keeping: approach encounter (sk_approach_crossing_v1) instead of the pinned schedule",
+   "version": "d7_reveal_sync_v3"
+  },
+  "suite": {
+   "allow_unsensed": false,
+   "dose": 2,
+   "drift_speed_mps": 0.1,
+   "enabled": true,
+   "intruder_size_beams": 0.5,
+   "intruder_speed_mps": 0.5,
+   "joint_dose_admission": true,
+   "journal_ray_sensor_all_tasks": true,
+   "native_fixed_nu": 0.0,
+   "native_nu_policy": "tied",
+   "plan_dt_s": 0.25,
+   "reveal_kind": "detection_horizon",
+   "static_margin_m": 0.05,
+   "unforced_window_rule": "abs_yaw_rate_lt_1e-6_rad_s_and_abs_accel_lt_1e-6_m_s2/1",
+   "verify_witness_on_reset": false,
+   "version": "d7_ttc_dose_v3",
+   "vessel_id": "wamv_vrx_v2_opt1",
+   "visibility_sample_dt_s": 0.05,
+   "witness_beam_width": 48,
+   "witness_clearance_m": 0.02,
+   "witness_dt_s": 0.25,
+   "witness_substeps": 4
+  },
+  "unforced_window": {
+   "accel_tol_mps2": 1e-06,
+   "bound": "|dp| <= 0.5*(v*e_w + e_a)*W^2 + (1/3)*e_a*e_w*W^3, |dpsi| <= e_w*W, timing <= |dp|/v; e_w = 1e-6 rad/s, e_a = 1e-6 m/s^2",
+   "rule": "abs_yaw_rate_lt_1e-6_rad_s_and_abs_accel_lt_1e-6_m_s2/1",
+   "yaw_rate_tol_rps": 1e-06
+  }
+ },
+ "extra": {},
+ "family": "path_hazard",
+ "generator": "scripts/make_d16_fixtures.py",
+ "header_file_digests": "digests of CRLF-converted text data files recorded as their LF digests (D26)",
+ "header_paths": "absolute file paths in dynamic_hazards_header replaced by '<runtime path>/<name>'",
+ "pairing_inventory": [
+  "actuator.cap",
+  "actuator.gain",
+  "actuator.lag",
+  "actuator.resistance",
+  "current",
+  "d7_assignment",
+  "direction_stratum",
+  "layout",
+  "perception.bias",
+  "perception.bundle",
+  "perception.dropout",
+  "perception.latency",
+  "perception.noise",
+  "route",
+  "spawn_pose",
+  "waves",
+  "wind"
+ ],
+ "producer": "tasks/path_hazard/path_hazard_journal.py:NotAdmittedBridge.finish",
+ "recipe": "tasks/path_hazard/tests_journal/test_journal_d16.py (WAM-V test pool 2 envs x 3 episodes, key (42, 0, 0) not admitted, dynamic=D2, contract timeout after 3 control steps; row 0)",
+ "regenerate": "python -B scripts/make_d16_fixtures.py --write",
+ "row": 0,
+ "scenario_hashes": {
+  "actuator.cap": "a2a6c399e0f2a049635e2be7987282087fee9dd3427049e6637188476e34a26e",
+  "actuator.gain": "600f0565f3cf4781e97060d1ff4e71bf628ca997bd67aa4bb11a41926bd9c5e3",
+  "actuator.lag": "ce7d83ea8528476600d5755f2a2f3253ffa00432fe9b0d244a1766969c7e7c54",
+  "actuator.resistance": "a8e7974b7047e02669e7ea6aff0cf0791f86b463a52a90f7eb50ccba8c96330d",
+  "current": "546ae35e10da5939212fa50c8ae37fab6ad8fe7c9c3a1a7af62863551a60ba9e",
+  "d7_assignment": "0add711317d75f2e76e09f5b9a9f2700c4ed8d069403e329a6e5d764e502bf84",
+  "direction_stratum": "f732762923e0d5ceabc6637334d25e4c80f0b387514e9a1563673c43d719dd5b",
+  "layout": "5f827b196671b2484005ced658a76b189c6939ef681e4567ede2b82664910e03",
+  "perception.bias": "27532366c93d3eb66e7674fa24964f45a65def80fae32f0c97c761493aba5684",
+  "perception.bundle": "f7a76fbb03e26f417d38471fdee2c0191d2fc78cc372269475da7eb1ad25f747",
+  "perception.dropout": "96e5dbc85aa23081bcb27050fe152d26ce53efe0c8be4b8a6fe9137b7a857b3f",
+  "perception.latency": "b1e3a33f207c64ccca287cf8ba6967848726a08547b47ec6d2d9b75c4beaad13",
+  "perception.noise": "d9b0fd06f4ed0c00aaed4168d5713587d57bab85889b5da5fdf4450dc99d5b8c",
+  "route": "82e27e0409e260dbb66308d8a2640a2e981653c37c83a5a1f5267d55c226c6d9",
+  "spawn_pose": "6006faa229db3b5cdb0b7360a4e6997623e0335520e86af0701589e6fd2d543e",
+  "waves": "2a195673f6d195d6722fe4dcf5ebedae249aaf4dd87e32f9b835342b5e16c589",
+  "wind": "bc65353e5848a4aa95149fe4c8ce16329bbad58a9c41fbf9bd16d2d93a0d8c2f"
+ },
+ "schema": "usvbench.t0.d16_fixture/1",
+ "source_digest_rule": "source_sha256 = SHA-256 of each file with CRLF normalised to LF (D26 d)",
+ "source_sha256": {
+  "scripts/make_d16_fixtures.py": "6762fc7b1108a730ff5635353fec0a86e29c0817dbfd1c0022366e596b01c0a3",
+  "tasks/_shared/conditions/dynamic/stamp.py": "f2309065ba71d7cf82407ca5d957d3a64e2d79b51e210f000138210f696d1e2d",
+  "tasks/_shared/conditions/pairing.py": "b10ec3e09e61e1acd0bd2f29f66194af54ded0e2a27dfe3ab8983f689bb7744e",
+  "tasks/_shared/journal_env_mixin.py": "12ef4f5f6d30520d05ce985acb4a55cfa0a509d359e9dcd1427a9a1c4b403cbc",
+  "tasks/path_hazard/path_hazard_env.py": "d9ba63dec027da99fb23159a0cf95e58c4b4f4d6cee7fe7429325482fba60b65",
+  "tasks/path_hazard/path_hazard_journal.py": "d9ad8abe120f3b92b4037943b3c0a8cd372ed4e22e722628e62858880898d3e5",
+  "tasks/path_hazard/tests_journal/ph_fixtures.py": "a1c6476779c1ebc98f2b4b943a937288f56535a938dc583c3555657fb084b527",
+  "tasks/path_hazard/tests_journal/test_journal_d16.py": "843f0024f3f161f4355a53791be55e4584f4b4ccff7d0c3991cb09639ff7aac2"
+ },
+ "stamp": {
+  "payload": {
+   "assignment": {
+    "admitted": false,
+    "candidate_digest": null,
+    "dose": 0,
+    "intruders": [],
+    "key": {
+     "env": 0,
+     "episode": 0,
+     "eval_seed": 42,
+     "hazard_group": "d7_path_hazard"
+    },
+    "pool_digest": "e21b09110d11dffeb2f2aa540b2f10ec42d024777c53ba0955d7794c583b2a8e",
+    "task": "path_hazard",
+    "witness_digest": null
+   },
+   "exposure": "not_admitted",
+   "model_version": "d7-kinematic-3",
+   "not_admitted_reasons": [
+    [
+     1,
+     "nominal_prefix_unsafe",
+     0
+    ],
+    [
+     2,
+     "nominal_prefix_unsafe",
+     0
+    ],
+    [
+     3,
+     "nominal_prefix_unsafe",
+     0
+    ],
+    [
+     4,
+     "nominal_prefix_unsafe",
+     0
+    ],
+    [
+     0,
+     "joint_ladder_member_rejected",
+     667
+    ]
+   ],
+   "runtime": {
+    "assigned": false,
+    "bridge": {
+     "d7_rows": "none: not admitted, run at D0 without intruder (D16)",
+     "first_swept_contact_interval_start_s": null,
+     "last_tick": 6,
+     "physics_dt_s": 0.008333333333333333,
+     "swept_contact_latched": false,
+     "swept_intervals": 0
+    },
+    "detected_samples": 0,
+    "env": 0,
+    "exposure": "not_admitted",
+    "first_detection_s": null,
+    "itt_count": 0,
+    "last_time_s": 0.05,
+    "min_sampled_surface_clearance_m": null,
+    "non_exposure_reason": "not_admitted",
+    "observer_updates": 0,
+    "realized_ttc_at_first_detection_s": null,
+    "run_dose": 0,
+    "sampled_contact": false,
+    "suite_dose": 2,
+    "termination_reason": "timeout"
+   },
+   "schema_version": 3,
+   "semantics": {
+    "admission": "finite-search kinematic witness, replay-validated; joint across doses by default",
+    "collision": "physical before and after reveal; swept contact latched by the env bridge",
+    "denominator": "every_assigned_episode (intention to treat)",
+    "dose": "TTC/t_avoid at the first detection of the frozen nominal own ship at u_ref (D1..D4 = 4, 3, 2, 1.25); D0 = no intruder. Under pinned_v0 and d7_release_sync_v1 the runtime dose is a detection DISTANCE, so the realized TTC at detection scales with the closing speed (G23c F11)",
+    "feasibility": "finite_search_kinematic_witness_not_simulator_proof",
+    "moving_basin": "native motion ratio is the dose; no added intruder",
+    "reveal": "physical detectability through the task's range sensor (its existing sensor, or the journal 36-ray 30 m sensor when journal_ray_sensor_all_tasks); no time gate",
+    "schedule": "pre-generated from (eval_seed, env, episode, hazard_group); exogenous episode seconds",
+    "t_avoid": "frozen per vessel: reaction + min(brake, max-rate turn) time to displace one beam",
+    "vessel_values": "D5 final registry (vehicles_v2.py), centreline thrust arm; reference speed 1.0 m/s and turning radius R = L are PENDING owner decisions (CONTEXT_R3 decision 14)"
+   }
+  },
+  "sha256": "9d503c1a36c051113a9cf9247829617fcf617f299c9f6d4d902c26f21cf5e696"
+ }
+}

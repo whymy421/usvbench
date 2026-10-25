@@ -1,0 +1,592 @@
+{
+ "family": "harbor_mission",
+ "family_total_bytes": 176250320,
+ "pool_schema": "usvbench.harbour_d7_pool/2",
+ "pools": [
+  {
+   "file": "harbour_mission_blueboat_v2_seed42.json.gz",
+   "file_sha256": "dc908c09d8a271394b0e493678c113801c09f7d20d295553f254dc1c4435b804",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_blueboat_v2_seed42.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "2163bca21eac4313cf06a69203d04cbb57cf3e98d899fe34ce3f771c3cf9245e",
+   "seed": 42,
+   "size_bytes": 8293034,
+   "tier": 2,
+   "vessel": "blueboat_v2"
+  },
+  {
+   "file": "harbour_mission_wamv_vrx_v2_opt1_seed42.json.gz",
+   "file_sha256": "2ddb6ad2d7c3bddc41e67ed26fb23c8720ea04ea15807a6688872114a863eebd",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_wamv_vrx_v2_opt1_seed42.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "6169a388ed1c6f8d1f5081cc22946ec3c2fd9c9ed371a60471582adedec77ae2",
+   "seed": 42,
+   "size_bytes": 21066273,
+   "tier": 2,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  {
+   "file": "harbour_mission_blueboat_v2_seed11002.json.gz",
+   "file_sha256": "3fde6cb27e6f41bb27a331254e1cf85dda7340c72c00b07a1dca9f72824b1364",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_blueboat_v2_seed11002.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "dbdca9dba68ddb2238b29a84e3a5d10bdbbdeae83f12dc6ce13d9a88b3730909",
+   "seed": 11002,
+   "size_bytes": 8361729,
+   "tier": 2,
+   "vessel": "blueboat_v2"
+  },
+  {
+   "file": "harbour_mission_wamv_vrx_v2_opt1_seed11002.json.gz",
+   "file_sha256": "3d82d51cbca251c20b28284870347ed3880ad494aad77cd27f6c5de63df38202",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_wamv_vrx_v2_opt1_seed11002.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "a17bfff26bf7d091b9c6077ab282845d7704f42ca848877bd7cb465554532d84",
+   "seed": 11002,
+   "size_bytes": 21110591,
+   "tier": 2,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  {
+   "file": "harbour_mission_blueboat_v2_seed41041.json.gz",
+   "file_sha256": "dd6fe740d5160d3faf44f4fbfe1c3c19231254652d99f855c849aaadf092ad44",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_blueboat_v2_seed41041.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "a15c2c101804ba7fdb1b0108f4549c8cf6050503e03e5c1afec161297cea78f2",
+   "seed": 41041,
+   "size_bytes": 8350593,
+   "tier": 2,
+   "vessel": "blueboat_v2"
+  },
+  {
+   "file": "harbour_mission_wamv_vrx_v2_opt1_seed41041.json.gz",
+   "file_sha256": "f6c5b49549a20b72d6e9012a41003d51eb8e20f1fc8d009259f415ad933bab27",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_wamv_vrx_v2_opt1_seed41041.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "cd5b8085eaca0c7b0fc054f852b20d7e18dab19303b0d4ce7a9b3e01dc18b4f7",
+   "seed": 41041,
+   "size_bytes": 21002474,
+   "tier": 2,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  {
+   "file": "harbour_mission_blueboat_v2_seed41047.json.gz",
+   "file_sha256": "a05ed791acf5e07b27199e4e5cd31b58131f296e0d385e20d930725e2bd346be",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 127,
+   "keys_by_failing_reason": {
+    "nominal_prefix_unsafe": 1
+   },
+   "keys_not_admitted": 1,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_blueboat_v2_seed41047.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [
+    [
+     20,
+     0
+    ]
+   ],
+   "per_dose_counts": [
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ],
+    [
+     128,
+     127,
+     1
+    ]
+   ],
+   "pool_digest": "47bd1a4f09ddcf71996212e3056de52f6eba4811667b2d782429593b42ff67f6",
+   "seed": 41047,
+   "size_bytes": 8243355,
+   "tier": 2,
+   "vessel": "blueboat_v2"
+  },
+  {
+   "file": "harbour_mission_wamv_vrx_v2_opt1_seed41047.json.gz",
+   "file_sha256": "bcc71a8d48ffe408ea297cf4da68782287e210fe6e4c77592c8a2ee5236aeabf",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_wamv_vrx_v2_opt1_seed41047.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "bf1e2bf79a3e7c9168141879153fe9e62b0003f11eabddde6d06f3612dd66bb4",
+   "seed": 41047,
+   "size_bytes": 21070473,
+   "tier": 2,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  {
+   "file": "harbour_mission_blueboat_v2_seed41051.json.gz",
+   "file_sha256": "992eec59ffcce19922b17ae71878088dccf10d6d94466c6a3391f14eface610c",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_blueboat_v2_seed41051.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "853064c5943d6ec150dcfa361f5a3812e340204702f6d6a6584462e1693d4b7d",
+   "seed": 41051,
+   "size_bytes": 8347900,
+   "tier": 2,
+   "vessel": "blueboat_v2"
+  },
+  {
+   "file": "harbour_mission_wamv_vrx_v2_opt1_seed41051.json.gz",
+   "file_sha256": "4bb587b334ed509998d3f016f800518a7cf6afdfd55e2487e861ec0a52ebd475",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_wamv_vrx_v2_opt1_seed41051.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "86556ea6544d0a20e51014de74beea45332e1dfe9d6ab18a4a752ac8b6e83804",
+   "seed": 41051,
+   "size_bytes": 21017948,
+   "tier": 2,
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  {
+   "file": "harbour_mission_blueboat_v2_seed41057.json.gz",
+   "file_sha256": "d7af50e3453c2df2aa5c7dfc430eb2fdc779debbaa2f99eed6aea6327bcc6f09",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_blueboat_v2_seed41057.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "ebc7b1b89c6c9cb7c02c9c06894966fd316a5c98eef56f48e2da75dae2cacd04",
+   "seed": 41057,
+   "size_bytes": 8369374,
+   "tier": 2,
+   "vessel": "blueboat_v2"
+  },
+  {
+   "file": "harbour_mission_wamv_vrx_v2_opt1_seed41057.json.gz",
+   "file_sha256": "8c9ea0b4caa69b82e222bf5672c77e933c783471d3c60ac3b1e4f6c5a7920006",
+   "grid": {
+    "envs": 64,
+    "episodes": 2
+   },
+   "keys_admitted": 128,
+   "keys_by_failing_reason": {},
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "location": "work/evidence/harbour_mission_wamv_vrx_v2_opt1_seed41057.json.gz (family total > 8 MB: not in the repo; ship with the release and point cfg.journal_d7_pool_path / $USVBENCH_HARBOUR_D7_POOL / $USVBENCH_D7_POOL_DIR at it, or copy it into tasks/harbor_mission/d7_pools/)",
+   "not_admitted_keys": [],
+   "per_dose_counts": [
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ],
+    [
+     128,
+     128,
+     0
+    ]
+   ],
+   "pool_digest": "665ed58c414c931dec359c0de65450c00188bb95dc73613d03f9dc367e49366c",
+   "seed": 41057,
+   "size_bytes": 21016576,
+   "tier": 2,
+   "vessel": "wamv_vrx_v2_opt1"
+  }
+ ],
+ "pools_in_repo": false,
+ "repo_limit_bytes": 8388608,
+ "rule": "D16 not_admitted keys keep their E5 layout (D0 only); D19 pinned: the env refuses a pool whose (vessel, seed, tier, grid) is listed here with another file SHA-256 or pool digest",
+ "schema": "usvbench.harbour_d7_pool_manifest/1",
+ "source_sha256": {
+  "tasks/_shared/conditions/dynamic/adapters.py": "aa5c84aa091ed3be1696bcc1e42a5fdf2e4c9dd96c06bc8eea98331d2858d2f8",
+  "tasks/_shared/conditions/dynamic/feasibility.py": "79fa8a2f8d59f2d2dc58ac0faa8f85e260b7f46e7578fe606291a8767c33ed66",
+  "tasks/_shared/conditions/dynamic/reference.py": "579e6ff5921f12f56d176173c13267d5cc0106098f26f2103ed8b183c9b910e4",
+  "tasks/_shared/conditions/dynamic/trajectory.py": "7c630a4a81036f00b8517314174b873b28e62e6707a7e1fda0c443c4e9fefa1f",
+  "tasks/_shared/journal_cfg_v2.py": "7fa06d9161855c6281a5abd8edbb3df0da2b0f325a87ada4b498abebe340b936",
+  "tasks/_shared/journal_layouts_v2.py": "21387d2f80601c437936a016f4fdf1e39281e648b3006889ef657201c0f1a2d8",
+  "tasks/harbor_mission/harbor_d7_pool.py": "f1b532ece68fee2a594ed30e947762d4335f25ed36a5495015cf56be7c8ebf81",
+  "tasks/harbor_mission/harbor_journal.py": "aea7c970163a12cc25eed4e86ab13ba0f451f983439c8cda818b8879201703dd"
+ },
+ "source_sha256_g48_formal_seeds": {
+  "tasks/_shared/conditions/dynamic/adapters.py": "ca01123540de396e7e846dfd6f6eab3381711cb1023b11d6cafb7116c571780a",
+  "tasks/_shared/conditions/dynamic/feasibility.py": "79fa8a2f8d59f2d2dc58ac0faa8f85e260b7f46e7578fe606291a8767c33ed66",
+  "tasks/_shared/conditions/dynamic/reference.py": "9a1f70b60dc4f969be07c708a2a7c311dff5f1267f0b6eabff4f1082b5a14f84",
+  "tasks/_shared/conditions/dynamic/trajectory.py": "188f6f4e9e3887185a067fbea65f98788c0f1f3086b46ed90171ed48db384713",
+  "tasks/_shared/journal_cfg_v2.py": "d0b1c67afbd4ce637c46c1f7efad77e60f0e3c8fc556926953bc321211d45a8a",
+  "tasks/_shared/journal_layouts_v2.py": "21387d2f80601c437936a016f4fdf1e39281e648b3006889ef657201c0f1a2d8",
+  "tasks/harbor_mission/harbor_d7_pool.py": "db066e7628301f28d95296615dfe8355e1624d1657eecf22698df7221a8c9ec2",
+  "tasks/harbor_mission/harbor_journal.py": "6ac2b14d372e36f7da84e2576ba90174badecb30285b150265d8a28bb81a97fa"
+ },
+ "task": "harbour_mission",
+ "tool": "f6-admit-d7-pool/2"
+}

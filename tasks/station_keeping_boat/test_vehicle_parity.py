@@ -48,10 +48,7 @@ def _equal_exact(actual: object, expected: object) -> bool:
 
 
 def main() -> None:
-    # "catamaran" was added by the catamaran_patrol task. This guard pins the wamv
-    # literals byte-for-byte; a new hull entry does not touch them, but the name set is
-    # asserted too so an accidental registry edit still trips it.
-    expected_names = {"rov", "wamv", "blueboat", "catamaran"}
+    expected_names = {"rov", "wamv", "blueboat"}
     if set(VEHICLES) != expected_names:
         raise AssertionError(
             f"registry names differ: actual={sorted(VEHICLES)}, "

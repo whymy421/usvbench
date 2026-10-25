@@ -1,0 +1,240 @@
+{
+  "python": "3.13.7 (tags/v3.13.7:bcee1c3, Aug 14 2025, 14:15:11) [MSC v.1944 64 bit (AMD64)]",
+  "numpy": "2.3.5",
+  "shapely": "2.1.2",
+  "trimesh": "5.0.0",
+  "usd": [
+    0,
+    26,
+    5
+  ],
+  "grid_m": 1e-06,
+  "analytic_self_check": "PASS",
+  "blueboat": {
+    "bounds_m": [
+      [
+        -0.5975813150405884,
+        -0.44936015625000003,
+        -0.2232
+      ],
+      [
+        0.5975813150405884,
+        0.44936015625000003,
+        0.1528146770477295
+      ]
+    ],
+    "triangle_count": 490794,
+    "waterline_cases": {
+      "-0.01": {
+        "waterline_z_m": -0.01,
+        "A_F_m2": 0.05241470162701807,
+        "A_L_m2": 0.17281980376489353,
+        "z_bar_lateral_m": 0.0812252063186872,
+        "z_bar_frontal_m": 0.08396403791300622,
+        "x_cp_geometric_m": 0.03953327777663951,
+        "y_cp_geometric_m": -5.604022616132002e-06
+      },
+      "0.0": {
+        "waterline_z_m": 0.0,
+        "A_F_m2": 0.04968478224291942,
+        "A_L_m2": 0.16220798892378677,
+        "z_bar_lateral_m": 0.07621178065812223,
+        "z_bar_frontal_m": 0.07830028403435119,
+        "x_cp_geometric_m": 0.042310528307893794,
+        "y_cp_geometric_m": -5.841431801202284e-06
+      },
+      "0.01": {
+        "waterline_z_m": 0.01,
+        "A_F_m2": 0.04682193637338716,
+        "A_L_m2": 0.15165383700710824,
+        "z_bar_lateral_m": 0.0711674555094332,
+        "z_bar_frontal_m": 0.07278005528026626,
+        "x_cp_geometric_m": 0.044770988146891205,
+        "y_cp_geometric_m": -6.134716986010779e-06
+      }
+    },
+    "grid_10um_minus_1um": {
+      "waterline_z_m": 0.0,
+      "A_F_m2": -1.880907201309845e-06,
+      "A_L_m2": -5.409555151741907e-06,
+      "z_bar_lateral_m": -2.4399998941049272e-06,
+      "z_bar_frontal_m": -2.189672209093607e-06,
+      "x_cp_geometric_m": -6.371590864778787e-07,
+      "y_cp_geometric_m": 7.881204175418825e-07
+    },
+    "input_sha256": {
+      "C:\\Users\\BRADY\\usvbench_gazebo\\blueboat_cad\\hull_set\\PUB-BR-101381-001.STL": "0715b35da7a868c624a6220657fc7fd2f65c42b234589e4fc957c24425d01e9f",
+      "C:\\Users\\BRADY\\usvbench_gazebo\\blueboat_cad\\hull_set\\PUB-BR-101381-002.STL": "e426231c1045d2f8210cb81df8b319db627774441ec7c35c7adee659e9328911"
+    },
+    "meshes": [
+      {
+        "file": "C:\\Users\\BRADY\\usvbench_gazebo\\blueboat_cad\\hull_set\\PUB-BR-101381-001.STL",
+        "raw_bounds_mm": [
+          [
+            141.4776611328125,
+            4.194826126098633,
+            16.958951950073242
+          ],
+          [
+            318.7979736328125,
+            380.2095031738281,
+            1212.12158203125
+          ]
+        ],
+        "faces": 245382
+      },
+      {
+        "file": "C:\\Users\\BRADY\\usvbench_gazebo\\blueboat_cad\\hull_set\\PUB-BR-101381-002.STL",
+        "raw_bounds_mm": [
+          [
+            177.210205078125,
+            4.194826126098633,
+            16.958951950073242
+          ],
+          [
+            354.530517578125,
+            380.2095031738281,
+            1212.12158203125
+          ]
+        ],
+        "faces": 245412
+      }
+    ],
+    "hull_spacing_m": 0.7214,
+    "draft_above_keel_m": 0.2232,
+    "x_com_m": -0.006
+  },
+  "wamv": {
+    "input_sha256": {
+      "D:\\claude code\\codex_tasks\\20260912_145841_usvbench_cross_vehicle\\vrx_wamv\\wamv_vrx_nominal.usdc": "a1d1964f94381ad66d709a98f10eb254c4b8363a23da4bd7ec5ce3b846829a66",
+      "D:\\claude code\\codex_tasks\\20260912_145841_usvbench_cross_vehicle\\vrx_wamv\\vehicle_profile.json": "c8b750e84280e7078b5c9f65c11acab83abfd6ea89c6464ef7c1eae0158d8979"
+    },
+    "meshes": [
+      {
+        "prim": "/WAMV/Visuals/Hull",
+        "vertices": 2510,
+        "triangles": 4564
+      },
+      {
+        "prim": "/WAMV/Visuals/Engine0",
+        "vertices": 143,
+        "triangles": 220
+      },
+      {
+        "prim": "/WAMV/Visuals/Propeller0",
+        "vertices": 77,
+        "triangles": 138
+      },
+      {
+        "prim": "/WAMV/Visuals/Engine1",
+        "vertices": 143,
+        "triangles": 220
+      },
+      {
+        "prim": "/WAMV/Visuals/Propeller1",
+        "vertices": 77,
+        "triangles": 138
+      }
+    ],
+    "authored_scale": 0.8,
+    "reference_assembly_mass_kg": 211.0,
+    "reference_com_in_vrx_base_m": [
+      -0.3500720947867298,
+      3.1570322975122933e-18,
+      0.04434111848341232
+    ],
+    "reference_waterline_in_vrx_base_m": 0.08880235909271281,
+    "reference_waterline_in_full_scale_com_m": 0.044461240609300484,
+    "reference_surface_plugin_density_kg_m3": 1000.0,
+    "reference_plugin_tangent_roll_stiffness_Nm_per_rad": 35206.53849557293,
+    "as_authored_z0_waterline_assumption": {
+      "bounds_m": [
+        [
+          -1.9747415781021118,
+          -0.9949031472206116,
+          -0.3571842610836029
+        ],
+        [
+          2.3241159915924072,
+          0.9949032664299011,
+          1.0014047622680664
+        ]
+      ],
+      "triangle_count": 5280,
+      "waterline_cases": {
+        "0.0": {
+          "waterline_z_m": 0.0,
+          "A_F_m2": 0.4507012356294593,
+          "A_L_m2": 1.478180931501566,
+          "z_bar_lateral_m": 0.2534562464507984,
+          "z_bar_frontal_m": 0.5055574593002544,
+          "x_cp_geometric_m": 0.2068877238800957,
+          "y_cp_geometric_m": -4.027312561171224e-08
+        }
+      },
+      "grid_10um_minus_1um": {
+        "waterline_z_m": 0.0,
+        "A_F_m2": 8.584536714817403e-08,
+        "A_L_m2": -1.1698065757403953e-05,
+        "z_bar_lateral_m": -2.909351610846933e-06,
+        "z_bar_frontal_m": -9.293238690255556e-06,
+        "x_cp_geometric_m": -7.492575172296512e-06,
+        "y_cp_geometric_m": -2.5488679593905773e-06
+      }
+    },
+    "restored_full_scale_reference_waterline": {
+      "bounds_m": [
+        [
+          -2.4684269726276398,
+          -1.2436289340257645,
+          -0.44648032635450363
+        ],
+        [
+          2.905144989490509,
+          1.2436290830373764,
+          1.251755952835083
+        ]
+      ],
+      "triangle_count": 5280,
+      "waterline_cases": {
+        "0.014461240609300485": {
+          "waterline_z_m": 0.014461240609300485,
+          "A_F_m2": 0.6969183040858031,
+          "A_L_m2": 2.25069871022377,
+          "z_bar_lateral_m": 0.31046760434863574,
+          "z_bar_frontal_m": 0.6240286550594445,
+          "x_cp_geometric_m": 0.2673746007925712,
+          "y_cp_geometric_m": -1.4750021245212643e-08
+        },
+        "0.044461240609300484": {
+          "waterline_z_m": 0.044461240609300484,
+          "A_F_m2": 0.6783940076132774,
+          "A_L_m2": 2.1235695477211163,
+          "z_bar_lateral_m": 0.2981496506166009,
+          "z_bar_frontal_m": 0.6106467893115323,
+          "x_cp_geometric_m": 0.28545081499033753,
+          "y_cp_geometric_m": -1.515278576225608e-08
+        },
+        "0.07446124060930048": {
+          "waterline_z_m": 0.07446124060930048,
+          "A_F_m2": 0.6572743382478555,
+          "A_L_m2": 1.9917286561281518,
+          "z_bar_lateral_m": 0.2868880978759351,
+          "z_bar_frontal_m": 0.5997770807158256,
+          "x_cp_geometric_m": 0.3024248572673637,
+          "y_cp_geometric_m": -1.5639678050814456e-08
+        }
+      },
+      "grid_10um_minus_1um": {
+        "waterline_z_m": 0.0,
+        "A_F_m2": -2.4317969767873038e-06,
+        "A_L_m2": 1.6385060641610494e-06,
+        "z_bar_lateral_m": 2.9197238180511675e-06,
+        "z_bar_frontal_m": 2.997213064293014e-06,
+        "x_cp_geometric_m": -8.852453620145084e-07,
+        "y_cp_geometric_m": 2.5026564238347965e-06
+      }
+    }
+  },
+  "elapsed_s": 99.15667599998415
+}

@@ -1,0 +1,2165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:usvbench:certificate:v3",
+  "title": "USVBench certificate schema v3 (minor 1: condition stamps; minor 2: release code tree, physics/vessel stamps, outcome); journal ids: schema-3 condition stamps, D7 envelopes, D11 pairing (F7); G9: controller.configuration.mppi_implementation (MPPI)",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 3
+    },
+    "header": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "vessel": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "physics_version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "controller": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "configuration": {
+              "type": "object",
+              "properties": {
+                "mppi_implementation": {
+                  "$ref": "#/$defs/mppi_implementation"
+                },
+                "avoidance": {
+                  "$ref": "#/$defs/avoidance_layer"
+                },
+                "ray_memory": {
+                  "$ref": "#/$defs/planner_memory"
+                }
+              }
+            }
+          },
+          "required": [
+            "name",
+            "configuration"
+          ],
+          "additionalProperties": false
+        },
+        "checkpoint": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "sha256": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "eval_seed": {
+          "type": "integer"
+        },
+        "level": {
+          "type": "integer"
+        },
+        "num_envs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "episodes_per_env": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "episodes_requested": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "overrides": {
+          "type": "object"
+        },
+        "suite_presets": {
+          "type": "object"
+        },
+        "resolved_config": {
+          "type": "object"
+        },
+        "code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/code_legacy_v1"
+            },
+            {
+              "$ref": "#/$defs/code_tree_v1"
+            }
+          ]
+        },
+        "runtime": {
+          "type": "object",
+          "properties": {
+            "hostname": {
+              "type": "string",
+              "minLength": 1
+            },
+            "gpu_name": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "gpu_device": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "driver": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "isaac_sim_version": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "isaac_lab_version": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "physx_version": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1
+            },
+            "reference_environment": {
+              "type": "object",
+              "required": [
+                "id",
+                "required",
+                "versions",
+                "match",
+                "mismatches"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "required": {
+                  "type": "object"
+                },
+                "versions": {
+                  "type": "object"
+                },
+                "match": {
+                  "type": "boolean"
+                },
+                "mismatches": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "hostname",
+            "gpu_name",
+            "gpu_device",
+            "driver",
+            "isaac_sim_version",
+            "isaac_lab_version",
+            "physx_version"
+          ],
+          "additionalProperties": false
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "ended_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "command": {
+          "type": "object",
+          "properties": {
+            "argv": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "parsed_args": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "argv",
+            "parsed_args"
+          ],
+          "additionalProperties": false
+        },
+        "timing": {
+          "type": "object",
+          "properties": {
+            "clock": {
+              "const": "perf_counter"
+            },
+            "scope": {
+              "const": "vectorized_batch_wall_seconds"
+            },
+            "cuda_synchronized": {
+              "type": "boolean"
+            },
+            "includes_warmup": {
+              "const": true
+            },
+            "environment_includes_autoreset": {
+              "const": true
+            },
+            "amortized_per_env": {
+              "const": false
+            },
+            "controller_deadline_s": {
+              "const": 0.016666666666666666
+            },
+            "deadline_comparison": {
+              "const": "strictly_greater"
+            },
+            "path_telemetry_in_environment_time": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "clock",
+            "scope",
+            "cuda_synchronized",
+            "includes_warmup",
+            "environment_includes_autoreset",
+            "amortized_per_env"
+          ],
+          "additionalProperties": false
+        },
+        "unverified": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conditions": {
+          "$ref": "#/$defs/condition_stamp"
+        },
+        "evaluation_protocol_version": {
+          "const": "d8-evaluation-v1"
+        },
+        "resolved_deadline_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "seed_namespace": {
+          "type": "object",
+          "required": [
+            "namespace",
+            "purpose",
+            "seed"
+          ],
+          "properties": {
+            "namespace": {
+              "type": "string",
+              "minLength": 1
+            },
+            "purpose": {
+              "enum": [
+                "selection",
+                "pilot",
+                "calibration",
+                "final_test",
+                "diagnostic"
+              ]
+            },
+            "seed": {
+              "type": "integer"
+            },
+            "block_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "registry_sha256": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "scientific_environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "override_precedence": {
+          "type": "string"
+        },
+        "path_length_semantics": {
+          "type": "object"
+        },
+        "pairing": {
+          "type": "object"
+        },
+        "speed_reference": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "vessel": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "value_m_s": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "basis": {
+              "enum": [
+                "nominal",
+                "condition_adjusted"
+              ]
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "vessel",
+            "value_m_s",
+            "basis"
+          ],
+          "additionalProperties": false
+        },
+        "controller_latency": {
+          "type": "object",
+          "properties": {
+            "controller": {
+              "type": "string"
+            },
+            "statistics_s": {
+              "type": "object"
+            },
+            "deadline_s": {
+              "const": 0.016666666666666666
+            },
+            "deadline_misses_60hz": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "scope": {
+              "type": "string"
+            },
+            "control_step_s": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "exclusiveMinimum": 0
+            }
+          },
+          "required": [
+            "controller",
+            "statistics_s",
+            "deadline_s",
+            "deadline_misses_60hz",
+            "scope"
+          ],
+          "additionalProperties": false
+        },
+        "runtime_environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "resolved_deadline_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cell_config": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "path",
+            "sha256",
+            "configuration"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "configuration": {
+              "type": "object"
+            }
+          },
+          "additionalProperties": false
+        },
+        "hydrodynamics_model": {
+          "enum": [
+            "legacy",
+            "hydro_v2"
+          ]
+        },
+        "vessel_profile": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "status": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "name",
+                "status",
+                "source"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "level_distance": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "table_field": {
+                  "enum": [
+                    "eval_level_distances",
+                    "eval_level_distances_v2"
+                  ]
+                },
+                "table_m": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "eval_level": {
+                  "type": "integer"
+                },
+                "table_index": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "spawn_distance_override_m": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "expected_distance_m": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "realised_distance_m": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "realised_source": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "table_field",
+                "table_m",
+                "eval_level",
+                "table_index",
+                "spawn_distance_override_m",
+                "expected_distance_m",
+                "realised_distance_m",
+                "realised_source"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "description": "journal docking (F5 D2 item 14): no level table is read; the env stamps the journal plan",
+              "properties": {
+                "table_field": {
+                  "const": "journal_plan"
+                },
+                "docking_level_table_in_force": {
+                  "const": "journal_plan"
+                }
+              },
+              "required": [
+                "table_field",
+                "docking_level_table_in_force"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outcome_semantics": {
+          "type": "object",
+          "properties": {
+            "fixed_horizon": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "fixed_horizon",
+            "source"
+          ],
+          "additionalProperties": false
+        },
+        "dynamic_hazards_header": {
+          "type": "object",
+          "description": "D7 header (journal_env_mixin dynamic_hazard_header plus family fields); G23c: runtime_rule (release.rule_block_for plus motion_rule) and exposure_summary (d7_exposure.exposure_summary, written by cert_v3.build over the counted records, recomputed by validate_cert_v3.dynamic_exposure_errors)",
+          "properties": {
+            "not_applicable_doses": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 1, "maximum": 4}, "description": "G23e: tiers not applicable by design (station keeping BlueBoat: [1]); their per-dose rows are all zero; distinct from not_admitted"},
+            "not_applicable_policy": {"type": "string", "minLength": 1},
+            "runtime_rule": {
+              "type": "object",
+              "required": ["version", "motion_rule"],
+              "properties": {"version": {"type": "string", "minLength": 1}, "motion_rule": {"type": "string", "minLength": 1}}
+            },
+            "exposure_summary": {
+              "type": "object",
+              "required": ["schema", "metric", "rule", "dose", "records", "not_admitted", "admitted", "released", "detected", "released_share", "detected_share", "dose_achieved", "dose_achieved_share", "clamped", "clamped_share", "rule_ttc_at_first_detection_over_t_avoid", "diagnostic", "realized", "release_causes", "outcomes"],
+              "properties": {"schema": {"const": "usvbench.d7_exposure_summary/3"},
+                             "dose": {"type": "integer", "minimum": 0, "maximum": 4},
+                             "dose_achieved_share": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+                             "clamped_share": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+                             "diagnostic": {"type": "object", "required": ["metric_A", "finite_ttc_at_detection", "finite_ttc_at_detection_share", "ttc_over_t_avoid_at_detection"]}}
+            }
+          }
+        },
+        "appearing_hazards_header": {
+          "type": "object",
+          "description": "G3 appearing-obstacle suite header (journal_env_mixin appearing_hazard_header); present only with the appearing suite"
+        },
+        "green_water": {
+          "$ref": "#/$defs/green_water_header"
+        },
+        "wind_coefficients": {
+          "type": "object",
+          "description": "G16: pinned vs used wind-load coefficients of the journal vessel and the diagnostic centroid-offset yaw term (usvbench.wind_coefficients/2); windcoef.* overrides are diagnostic only",
+          "required": ["schema", "vessel_profile", "pinned", "used", "centroid_offset", "pinned_values", "override", "wind_enabled"],
+          "properties": {
+            "schema": {"const": "usvbench.wind_coefficients/2"},
+            "vessel_profile": {"type": "string", "minLength": 1},
+            "pinned": {"$ref": "#/$defs/wind_coefficient_values"},
+            "used": {"$ref": "#/$defs/wind_coefficient_values"},
+            "centroid_offset": {
+              "type": "object",
+              "required": ["enabled", "offset_sl", "form"],
+              "properties": {"enabled": {"type": "boolean"}, "offset_sl": {"type": ["number", "null"]},
+                             "form": {"type": "string"}},
+              "additionalProperties": false
+            },
+            "pinned_values": {"type": "boolean"},
+            "override": {
+              "anyOf": [
+                {"type": "null"},
+                {"type": "object", "minProperties": 1, "additionalProperties": false,
+                 "properties": {"c_x0": {"type": "number"}, "c_y0": {"type": "number"}, "c_n0": {"type": "number"},
+                                "offset_sl": {"type": "number"}}}
+              ]
+            },
+            "wind_enabled": {"type": "boolean"},
+            "effect": {"type": "string"},
+            "rule": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "rollpitch_damping": {
+          "type": "object",
+          "description": "T25 (owner decision T1.35b): journal-default vs used roll/pitch linear damping of the hydro_v2 hull model (usvbench.rollpitch_damping/1); hydro.rollpitch_zeta overrides are diagnostic only",
+          "required": ["schema", "vessel_profile", "pinned", "used", "pinned_values", "override"],
+          "properties": {
+            "schema": {"const": "usvbench.rollpitch_damping/1"},
+            "vessel_profile": {"type": "string", "minLength": 1},
+            "pinned": {"$ref": "#/$defs/rollpitch_damping_values"},
+            "used": {"$ref": "#/$defs/rollpitch_damping_values"},
+            "pinned_values": {"type": "boolean"},
+            "override": {
+              "anyOf": [
+                {"type": "null"},
+                {"type": "object", "required": ["rollpitch_zeta"], "additionalProperties": false,
+                 "properties": {"rollpitch_zeta": {"type": "number", "exclusiveMinimum": 0, "maximum": 2}}}
+              ]
+            },
+            "effect": {"type": "string"},
+            "decision": {"type": "string"},
+            "rule": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "journal_mixin": {
+          "type": "string",
+          "minLength": 1
+        },
+        "journal": {
+          "type": "object",
+          "properties": {
+            "task": {
+              "type": "string",
+              "minLength": 1
+            },
+            "carrier": {
+              "type": "string",
+              "minLength": 1
+            },
+            "vehicle": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contract_version": {
+              "const": 2
+            }
+          },
+          "required": [
+            "task",
+            "carrier",
+            "vehicle",
+            "contract_version"
+          ],
+          "additionalProperties": false
+        },
+        "runtime_paths": {
+          "type": "object",
+          "description": "D19 runtime pool-path cfg fields (journal_d7_pool_path, journal_d7_pool_dir, d7_pool_dir, d7_pool_file) set with --set; runtime, never science; the pinned pool is identified by dynamic_hazards_header.pool_digest / pool_manifest_sha256",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "task_id",
+        "vessel",
+        "physics_version",
+        "controller",
+        "checkpoint",
+        "eval_seed",
+        "level",
+        "num_envs",
+        "episodes_per_env",
+        "episodes_requested",
+        "complete",
+        "overrides",
+        "suite_presets",
+        "resolved_config",
+        "code",
+        "runtime",
+        "started_at",
+        "ended_at",
+        "command",
+        "timing",
+        "unverified"
+      ],
+      "additionalProperties": false
+    },
+    "records": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/episode"
+      }
+    },
+    "schema_minor_version": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2
+    }
+  },
+  "required": [
+    "schema_version",
+    "header",
+    "records"
+  ],
+  "additionalProperties": true,
+  "$defs": {
+    "wind_coefficient_values": {
+      "type": "object",
+      "required": ["c_x0", "c_y0", "c_n0"],
+      "properties": {"c_x0": {"type": "number"}, "c_y0": {"type": "number"}, "c_n0": {"type": "number"}},
+      "additionalProperties": false
+    },
+    "rollpitch_damping_values": {
+      "type": "object",
+      "required": ["rule", "roll_nms_rad", "pitch_nms_rad"],
+      "properties": {"rule": {"type": "string", "minLength": 1}, "roll_nms_rad": {"type": "number"},
+                     "pitch_nms_rad": {"type": "number"}},
+      "additionalProperties": false
+    },
+    "episode": {
+      "type": "object",
+      "properties": {
+        "env": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ep": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "terminated": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "termination_reason": {
+          "enum": [
+            "success",
+            "collision",
+            "timeout",
+            "out_of_bounds",
+            "failure",
+            "capsize",
+            "sinking",
+            "airborne",
+            "non_finite_state",
+            "unknown"
+          ]
+        },
+        "tts_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "path_length_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "contact_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "contact_longest_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "contact_depth_mean_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "d0_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "route_geodesic_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "min_clearance_m": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "contact_steps": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "controller_compute_time_s": {
+          "$ref": "#/$defs/timing_statistics"
+        },
+        "environment_step_time_s": {
+          "$ref": "#/$defs/timing_statistics"
+        },
+        "stage_attainment": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": false,
+              "properties": {
+                "max_phase": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "gates_passed": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "path_length_full_episode_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "path_length_success_prefix_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "episode_elapsed_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "controller_deadline_misses_60hz": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outcome": {
+          "enum": [
+            "success",
+            "contact_voided",
+            "never_achieved",
+            "out_of_bounds",
+            "capsized",
+            "sinking",
+            "airborne",
+            "non_finite_state",
+            "timeout",
+            null
+          ]
+        },
+        "dynamic_hazards": {
+          "$ref": "#/$defs/dynamic_hazard_stamp"
+        },
+        "appearing_hazards": {
+          "$ref": "#/$defs/appearing_hazard_stamp",
+          "description": "G3 appearing-obstacle stamp envelope {payload, sha256} (conditions/appearing/stamp.py; G20d schema usvbench.appearing_stamp/3)"
+        },
+        "green_water": {
+          "$ref": "#/$defs/green_water_record"
+        },
+        "green_water_report": {
+          "type": "object",
+          "description": "T25 (owner decision T1.35d) report-only green-water point sets of the episode (conditions/green_water.py report_episode; WAM-V deck edge): {set: {record (rule/1 record form), diagnostics (G18 form)}}; checked by green_water_rule.report_errors_all; never part of any verdict"
+        },
+        "green_water_diagnostics": {
+          "type": "object",
+          "description": "G18 read-only green-water diagnostics of the episode (conditions/green_water.py GreenWaterMonitor.episode_diagnostics; usvbench.green_water.diagnostics/1): the N-substep detector after the settling window, events and exposure after it, per-point up-crossings of the calm freeboard and of the calm mean level; checked by green_water_rule.diagnostics_errors; never part of the verdict"
+        },
+        "scenario_hashes": {
+          "type": "object"
+        },
+        "journal_contract": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "F5/F6 contract metrics of the finished episode: journal_contract_record(i) and/or journal_episode_results[i], latched by the env before the reset"
+        }
+      },
+      "required": [
+        "env",
+        "ep",
+        "success",
+        "terminated",
+        "truncated",
+        "termination_reason",
+        "tts_s",
+        "path_length_m",
+        "contact_seconds",
+        "contact_longest_seconds",
+        "contact_depth_mean_m",
+        "d0_m",
+        "route_geodesic_m",
+        "min_clearance_m",
+        "contact_steps",
+        "controller_compute_time_s",
+        "environment_step_time_s",
+        "stage_attainment"
+      ],
+      "additionalProperties": true
+    },
+    "timing_statistics": {
+      "type": "object",
+      "properties": {
+        "n": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "total": {
+          "type": "number",
+          "minimum": 0
+        },
+        "mean": {
+          "type": "number",
+          "minimum": 0
+        },
+        "std": {
+          "type": "number",
+          "minimum": 0
+        },
+        "min": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p50": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p95": {
+          "type": "number",
+          "minimum": 0
+        },
+        "p99": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "n",
+        "total",
+        "mean",
+        "std",
+        "min",
+        "p50",
+        "p95",
+        "p99",
+        "max"
+      ],
+      "additionalProperties": false
+    },
+    "condition_stamp": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/condition_stamp_v2"
+        },
+        {
+          "$ref": "#/$defs/condition_stamp_v3"
+        }
+      ]
+    },
+    "code_legacy_v1": {
+      "type": "object",
+      "properties": {
+        "tasks_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "scripts_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "tree_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "evaluator_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "tasks_root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "scripts_root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evaluator_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment_source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "hash_algorithm": {
+          "const": "sha256-path-nul-content-v1"
+        }
+      },
+      "required": [
+        "tasks_sha256",
+        "scripts_sha256",
+        "tree_sha256",
+        "evaluator_sha256",
+        "tasks_root",
+        "scripts_root",
+        "evaluator_path",
+        "environment_source",
+        "hash_algorithm"
+      ],
+      "additionalProperties": false
+    },
+    "code_tree_v1": {
+      "type": "object",
+      "properties": {
+        "hash_algorithm": {
+          "const": "usvbench-code-tree-v1"
+        },
+        "inclusion": {
+          "type": "object"
+        },
+        "source": {
+          "enum": [
+            "release_descriptor",
+            "working_tree",
+            "unavailable"
+          ]
+        },
+        "code_tree_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "file_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "release_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{12}-[0-9a-f]{12}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "git_commit": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "git_tree": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "release_descriptor": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "required": [
+                "path",
+                "sha256"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "manifest_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "loaded_modules": {
+          "type": "object",
+          "properties": {
+            "checked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "verified": {
+              "type": "boolean"
+            },
+            "mismatches": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "mismatch_count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "checked",
+            "verified",
+            "mismatches",
+            "mismatch_count"
+          ],
+          "additionalProperties": false
+        },
+        "evaluator_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evaluator_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "evaluator_member": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment_source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      },
+      "required": [
+        "hash_algorithm",
+        "inclusion",
+        "source",
+        "code_tree_sha256",
+        "file_count",
+        "release_id",
+        "git_commit",
+        "git_tree",
+        "release_descriptor",
+        "manifest_root",
+        "loaded_modules",
+        "evaluator_path",
+        "evaluator_sha256",
+        "evaluator_member",
+        "environment_source"
+      ],
+      "additionalProperties": false
+    },
+    "condition_stamp_v2": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "usvbench.conditions/2"
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "schema_version": {
+              "const": 2
+            }
+          },
+          "required": [
+            "waves",
+            "current",
+            "wind",
+            "actuator",
+            "perception",
+            "dynamic_hazards",
+            "seed",
+            "presets",
+            "preset_version",
+            "schema_version"
+          ]
+        },
+        "parameters_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "dose_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "semantics": {
+          "type": "object"
+        },
+        "context": {
+          "type": "object"
+        },
+        "runtime": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "schema",
+        "parameters",
+        "parameters_sha256",
+        "dose_status",
+        "semantics",
+        "context",
+        "runtime"
+      ],
+      "additionalProperties": false
+    },
+    "condition_stamp_v3": {
+      "type": "object",
+      "description": "E3 hydro_v2 condition stamp (tasks/_shared/conditions/stamp.py stamp_conditions_v3); digest = SHA-256 of the canonical JSON of parameters, as for schema 2",
+      "properties": {
+        "schema": {
+          "const": "usvbench.conditions/3"
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "schema_version": {
+              "const": 3
+            },
+            "hydrodynamics_model": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "waves",
+            "current",
+            "wind",
+            "actuator",
+            "perception",
+            "seed",
+            "presets",
+            "preset_version",
+            "direction_strata",
+            "hydrodynamics_model",
+            "schema_version"
+          ]
+        },
+        "parameters_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "dose_status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "semantics": {
+          "type": "object"
+        },
+        "context": {
+          "type": "object"
+        },
+        "runtime": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "schema",
+        "parameters",
+        "parameters_sha256",
+        "dose_status",
+        "semantics",
+        "context",
+        "runtime"
+      ],
+      "additionalProperties": false
+    },
+    "dynamic_hazard_stamp": {
+      "type": "object",
+      "description": "E4/D7 per-episode dynamic-hazard stamp envelope (conditions/dynamic/stamp.py make_stamp); sha256 over the canonical JSON of payload",
+      "properties": {
+        "payload": {
+          "type": "object"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "payload",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "appearing_hazard_stamp": {
+      "type": "object",
+      "description": "G3/G20b appearing-obstacle stamp envelope (conditions/appearing/stamp.py make_appearing_stamp); sha256 over the canonical JSON of payload; scripts/appearing_exposure.py re-derives the digest and recomputes the trigger record's closing_speed_mps (surge x cos bearing) and realized_ttc_s (max(gap, 0) / closing speed, null when not closing)",
+      "properties": {
+        "payload": {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "usvbench.appearing_stamp/3"
+            },
+            "runtime": {
+              "type": "object",
+              "properties": {
+                "trigger": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "closing_speed_mps": {
+                          "type": "number"
+                        },
+                        "realized_ttc_s": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "visible_at_trigger": {
+                          "type": "boolean"
+                        },
+                        "visible_rays": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "required": [
+                        "gap_m",
+                        "bearing_rad",
+                        "pose",
+                        "closing_speed_mps",
+                        "realized_ttc_s",
+                        "visible_at_trigger",
+                        "visible_rays"
+                      ]
+                    }
+                  ]
+                },
+                "visible_at_trigger": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "visible_at_trigger"
+              ]
+            }
+          }
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "payload",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "mppi_implementation": {
+      "type": "object",
+      "description": "G9: the MPPI control-step implementation actually used by eval_mppi (mppi_controller.CudaGraphMPPI 'cuda_graph_v1' or the eager rollout), the number of CUDA graphs captured and how many of those captures replaced a live graph (recaptures)",
+      "properties": {
+        "mode": {
+          "enum": [
+            "eager",
+            "cuda_graph_v1"
+          ]
+        },
+        "captured_graphs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "recaptures": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "mode",
+        "captured_graphs",
+        "recaptures"
+      ],
+      "additionalProperties": false
+    },
+    "avoidance_layer": {
+      "type": "object",
+      "description": "G17 / G24b: the obstacle-avoidance layer of the journal classical controllers los_pid_avoid_v2 / los_pid_cont_avoid_v2 / docking_runup_pid_avoid_v2 (scripts/journal_avoidance.py): frozen constants (scripts/classical_avoidance_v2.json), provenance and the run telemetry written at the end of the run",
+      "properties": {
+        "format": {
+          "const": "usvbench-classical-avoidance-v1"
+        },
+        "layer_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_name": {
+          "enum": [
+            "los_pid_avoid_v2",
+            "los_pid_cont_avoid_v2",
+            "docking_runup_pid_avoid_v2"
+          ]
+        },
+        "base_controller_name": {
+          "enum": [
+            "los_pid",
+            "los_pid_cont",
+            "docking_runup_pid"
+          ]
+        },
+        "task": {
+          "enum": [
+            "path_following",
+            "station_keeping",
+            "docking"
+          ]
+        },
+        "file_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "motion_prediction": {
+          "type": "boolean"
+        },
+        "rule_constants": {
+          "type": "object"
+        },
+        "vessel_constants": {
+          "type": "object"
+        },
+        "task_constants": {
+          "type": "object"
+        },
+        "hold_zone_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "telemetry": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "format",
+        "layer_version",
+        "controller_name",
+        "base_controller_name",
+        "task",
+        "file_sha256",
+        "motion_prediction",
+        "rule_constants",
+        "vessel_constants",
+        "task_constants",
+        "hold_zone_m",
+        "telemetry"
+      ]
+    },
+    "planner_memory": {
+      "type": "object",
+      "description": "G25 / G25b / G24b: the ray-return memory (no expiry since G24b) and circumscribed-radius ladder of the journal planner planner_los_pid_mem_v2 (scripts/planner_memory.py, classical_planner_pid.journal_memory_ladder): rule constants, derived constants, ladder rule and values, provenance and the run telemetry written at the end of the run; validate_cert_v3.planner_memory_errors pins every value to planner_memory and the vessel registry",
+      "properties": {
+        "format": {
+          "const": "usvbench-planner-memory-v1"
+        },
+        "memory_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "controller_name": {
+          "enum": [
+            "planner_los_pid_mem_v2"
+          ]
+        },
+        "base_controller_name": {
+          "enum": [
+            "planner_los_pid"
+          ]
+        },
+        "vessel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rule_constants": {
+          "type": "object"
+        },
+        "constants": {
+          "type": "object"
+        },
+        "module_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "ladder": {
+          "type": "object",
+          "properties": {
+            "inflation_ladder_m": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 1
+            }
+          },
+          "required": [
+            "rule",
+            "circumscribed_radius_m",
+            "half_beam_m",
+            "length_scale",
+            "margin_lengths",
+            "narrow_margin_lengths",
+            "inflation_ladder_m"
+          ]
+        },
+        "telemetry": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "format",
+        "memory_version",
+        "controller_name",
+        "base_controller_name",
+        "vessel",
+        "rule_constants",
+        "constants",
+        "module_sha256",
+        "ladder",
+        "telemetry"
+      ]
+    },
+    "green_water_header": {
+      "type": "object",
+      "description": "G10 green-water exclusion rule A + B (conditions/green_water_rule.py): static rule, formula stamp (D9 wave-following per-cycle wetness, NORDFORSK 0.05), detection definition and the cell summary over the counted episodes; required for journal certificates whose condition stack includes waves",
+      "properties": {
+        "schema": {
+          "const": "usvbench.green_water_header/1"
+        },
+        "vessel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rule": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": "usvbench.green_water.rule/1"
+            },
+            "text": {
+              "type": "string"
+            },
+            "formula_limit": {
+              "const": 0.05
+            },
+            "share_limit": {
+              "const": 0.05
+            }
+          },
+          "required": [
+            "version",
+            "text",
+            "formula_limit",
+            "share_limit"
+          ]
+        },
+        "formula": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": "usvbench.green_water.formula/1"
+            },
+            "criterion": {
+              "type": "string",
+              "minLength": 1
+            },
+            "limit": {
+              "const": 0.05
+            },
+            "probability": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "vessel": {
+              "type": "string",
+              "minLength": 1
+            },
+            "preset": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "preset_role": {
+              "enum": [
+                "MAIN",
+                "SUPPLEMENT",
+                "OVERRIDE"
+              ]
+            },
+            "inputs": {
+              "type": "object"
+            }
+          },
+          "required": [
+            "version",
+            "criterion",
+            "limit",
+            "probability",
+            "vessel",
+            "preset",
+            "preset_role",
+            "inputs"
+          ]
+        },
+        "detection": {
+          "type": "object",
+          "properties": {
+            "version": {
+              "const": "usvbench.green_water.detect/1"
+            },
+            "n_consecutive_substeps": {
+              "const": 6
+            },
+            "physics_dt_s": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "points": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "x_m": {
+                    "type": "number"
+                  },
+                  "y_m": {
+                    "type": "number"
+                  },
+                  "z_m": {
+                    "type": "number"
+                  },
+                  "calm_freeboard_m": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "label",
+                  "x_m",
+                  "y_m",
+                  "z_m",
+                  "calm_freeboard_m"
+                ]
+              }
+            }
+          },
+          "required": [
+            "version",
+            "n_consecutive_substeps",
+            "physics_dt_s",
+            "points"
+          ]
+        },
+        "presets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "diagnostics": {
+          "type": "object",
+          "description": "G18 non-binding diagnostics over the counted episodes (green_water_rule.diagnostics_summary): settled share, event rate, simulated per-cycle exceedance per point and candidate verdicts for the owner; present only when every counted record carries green_water_diagnostics; recomputed by the validator"
+        },
+        "spawn": {
+          "type": "object",
+          "description": "G18 option conditions/wave_spawn.py (cfg.journal_spawn_on_waves): present only when the reset rows are placed on the filtered wave surface"
+        },
+        "report_points": {
+          "type": "object",
+          "description": "T25 (owner decision T1.35d) static block of the report-only point sets (conditions/green_water.py report_header; G28: WAM-V pontoon top line, set wamv_pontoon_top; v2.5 certificates: WAM-V deck edge, set wamv_deck_edge): version usvbench.green_water.report_points/1, binding false, the points with their calm freeboard and source; never part of any verdict"
+        },
+        "report": {
+          "type": "object",
+          "description": "T25 (owner decision T1.35d) non-binding summary of the report-only point sets over the counted episodes (green_water_rule.report_summary): per set the per-episode share, the settled share and event rate and the simulated per-cycle exceedance per point; recomputed by the validator"
+        },
+        "exclusion": {
+          "type": "object",
+          "description": "T25 (owner decision T1.35c) the BINDING exclusion verdict, green-water rule/2 (green_water_rule.exclusion_block): formula probability > 0.05 or simulated per-cycle exceedance at the worst point after the settling window > 0.05; rule/1 (header.green_water.cell) is reported, not binding; recomputed by the validator",
+          "required": ["rule_version", "binding", "decision", "text", "formula_limit", "per_cycle_limit", "settle_s",
+                       "comparison", "formula_probability", "simulated_per_cycle_worst",
+                       "simulated_per_cycle_worst_point", "simulated_basis", "excluded_green_water", "reasons", "rule_1"],
+          "properties": {
+            "rule_version": {"const": "usvbench.green_water.rule/2"},
+            "binding": {"const": true},
+            "decision": {"type": "string"},
+            "text": {"type": "string"},
+            "formula_limit": {"const": 0.05},
+            "per_cycle_limit": {"const": 0.05},
+            "settle_s": {"type": "number"},
+            "comparison": {"type": "string"},
+            "formula_probability": {"type": "number", "minimum": 0, "maximum": 1},
+            "simulated_per_cycle_worst": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+            "simulated_per_cycle_worst_point": {"type": ["string", "null"]},
+            "simulated_basis": {"type": "string"},
+            "excluded_green_water": {"type": "boolean"},
+            "reasons": {"type": "array", "items": {"type": "string"}},
+            "rule_1": {
+              "type": "object",
+              "required": ["rule_version", "binding", "excluded_green_water", "reasons"],
+              "properties": {"rule_version": {"const": "usvbench.green_water.rule/1"}, "binding": {"const": false},
+                             "excluded_green_water": {"type": "boolean"},
+                             "reasons": {"type": "array", "items": {"type": "string"}}},
+              "additionalProperties": false
+            },
+            "probe": {
+              "type": "object",
+              "description": "G28 (owner decision 2026-10-03 17:0x item 3) the exclusion probe: set blueboat_deck_edge or wamv_deck_edge and its labels (= header.green_water.detection.points labels); WAM-V pontoon top is report-only (header.green_water.report_points set wamv_pontoon_top); absent on v2.5 certificates (WAM-V pontoon top binding there); recomputed by the validator",
+              "required": ["version", "decision", "set", "geometry", "labels", "points_key", "report_only_sets", "applies_to"],
+              "properties": {"version": {"const": "usvbench.green_water.probe/2"}, "decision": {"type": "string"},
+                             "set": {"enum": ["blueboat_deck_edge", "wamv_deck_edge"]}, "geometry": {"type": "string"},
+                             "labels": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+                             "points_key": {"const": "header.green_water.detection.points"},
+                             "report_only_sets": {"type": "array", "items": {"type": "string"}},
+                             "applies_to": {"type": "string"}},
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "cell": {
+          "type": "object",
+          "properties": {
+            "rule_version": {
+              "const": "usvbench.green_water.rule/1"
+            },
+            "episodes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "episodes_with_green_water": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "share": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "formula_probability": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "excluded_green_water": {
+              "type": "boolean"
+            },
+            "reasons": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "rule_version",
+            "episodes",
+            "episodes_with_green_water",
+            "share",
+            "formula_probability",
+            "excluded_green_water",
+            "reasons"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema",
+        "vessel",
+        "rule",
+        "formula",
+        "detection",
+        "cell"
+      ]
+    },
+    "green_water_record": {
+      "type": "object",
+      "description": "G10 per-episode simulated green-water record (conditions/green_water.py GreenWaterMonitor.episode_record): a declared deck-edge point below the instantaneous water surface for >= N consecutive physics substeps",
+      "properties": {
+        "green_water": {
+          "type": "boolean"
+        },
+        "first_time_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "first_point": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "submerged_point_substeps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "longest_run_substeps": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "substeps": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "green_water",
+        "first_time_s",
+        "first_point",
+        "submerged_point_substeps",
+        "longest_run_substeps",
+        "substeps"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "schema_minor_version"
+        ],
+        "properties": {
+          "schema_minor_version": {
+            "enum": [
+              1,
+              2
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "header": {
+            "required": [
+              "conditions"
+            ]
+          },
+          "records": {
+            "items": {
+              "required": [
+                "conditions"
+              ],
+              "properties": {
+                "conditions": {
+                  "$ref": "#/$defs/condition_stamp"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "schema_minor_version"
+        ],
+        "properties": {
+          "schema_minor_version": {
+            "const": 2
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "header": {
+            "required": [
+              "hydrodynamics_model",
+              "vessel_profile",
+              "level_distance",
+              "outcome_semantics"
+            ],
+            "properties": {
+              "physics_version": {
+                "enum": [
+                  "1",
+                  "2",
+                  null
+                ]
+              }
+            }
+          },
+          "records": {
+            "items": {
+              "required": [
+                "outcome"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "header"
+        ],
+        "properties": {
+          "header": {
+            "required": [
+              "journal",
+              "controller",
+              "command"
+            ],
+            "properties": {
+              "controller": {
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "const": "mppi"
+                  }
+                }
+              },
+              "command": {
+                "required": [
+                  "parsed_args"
+                ],
+                "properties": {
+                  "parsed_args": {
+                    "required": [
+                      "mppi_impl"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "header": {
+            "properties": {
+              "controller": {
+                "properties": {
+                  "configuration": {
+                    "required": [
+                      "mppi_implementation"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "header"
+        ],
+        "properties": {
+          "header": {
+            "required": [
+              "journal",
+              "conditions"
+            ],
+            "properties": {
+              "conditions": {
+                "required": [
+                  "parameters"
+                ],
+                "properties": {
+                  "parameters": {
+                    "required": [
+                      "waves"
+                    ],
+                    "properties": {
+                      "waves": {
+                        "required": [
+                          "enabled"
+                        ],
+                        "properties": {
+                          "enabled": {
+                            "const": true
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "header": {
+            "required": [
+              "green_water"
+            ]
+          },
+          "records": {
+            "items": {
+              "required": [
+                "green_water"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

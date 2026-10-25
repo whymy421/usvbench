@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from .._shared.vehicles import PhysicsVersionCfg, physics_version
+
 import os as _os
 
 import gymnasium as gym
@@ -17,6 +19,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 
+from .._shared.sea_state import SeaStateCfg
 from .._shared.vehicles import VehicleSpec, get_vehicle
 
 
@@ -80,7 +83,7 @@ def _build_robot_cfg(spec: VehicleSpec) -> ArticulationCfg | RigidObjectCfg:
 
 
 @configclass
-class UnderwaterPhysicsCfg:
+class UnderwaterPhysicsCfg(PhysicsVersionCfg):
     """Calm-water hull dynamics populated from the vehicle registry."""
 
     water_density: float = 1000.0
@@ -180,11 +183,51 @@ class HarborMissionEnvCfg(DirectRLEnvCfg):
     hazard_layout_max_attempts: int = 20
     layout_seed: int = 0
 
+    # Stage the boat starts in. 0 = the harbor mouth, i.e. every certified
+    # number to date. 2 spawns at the field exit with M1/M2 already latched,
+    # which is the state a phase-2 hand-off actually produces; training a dock
+    # specialist from the harbor mouth never reached the dock at all.
+    spawn_phase: int = 0
+    spawn_phase_jitter_m: float = 0.0
+
     reward_progress_scale: float = 20.0
+    # v6.1: quadratic tax RESTORED for harbor. The v6.0 log field (w=4.1,
+    # band 1.35 m) chronically taxed the dense transit zone: s43 found the
+    # exit at 14.4k steps then LEARNED TO STAY HOME (accumulated in-band tax
+    # over a multi-thousand-step transit dwarfs the +25 milestone). The log
+    # field is certified for sparse fields (hazard tier 0, 5x-beam gaps);
+    # dense-field adaptation (narrower band / mean-log cap) is a separate
+    # experiment. v6.1 isolates ONE variable: milestone bonuses on the
+    # unchanged v1 reward base.
     reward_clearance_scale: float = 1.0
+    reward_prox_scale: float = 0.0
+    prox_ray_floor_m: float = 0.45
+    # v6: one-time bonus on each milestone latch rising edge (M1 exit, M2
+    # transit, M3 dock-hold). +25 = one contact entry = proven event scale;
+    # cures stage-boundary hesitation by putting a value cliff at each gate.
+    reward_milestone_bonus: float = 25.0
     reward_contact_entry_penalty: float = 25.0
     reward_contact_dwell_penalty: float = 1.0
     reward_dock_conjunction: float = 3.0
+
+    # Staged curriculum (advisor's plan): 1 = exit only, 2 = exit + transit,
+    # 3 = full mission. The stage's terminal milestone scores the episode.
+    mission_depth: int = 3
+    # v11 recipe (adopted from the certified hazard v11): the stage terminal
+    # milestone and (optionally) any contact END the episode, and the clean
+    # terminal step pays entry + time bonuses. Defaults keep the original
+    # fixed-horizon task id byte-compatible; stage variants turn them on.
+    terminate_on_milestone: bool = False
+    terminate_on_contact: bool = False
+    # Let a Stage 2 episode continue through phase 2 so the full mission's
+    # berth-approach and docking reward channels are reachable.
+    stage2_full_mission_rewards: bool = False
+    reward_stage_goal_bonus: float = 50.0
+    reward_stage_time_bonus: float = 50.0
+    # v11-style kinematic observation: body-frame surge, sway, yaw rate
+    # appended after distance_norm (46 -> 49 dims, new gym ids only).
+    obs_kinematic: bool = False
+    yaw_rate_obs_scale_rad_s: float = 1.0
 
     thrust_max_fwd: float = _DEFAULT_VEHICLE.thrust_fwd_n
     thrust_max_rev: float = _DEFAULT_VEHICLE.thrust_rev_n
@@ -212,22 +255,263 @@ class HarborMissionEnvCfg(DirectRLEnvCfg):
     dof_names = []
 
     def __post_init__(self) -> None:
+        if getattr(self, "journal_contract_version", 1) == 2:
+            # Journal contract v2 (task F6): the v2 vessel, hydro_v2 and the plan's
+            # geometry; the legacy body below stays byte-identical (D15).
+            _journal_parent_post_init(self, super())
+            return
         base_post_init = getattr(super(), "__post_init__", None)
         if base_post_init is not None:
             base_post_init()
 
         spec = get_vehicle(self.vehicle)
         self.robot_cfg = _build_robot_cfg(spec)
+        version = physics_version(self.underwater_physics_cfg)
         self.underwater_physics_cfg = _build_underwater_physics_cfg(spec)
+        self.underwater_physics_cfg.physics_version = version
         self.thrust_max_fwd = spec.thrust_fwd_n
         self.thrust_max_rev = spec.thrust_rev_n
         self.yaw_torque_max = spec.yaw_torque_nm
 
-        if self.observation_space != 3 + 36 + 4 + 2 + 1:
-            raise ValueError("HarborMission requires observation_space=46")
+        expected_obs = (3 + 36 + 4 + 2 + 1) + (3 if self.obs_kinematic else 0)
+        if self.observation_space != expected_obs:
+            raise ValueError(
+                f"HarborMission requires observation_space={expected_obs} "
+                f"when obs_kinematic={self.obs_kinematic}"
+            )
+        if self.mission_depth not in (1, 2, 3):
+            raise ValueError("mission_depth must be 1, 2, or 3")
+        if self.spawn_phase not in (0, 2):
+            raise ValueError("spawn_phase must be 0 (harbor mouth) or 2 (field exit)")
+        if self.spawn_phase_jitter_m < 0.0:
+            raise ValueError("spawn_phase_jitter_m must be non-negative")
+        if self.reward_stage_goal_bonus < 0.0 or self.reward_stage_time_bonus < 0.0:
+            raise ValueError("stage bonus scales must be non-negative")
         if self.ray_count != 36:
             raise ValueError("HarborMission v1 requires exactly 36 rays")
         if self.max_obstacles < 10:
             raise ValueError("max_obstacles must accommodate the specified 6--10 range")
         if self.goal_radius != self.success_position_tolerance_m:
             raise ValueError("goal_radius must alias the docking position tolerance")
+
+
+_REPO_ROOT = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+# Journal ray block / observation (CONTEXT_R4 D14, observation_groups journal_kin48_ray36):
+# the Kin layout (3 nav + 3 kinematics + 36 rays + 4 phase + 2 dock + 1 dwell).
+_JOURNAL_OBSERVATION_SPACE = 49
+
+
+def _build_journal_robot_cfg(vehicle, usd_path: str) -> RigidObjectCfg:
+    """v2 asset (origin = COM, bow +x, authored mass kept; hash-verified path)."""
+    return RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Robot",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=str(usd_path),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                rigid_body_enabled=True,
+                max_linear_velocity=8.0,
+                max_angular_velocity=573.0,
+                max_depenetration_velocity=1.0,
+                disable_gravity=False,
+                linear_damping=0.0,
+                angular_damping=0.0,
+            ),
+            activate_contact_sensors=False,
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.0, 0.0, float(vehicle.hydro_profile.hydro.equilibrium_com_z_m)),
+            rot=(1.0, 0.0, 0.0, 0.0),
+            lin_vel=(0.0, 0.0, 0.0),
+            ang_vel=(0.0, 0.0, 0.0),
+        ),
+        collision_group=0,
+    )
+
+
+def _journal_parent_post_init(cfg, parent) -> None:
+    """Parent-cfg edits of a journal harbour cfg (ANCHORS_E5 C6/C8, CONTEXT_R3 13, R4 D14).
+
+    Runs INSIDE the E5 template's _journal_post_init (journal_plan is already
+    set; physics_version=2 is re-applied and episode_length_s / max_obstacles
+    are set by the template afterwards). The v2 vessel is resolved through
+    journal_vehicle.resolve_journal_vehicle BEFORE any asset is built, the
+    asset comes from assets_v2 with its registry SHA-256 checked (fail closed),
+    and the legacy geometry fields that rewards/markers read are set from the
+    plan so the goal-radius alias (C8) holds: goal_radius ==
+    success_position_tolerance_m == the plan's berth position tolerance.
+    """
+    import math as _math
+
+    from .._shared.journal_vehicle import ASSETS_DIRNAME, resolve_journal_vehicle
+
+    base_post_init = getattr(parent, "__post_init__", None)
+    if base_post_init is not None:
+        base_post_init()
+    plan = getattr(cfg, "journal_plan", None)
+    if plan is None or getattr(plan, "task", None) != "harbour_mission":
+        raise ValueError("journal harbour cfgs are built from an E5 template (journal_plan of "
+                         "task 'harbour_mission' is set before the parent __post_init__)")
+    plan.assert_vehicle_override(cfg.vehicle)
+    params = plan.params
+    options = dict(getattr(cfg, "journal_vehicle_options", None) or {})
+    vehicle = resolve_journal_vehicle(cfg.vehicle, **options)
+    assets_dir = _os.environ.get("USVBENCH_ASSETS_V2", _os.path.join(_REPO_ROOT, ASSETS_DIRNAME))
+    usd_path = vehicle.verify_asset(assets_dir)
+    cfg.robot_cfg = _build_journal_robot_cfg(vehicle, usd_path)
+    physics = UnderwaterPhysicsCfg()
+    physics.physics_version = 2
+    physics.hydrodynamics_model = "hydro_v2"
+    physics.vessel_profile = vehicle.name
+    physics.vessel_profile_status = vehicle.profile_status
+    cfg.underwater_physics_cfg = physics
+    thrusters = vehicle.hydro_profile.thrusters
+    cfg.thrust_max_fwd = float(sum(thrusters.forward_limit_n))
+    cfg.thrust_max_rev = float(sum(thrusters.reverse_limit_n))
+    cfg.yaw_torque_max = float(thrusters.yaw_command_limit_nm)
+    s = float(params["length_scale"])
+    record = plan.record
+    # C8: the goal radius aliases the plan's berth position tolerance.
+    cfg.goal_radius = float(params["position_tolerance_m"])
+    cfg.success_position_tolerance_m = float(params["position_tolerance_m"])
+    cfg.success_heading_tolerance_deg = _math.degrees(float(params["heading_tolerance_rad"]))
+    cfg.success_speed_tolerance_mps = float(params["speed_tolerance_m_s"])
+    cfg.required_hold_time_s = float(params["hold_s"])
+    cfg.gate_half_width_m = 0.5 * float(params["virtual_gate_width_m"])
+    cfg.gate_approach_distance_m = float(params["gate_approach_m"])
+    cfg.gate_min_normal_speed_mps = float(params["gate_min_normal_speed_m_s"])
+    cfg.half_beam_m = float(record.geometry.lateral_half_extent_m)
+    cfg.safe_clearance_m = 0.90 * s
+    cfg.prox_ray_floor_m = 0.45 * s
+    cfg.ray_count = int(params["ray_sensor_ray_count"])
+    cfg.ray_max_range_m = float(params["ray_sensor_max_range_m"])
+    cfg.obs_kinematic = True
+    cfg.observation_space = _JOURNAL_OBSERVATION_SPACE
+    cfg.yaw_rate_obs_scale_rad_s = 1.0 / s
+    cfg.mission_depth = 3
+    extent = float(params["reference_length_m"]) + 2.0 * float(params["region_padding_m"])
+    cfg.scene.env_spacing = max(float(cfg.scene.env_spacing), 1.25 * extent)
+    setattr(cfg, "journal_observation_hooks_wired", True)
+    if getattr(cfg, "journal_d7_pool_path", None) is None:
+        cfg.journal_d7_pool_path = None
+    if getattr(cfg, "journal_d7_pool", None) is None:
+        cfg.journal_d7_pool = None
+    if cfg.spawn_phase not in (0, 2):
+        raise ValueError("journal harbour spawn_phase must be 0 (full mission) or 2 (isolated dock phase)")
+    if cfg.spawn_phase_jitter_m != 0.0:
+        raise ValueError("journal harbour spawns come from the layout (spawn_phase_jitter_m must be 0)")
+    if cfg.ray_count != 36:
+        raise ValueError("journal harbour requires exactly 36 rays")
+    if cfg.goal_radius != cfg.success_position_tolerance_m:
+        raise ValueError("goal_radius must alias the docking position tolerance")
+
+
+@configclass
+class HarborStage1EnvCfg(HarborMissionEnvCfg):
+    """Stage 1 of the advisor curriculum: harbor exit only (M1), v11 recipe."""
+
+    mission_depth: int = 1
+    episode_length_s = 60.0
+    terminate_on_milestone: bool = True
+    terminate_on_contact: bool = True
+    obs_kinematic: bool = True
+    observation_space = 49
+
+
+@configclass
+class HarborStage2EnvCfg(HarborMissionEnvCfg):
+    """Stage 2: exit + hazard transit (M2), warm-started from Stage 1."""
+
+    mission_depth: int = 2
+    episode_length_s = 150.0
+    terminate_on_milestone: bool = True
+    terminate_on_contact: bool = True
+    obs_kinematic: bool = True
+    observation_space = 49
+
+
+@configclass
+class HarborStage3EnvCfg(HarborMissionEnvCfg):
+    """Stage 3: full ordered mission (M3), warm-started from Stage 2."""
+
+    mission_depth: int = 3
+    terminate_on_milestone: bool = True
+    terminate_on_contact: bool = True
+    obs_kinematic: bool = True
+    observation_space = 49
+
+
+@configclass
+class HarborDockPhaseEnvCfg(HarborMissionEnvCfg):
+    """Dock phase in isolation: spawn at the field exit with M1/M2 latched.
+
+    Exists because the "stage 3 specialist" of 2026-08-06 was in fact trained on
+    the full ordered mission (HarborStage3 is only mission_depth=3), so it hit
+    the departure wall and its certification recorded max_phase=0 on 128/128
+    episodes. Handing the dock to that policy is what the composite evaluation
+    measured, which is why its 0/89 conversion says nothing about skill routing.
+    """
+
+    mission_depth: int = 3
+    spawn_phase: int = 2
+    spawn_phase_jitter_m: float = 2.0
+    episode_length_s = 60.0
+    terminate_on_milestone: bool = True
+    terminate_on_contact: bool = True
+    obs_kinematic: bool = True
+    observation_space = 49
+
+
+@configclass
+class HarborStage2AllRewEnvCfg(HarborStage2EnvCfg):
+    """Stage 2 scoring with the full mission reward trajectory enabled."""
+
+    stage2_full_mission_rewards: bool = True
+
+
+@configclass
+class HarborMissionKinEnvCfg(HarborMissionEnvCfg):
+    """Full ordered harbor mission with the staged 49-D observation contract."""
+
+    obs_kinematic: bool = True
+    observation_space = 49
+
+
+@configclass
+class HarborMissionWaveEnvCfg(HarborMissionEnvCfg):
+    """Harbor mission x waves: the certified ordered mission in an irregular sea.
+
+    BACKGROUND DISTURBANCE ONLY. Unlike the station-keeping Wave id (which
+    appends 3 sea-state observation channels), this variant changes NOTHING
+    about the observation, reward, termination, or route sampling of its
+    parent (Isaac-USV-HarborMission-Direct-v1): the JONSWAP field enters
+    through the same world-frame force path as the buoyancy/drag wrench, and
+    the policy is never told the sea exists. A certified checkpoint therefore
+    loads zero-shot and the comparison is "same policy, same observation,
+    world now has waves".
+
+    Band: the frozen evaluation box (2026-08-26): H_s 0.30-0.60 m (the
+    station-keeping wave band for this hull), T_p 2.0-2.5 s. Every corner
+    passes the DNV-RP-C205 steepness admission
+    (sea_state.validate_steepness_admission; worst corner Hs=0.60 m at
+    Tp=2.0 s gives Sp ~ 1/10.4 < 1/7) and captures >= 95% of the analytic
+    JONSWAP variance on the default 104-component 0.04-1.60 Hz band (worst
+    corner 98.8% at gamma=1). The rung ladder pins Hs per-rung later via
+    --set; hs_range stays the full certified band here. The certified
+    station-keeping id's 1.5 s floor stays excluded: it is grandfathered
+    history, not a template.
+
+    DUAL CALM REFERENCE: enable=True with Hs -> 0 is NOT calm water -- the
+    quadratic hull drag in sea_state.forces() still opposes the hull with
+    orbital_drag_coeff * speed^2 (0.08 N at 0.1 m/s, 8 N at 1 m/s, 72 N at
+    3 m/s; see sea_state.zero_amplitude_drag_force). Any dose ladder over
+    this variant must carry BOTH a true-calm reference (enable=False) and an
+    intercept rung (enable=True, Hs -> 0).
+    """
+
+    sea_state: SeaStateCfg = SeaStateCfg()
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        self.sea_state.enable = True
+        self.sea_state.hs_range = (0.30, 0.60)
+        self.sea_state.tp_range = (2.0, 2.5)

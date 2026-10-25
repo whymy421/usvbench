@@ -1,0 +1,131 @@
+{
+  "records": [
+    {
+      "env": 0,
+      "ep": 0,
+      "success": false,
+      "terminated": false,
+      "truncated": true,
+      "tts_s": null,
+      "termination_reason": "timeout",
+      "path_length_m": null,
+      "min_clearance_m": null,
+      "contact_steps": null,
+      "contact_seconds": null,
+      "contact_longest_seconds": null,
+      "contact_depth_mean_m": null,
+      "d0_m": null,
+      "route_geodesic_m": null,
+      "controller_compute_time_s": {
+        "n": 1,
+        "total": 0.001,
+        "mean": 0.001,
+        "std": 1e+99,
+        "min": 0.001,
+        "p50": 0.001,
+        "p95": 0.001,
+        "p99": 0.001,
+        "max": 0.001
+      },
+      "environment_step_time_s": {
+        "n": 1,
+        "total": 0.001,
+        "mean": 0.001,
+        "std": 0.0,
+        "min": 0.001,
+        "p50": 0.001,
+        "p95": 0.001,
+        "p99": 0.001,
+        "max": 0.001
+      },
+      "stage_attainment": null
+    }
+  ],
+  "controller": "test",
+  "checkpoint": null,
+  "schema_version": 3,
+  "header": {
+    "task_id": "Test-BlueBoat",
+    "vessel": "blueboat",
+    "physics_version": "v2",
+    "controller": {
+      "name": "test",
+      "configuration": {}
+    },
+    "checkpoint": {
+      "path": null,
+      "sha256": null
+    },
+    "eval_seed": 42,
+    "level": 0,
+    "num_envs": 1,
+    "episodes_per_env": 1,
+    "episodes_requested": 1,
+    "complete": true,
+    "overrides": {
+      "seed": 42,
+      "eval_level": 0,
+      "scene.num_envs": 1
+    },
+    "suite_presets": {},
+    "resolved_config": {
+      "seed": 42,
+      "eval_level": 0,
+      "vehicle": "blueboat",
+      "physics_version": "v2",
+      "scene": {
+        "num_envs": 1
+      },
+      "dt": 0.016666666666666666
+    },
+    "code": {
+      "tasks_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "scripts_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evaluator_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "tree_sha256": "3e0a89f889e876138e7d3507b612e2166b96b0301b807c4b490fc229d38fc1ee",
+      "tasks_root": "synthetic/tasks",
+      "scripts_root": "synthetic/scripts",
+      "environment_source": "synthetic/tasks/family/env.py",
+      "evaluator_path": "synthetic/scripts/eval.py",
+      "hash_algorithm": "sha256-path-nul-content-v1"
+    },
+    "runtime": {
+      "hostname": "synthetic_fixture",
+      "gpu_name": "synthetic_fixture",
+      "gpu_device": "synthetic_fixture",
+      "driver": "synthetic_fixture",
+      "isaac_sim_version": "synthetic_fixture",
+      "isaac_lab_version": "synthetic_fixture",
+      "physx_version": "synthetic_fixture"
+    },
+    "started_at": "2026-09-30T15:12:57.052247Z",
+    "ended_at": "2026-09-30T15:12:57.052618Z",
+    "command": {
+      "argv": [
+        "eval.py"
+      ],
+      "parsed_args": {}
+    },
+    "timing": {
+      "clock": "perf_counter",
+      "scope": "vectorized_batch_wall_seconds",
+      "cuda_synchronized": false,
+      "includes_warmup": true,
+      "environment_includes_autoreset": true,
+      "amortized_per_env": false
+    },
+    "unverified": []
+  },
+  "task": "Test-BlueBoat",
+  "seed": 42,
+  "level": 0,
+  "num_envs": 1,
+  "episodes_per_env": 1,
+  "episodes_requested": 1,
+  "complete": true,
+  "overrides": {
+    "seed": 42,
+    "eval_level": 0,
+    "scene.num_envs": 1
+  }
+}

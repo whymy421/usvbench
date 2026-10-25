@@ -13,6 +13,11 @@ import os
 import statistics
 import sys
 
+from cert_v3 import CertificateRun
+from eval_protocol import add_protocol_arguments, preflight_protocol, resolve_protocol
+
+ORIGINAL_ARGV = list(sys.argv)
+
 from isaaclab.app import AppLauncher
 
 
@@ -22,10 +27,12 @@ parser.add_argument("--checkpoint", required=True)
 parser.add_argument("--episodes", type=int, default=64)
 parser.add_argument("--num_envs", type=int, default=64)
 parser.add_argument("--seed", type=int, default=42)
-parser.add_argument("--eval_level", type=int, default=1)
+parser.add_argument("--eval_level", "--eval-level", "--level", dest="level", type=int, default=1)
 parser.add_argument("--output_json", type=str, default=None)
+add_protocol_arguments(parser)
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
+preflight_protocol(args_cli, ORIGINAL_ARGV, parser)
 
 if args_cli.episodes <= 0 or args_cli.num_envs <= 0:
     parser.error("--episodes and --num_envs must be positive")
@@ -33,7 +40,13 @@ checkpoint_path = os.path.abspath(args_cli.checkpoint)
 if not os.path.isfile(checkpoint_path):
     parser.error(f"checkpoint does not exist: {checkpoint_path}")
 
-sys.argv = [sys.argv[0]] + hydra_args
+# G6: Hydra's run directory and logs go to the output folder, never the working directory
+# (scripts/hydra_outputs.py; Isaac Lab hydra.py:83 leaves Hydra's cwd-relative defaults).
+if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import hydra_outputs  # noqa: E402
+
+sys.argv = [sys.argv[0]] + hydra_args + hydra_outputs.run_dir_overrides(args_cli.output_json, hydra_args)
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -46,6 +59,11 @@ from isaaclab.envs import DirectMARLEnv, multi_agent_to_single_agent  # noqa: E4
 from isaaclab_rl.skrl import SkrlVecEnvWrapper  # noqa: E402
 import isaaclab_tasks  # noqa: E402,F401
 from isaaclab_tasks.utils.hydra import hydra_task_config  # noqa: E402
+
+try:
+    from tasks._shared.scenario_draws import scenario_protocol_stamp
+except ImportError:
+    from isaaclab_tasks.direct._shared.scenario_draws import scenario_protocol_stamp
 
 
 def _base_env(env):
@@ -72,11 +90,7 @@ def _values_at(base, name: str, env_ids: torch.Tensor, default) -> list:
 
 @hydra_task_config(args_cli.task, "skrl_cfg_entry_point")
 def main(env_cfg, experiment_cfg):
-    env_cfg.scene.num_envs = args_cli.num_envs
-    env_cfg.sim.device = args_cli.device if args_cli.device else env_cfg.sim.device
-    env_cfg.seed = args_cli.seed
-    env_cfg.curriculum_frozen = True
-    env_cfg.eval_level = args_cli.eval_level
+    applied_overrides = resolve_protocol(env_cfg, args_cli)
     env_cfg.log_dir = os.path.dirname(os.path.dirname(checkpoint_path))
 
     experiment_cfg["seed"] = args_cli.seed
@@ -96,7 +110,20 @@ def main(env_cfg, experiment_cfg):
     base = _base_env(env)
     device = torch.device(getattr(base, "device", env_cfg.sim.device))
 
+    cert = CertificateRun(
+        base=base, env_cfg=env_cfg, evaluator=__file__, task=args_cli.task,
+        controller="learned", controller_config={
+            "experiment": experiment_cfg,
+            "runtime_agent_config": getattr(runner.agent, "cfg", None),
+            "action_selection": "mean_actions_if_available",
+        }, checkpoint=checkpoint_path, eval_seed=args_cli.seed,
+        level=args_cli.level, episodes_requested=args_cli.episodes,
+        overrides=applied_overrides, argv=ORIGINAL_ARGV, cli_args=vars(args_cli),
+    )
+
     observation, _ = env.reset()
+    cert.after_reset()
+    records = []
     completed = 0
     successes = 0
     spl_values: list[float] = []
@@ -109,28 +136,40 @@ def main(env_cfg, experiment_cfg):
 
     print(
         f"[INFO] deterministic eval: {args_cli.episodes} episodes, "
-        f"level={args_cli.eval_level}, seed={args_cli.seed}"
+        f"level={args_cli.level}, seed={args_cli.seed}"
     )
-    while completed < args_cli.episodes:
+    step = 0
+    max_steps = (cert.quota + 3) * base.max_episode_length
+    while not cert.grid.complete and step < max_steps:
         active = ~base._reached_goal
-        with torch.inference_mode():
+        active &= torch.tensor([count < cert.quota for count in cert.grid.counts], device=device)
+        with cert.time_controller(), torch.inference_mode():
             outputs = runner.agent.act(observation, timestep=0, timesteps=0)
             actions = outputs[-1].get("mean_actions", outputs[0])
-            active_steps += int(active.sum().item())
-            reverse_action_steps += int(((actions[:, 0] < 0.0) & active).sum().item())
-            surge_norm, _, _ = base._body_motion_observation()
-            reverse_velocity_steps += int(
-                ((surge_norm.squeeze(-1) < 0.0) & active).sum().item()
-            )
+        active_steps += int(active.sum().item())
+        reverse_action_steps += int(((actions[:, 0] < 0.0) & active).sum().item())
+        surge_norm, _, _ = base._body_motion_observation()
+        reverse_velocity_steps += int(
+            ((surge_norm.squeeze(-1) < 0.0) & active).sum().item()
+        )
+        with cert.time_environment():
             observation, _, terminated, truncated, _ = env.step(actions)
+        cert.after_step()
+        step += 1
 
-        done = torch.as_tensor(terminated, device=device).reshape(-1).bool()
+        done = torch.as_tensor(terminated, device=device).reshape(-1).bool().clone()
         done |= torch.as_tensor(truncated, device=device).reshape(-1).bool()
         done_ids = torch.nonzero(done, as_tuple=False).flatten()
         if done_ids.numel() == 0:
             continue
 
-        counted_ids = done_ids[: args_cli.episodes - completed]
+        # Shared fixed (env, ep) grid (finding 48): no first-finished truncation.
+        accepted = []
+        for env_id in done_ids.tolist():
+            ep = cert.next_episode(env_id)
+            if ep is not None:
+                accepted.append((env_id, ep))
+        counted_ids = torch.tensor([i for i, _ in accepted], device=device, dtype=torch.long)
         episode_success = [
             bool(value)
             for value in _values_at(base, "episode_success", counted_ids, False)
@@ -152,13 +191,26 @@ def main(env_cfg, experiment_cfg):
             for value in _values_at(base, "episode_min_clearance", counted_ids, math.nan)
         ]
 
-        for success, path_length, route_length, time_s, clearance in zip(
+        for (env_id, ep), success, path_length, route_length, time_s, clearance in zip(
+            accepted,
             episode_success,
             episode_paths,
             episode_routes,
             episode_times,
             episode_clearances,
         ):
+            rec = {
+                "env": env_id, "ep": ep, "success": success,
+                "terminated": bool(terminated.reshape(-1)[env_id]),
+                "truncated": bool(truncated.reshape(-1)[env_id]),
+                "tts_s": time_s if success else None,
+                "path_length_m": path_length, "route_geodesic_m": route_length,
+                "min_clearance_m": clearance,
+            }
+            hashes = getattr(base, "episode_scenario_hashes", None)
+            if hashes is not None and hashes[env_id]:
+                rec["scenario_hashes"] = dict(hashes[env_id])
+            records.append(cert.finish_episode(env_id, rec))
             successes += int(success)
             path_lengths.append(path_length)
             min_clearances.append(clearance)
@@ -175,6 +227,9 @@ def main(env_cfg, experiment_cfg):
 
         completed += int(counted_ids.numel())
 
+    grid_complete = cert.grid.complete
+    if not grid_complete:
+        print("[INCOMPLETE] step budget exhausted before every env delivered its quota", flush=True)
     finite_paths = [value for value in path_lengths if math.isfinite(value)]
     finite_clearances = [value for value in min_clearances if math.isfinite(value)]
     result = {
@@ -182,11 +237,11 @@ def main(env_cfg, experiment_cfg):
         "checkpoint": checkpoint_path,
         "checkpoint_name": os.path.basename(checkpoint_path),
         "seed": args_cli.seed,
-        "eval_level": args_cli.eval_level,
+        "eval_level": args_cli.level,
         "episodes": completed,
         "successes": successes,
-        "success_rate": successes / completed,
-        "spl": sum(spl_values) / completed,
+        "success_rate": successes / completed if completed else math.nan,
+        "spl": sum(spl_values) / completed if completed else math.nan,
         "mean_time_to_success_s": (
             sum(success_times) / len(success_times) if success_times else math.nan
         ),
@@ -203,6 +258,8 @@ def main(env_cfg, experiment_cfg):
         ),
         "reverse_action_ratio_pre_goal": reverse_action_steps / max(active_steps, 1),
         "reverse_velocity_ratio_pre_goal": reverse_velocity_steps / max(active_steps, 1),
+        "scenario_protocol": scenario_protocol_stamp(base),
+        "records": records,
     }
 
     print("\n" + "=" * 64)
@@ -220,7 +277,7 @@ def main(env_cfg, experiment_cfg):
         output_path = os.path.abspath(args_cli.output_json)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as file:
-            json.dump(result, file, indent=2, allow_nan=True)
+            json.dump(cert.build(result), file, indent=2, allow_nan=False)
         print(f"[INFO] wrote {output_path}")
 
     env.close()

@@ -6,13 +6,31 @@ validated without importing Isaac Lab.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Literal
 
 
 BowBodyAxis = Literal["+x", "-x", "+y", "-y"]
 AssetKind = Literal["articulation", "rigid_object"]
+
+
+@dataclass
+class PhysicsVersionCfg:
+    """Append-only dynamics contract; existing task IDs always default to 1.
+
+    Future journal configurations select 2 on underwater_physics_cfg. Keep
+    this independent of the vessel so both hulls share the same switch.
+    """
+
+    physics_version: int = 1
+
+
+def physics_version(cfg) -> int:
+    """Validate the shared switch without importing Isaac Lab."""
+    value = getattr(cfg, "physics_version", 1)
+    if isinstance(value, bool) or value not in (1, 2):
+        raise ValueError("physics_version must be 1 (legacy) or 2")
+    return int(value)
 
 
 @dataclass(frozen=True)
@@ -41,76 +59,11 @@ class VehicleSpec:
     buoyancy_center_offset_m: float
     bow_body_axis: BowBodyAxis
     notes: str
-    # Plan-form geometry, used to sample the water surface at several points
-    # across the hull rather than once at the origin. Different in kind from
-    # displaced_volume/hull_height above: those are hydrostatic equivalents
-    # fitted to the buoyancy model, these are measured lengths.
-    hull_length_m: float = 0.0
-    hull_spacing_m: float = 0.0
 
     @property
     def mass_kg_or_None(self) -> float | None:
         """Explicit alias documenting that ``None`` preserves USD-authored mass."""
         return self.mass_kg
-
-    @property
-    def waterplane_area_m2(self) -> float:
-        """Heave stiffness over rho*g, as implied by the buoyancy model.
-
-        ``submerged_ratio`` spans 0 to 1 across one hull height, so the model's
-        heave stiffness is rho*g*V/h, making this V/h. It is an equivalent
-        area, not an integrated waterplane; for a real hull the two differ.
-        """
-        return self.displaced_volume_m3 / self.hull_height_m
-
-    def surface_sample_offsets(
-        self, water_density: float = 1000.0, gravity: float = 9.81
-    ) -> list[tuple[float, float]]:
-        """Body-frame (surge, sway) offsets at which to sample the surface.
-
-        Two sides by three stations. Spreading the samples over the hull is
-        what makes a head sea produce pitch and a beam sea produce roll without
-        either being an authored gain, and it averages out waves shorter than
-        the vessel instead of letting them drive the whole rigid body.
-
-        The offsets are *hydrodynamically equivalent* radii, not the hull's
-        plan-form coordinates: they are solved so the six stations reproduce
-        this vehicle's calibrated ``restoring_stiffness_roll/pitch``. Placing
-        them at the geometric hull centrelines instead would lump each hull's
-        buoyancy onto its centreline and drop the waterplane inertia the hull's
-        own width contributes, which for BlueBoat loses well over half the roll
-        stiffness. Same character as ``displaced_volume_m3`` and
-        ``hull_height_m``, which are also fitted equivalents rather than
-        integrals of the CAD.
-
-        Returns a single centre sample when either the stiffnesses or the
-        plan-form are missing, which reproduces point sampling -- and with it
-        the fact that a single point yields no attitude response at all.
-        """
-        if self.hull_length_m <= 0.0 or self.hull_spacing_m <= 0.0:
-            return [(0.0, 0.0)]
-        if self.restoring_stiffness_roll <= 0.0 or self.restoring_stiffness_pitch <= 0.0:
-            return [(0.0, 0.0)]
-
-        # Each of the n stations carries V/n of the displaced volume, so its
-        # heave stiffness is rho*g*(V/n)/h. Summed against the offsets:
-        #   K_roll  = rho*g*V/h * r_roll^2          (all n stations offset)
-        #   K_pitch = rho*g*V/h * (n_end/n) * r_pitch^2  (end stations only)
-        heave_stiffness = (
-            water_density * gravity * self.displaced_volume_m3 / self.hull_height_m
-        )
-        stations, end_stations = 6, 4
-        roll_radius = math.sqrt(self.restoring_stiffness_roll / heave_stiffness)
-        pitch_radius = math.sqrt(
-            self.restoring_stiffness_pitch
-            * stations
-            / (end_stations * heave_stiffness)
-        )
-        return [
-            (station * pitch_radius, side * roll_radius)
-            for station in (-1.0, 0.0, 1.0)
-            for side in (-1.0, 1.0)
-        ]
 
 
 VEHICLES: dict[str, VehicleSpec] = {
@@ -184,45 +137,7 @@ VEHICLES: dict[str, VehicleSpec] = {
         hull_height_m=0.376,
         buoyancy_center_offset_m=-0.05,
         bow_body_axis="+x",
-        # 0.7214 m is the CAD hull/thruster spacing, cross-checked by the
-        # 0.3607 m lever arm behind the 23 N*m yaw limit. Length is the product
-        # designation (BB120, and the shipped BB120_official_visual_only.usd),
-        # not a CAD integration -- refine it if the drawing becomes available.
-        hull_length_m=1.20,
-        hull_spacing_m=0.7214,
         notes="BlueBoat CAD and Blue Robotics datasheet.",
-    ),
-    "catamaran": VehicleSpec(
-        name="catamaran",
-        asset_kind="rigid_object",
-        usd_relpath="catamaran.usd",
-        mass_kg=120.0,
-        thrust_fwd_n=850.0,
-        thrust_rev_n=340.0,
-        yaw_torque_nm=740.0,
-        surge_lin=65.0,
-        surge_quad=110.0,
-        sway_lin=195.0,
-        sway_quad=330.0,
-        heave_damping=330.0,
-        yaw_lin=385.0,
-        yaw_quad=355.0,
-        restoring_stiffness_roll=265.0,
-        restoring_stiffness_pitch=2934.0,
-        rollpitch_rate_damping=460.0,
-        displaced_volume_m3=0.3,
-        hull_height_m=1.0,
-        buoyancy_center_offset_m=0.0,
-        bow_body_axis="+x",
-        # Dimensions of the converted hull used to spread wave samples over
-        # the catamaran plan form; restoring radii are calibrated above.
-        hull_length_m=3.0,
-        hull_spacing_m=1.101,
-        notes=(
-            "Surge/yaw Froude-scaled from VRX WAM-V and confirmed against measured "
-            "terminal values; sway follows the BlueBoat 3x-surge convention; "
-            "restoring from mesh hydrostatics at assumed KG=0.30 m."
-        ),
     ),
 }
 

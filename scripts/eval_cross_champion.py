@@ -16,10 +16,17 @@ Example:
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import os
 import statistics
 import sys
+
+from cert_v3 import CertificateRun
+from fixed_grid import assert_frozen_level
+from eval_protocol import add_protocol_arguments, preflight_protocol, resolve_protocol
+
+ORIGINAL_ARGV = list(sys.argv)
 
 import numpy as np
 
@@ -52,8 +59,12 @@ parser.add_argument("--champion-task", type=str, required=True)
 parser.add_argument("--episodes", type=int, default=128)
 parser.add_argument("--num_envs", type=int, default=64)
 parser.add_argument("--seed", type=int, default=42)
+parser.add_argument("--level", type=int, required=True, help="Immutable frozen evaluation level")
+parser.add_argument("--out", default=None, help="Schema-v3 per-episode certificate")
+add_protocol_arguments(parser)
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
+preflight_protocol(args_cli, ORIGINAL_ARGV, parser)
 
 if args_cli.num_envs <= 0:
     parser.error("--num_envs must be positive")
@@ -74,7 +85,13 @@ checkpoint_path = os.path.abspath(args_cli.champion_checkpoint)
 if not os.path.isfile(checkpoint_path):
     parser.error(f"--champion-checkpoint does not exist: {checkpoint_path}")
 
-sys.argv = [sys.argv[0]] + hydra_args
+# G6: Hydra's run directory and logs go to the output folder, never the working directory
+# (scripts/hydra_outputs.py; Isaac Lab hydra.py:83 leaves Hydra's cwd-relative defaults).
+if os.path.dirname(os.path.abspath(__file__)) not in sys.path:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import hydra_outputs  # noqa: E402
+
+sys.argv = [sys.argv[0]] + hydra_args + hydra_outputs.run_dir_overrides(args_cli.out, hydra_args)
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
@@ -88,6 +105,11 @@ from isaaclab_rl.skrl import SkrlVecEnvWrapper  # noqa: E402
 import isaaclab_tasks  # noqa: E402,F401
 from isaaclab_tasks.utils import load_cfg_from_registry  # noqa: E402
 from isaaclab_tasks.utils.hydra import hydra_task_config  # noqa: E402
+
+try:
+    from tasks._shared.scenario_draws import scenario_protocol_stamp
+except ImportError:
+    from isaaclab_tasks.direct._shared.scenario_draws import scenario_protocol_stamp
 
 
 AGENT_CFG_ENTRY_POINT = "skrl_cfg_entry_point"
@@ -168,14 +190,10 @@ def _champion_observation(superset_observation):
 
 @hydra_task_config(args_cli.target_task, AGENT_CFG_ENTRY_POINT)
 def main(env_cfg, _target_experiment_cfg):
-    env_cfg.scene.num_envs = args_cli.num_envs
-    env_cfg.sim.device = (
-        args_cli.device if args_cli.device is not None else env_cfg.sim.device
-    )
-    env_cfg.seed = args_cli.seed
     env_cfg.emit_superset_obs = True
     env_cfg.observation_space = SUPERSET_DIM
     env_cfg.log_dir = os.path.dirname(os.path.dirname(checkpoint_path))
+    applied_overrides = resolve_protocol(env_cfg, args_cli)
 
     experiment_cfg = load_cfg_from_registry(
         args_cli.champion_task, AGENT_CFG_ENTRY_POINT
@@ -199,11 +217,25 @@ def main(env_cfg, _target_experiment_cfg):
 
     base = _base_env(env)
     device = torch.device(getattr(base, "device", env_cfg.sim.device))
+    cert = CertificateRun(
+        base=base, env_cfg=env_cfg, evaluator=__file__, task=args_cli.target_task,
+        controller="cross_champion", controller_config={
+            "champion_task": args_cli.champion_task,
+            "experiment": experiment_cfg,
+            "runtime_agent_config": getattr(runner.agent, "cfg", None),
+            "native_observation_dim": native_dim, "superset_dim": SUPERSET_DIM,
+            "action_selection": "mean_actions_if_available",
+        }, checkpoint=checkpoint_path, eval_seed=args_cli.seed,
+        level=args_cli.level, episodes_requested=args_cli.episodes,
+        overrides=applied_overrides, argv=ORIGINAL_ARGV, cli_args=vars(args_cli),
+    )
     goal_radius = _radius_from_cfg(env_cfg)
     if not hasattr(base, "_horizontal_distance"):
         print("[WARN] Target env has no _horizontal_distance(); SPL will be nan.")
 
     superset_observation, _ = env.reset()
+    cert.after_reset()
+    assert_frozen_level(base, args_cli.level)
     if superset_observation.shape[-1] != SUPERSET_DIM:
         raise RuntimeError(
             f"Target emitted {superset_observation.shape[-1]} observations; "
@@ -211,6 +243,7 @@ def main(env_cfg, _target_experiment_cfg):
         )
     observation = _champion_observation(superset_observation)
     initial_distance = _initial_distances(base, args_cli.num_envs, device)
+    records = []
 
     completed = 0
     successes = 0
@@ -224,12 +257,19 @@ def main(env_cfg, _target_experiment_cfg):
         f"episodes x {args_cli.num_envs} envs with a deterministic "
         f"{args_cli.champion_task} champion ({native_dim}D from {SUPERSET_DIM}D)..."
     )
-    while completed < args_cli.episodes:
-        with torch.inference_mode():
+    step = 0
+    max_steps = (cert.quota + 3) * base.max_episode_length
+    while not cert.grid.complete and step < max_steps:
+        assert_frozen_level(base, args_cli.level)
+        with cert.time_controller(), torch.inference_mode():
+            observation = _champion_observation(superset_observation)
             outputs = runner.agent.act(observation, timestep=0, timesteps=0)
             actions = outputs[-1].get("mean_actions", outputs[0])
+        with cert.time_environment():
             superset_observation, _, terminated, truncated, _ = env.step(actions)
-            observation = _champion_observation(superset_observation)
+        cert.after_step()
+        assert_frozen_level(base, args_cli.level)
+        step += 1
 
         terminated = torch.as_tensor(terminated, device=device).reshape(-1).bool()
         truncated = torch.as_tensor(truncated, device=device).reshape(-1).bool()
@@ -237,8 +277,13 @@ def main(env_cfg, _target_experiment_cfg):
         if done_ids.numel() == 0:
             continue
 
-        remaining = args_cli.episodes - completed
-        counted_ids = done_ids[:remaining]
+        # Shared fixed (env, ep) grid (finding 48): no first-finished truncation.
+        accepted = []
+        for env_id in done_ids.tolist():
+            ep = cert.next_episode(env_id)
+            if ep is not None:
+                accepted.append((env_id, ep))
+        counted_ids = torch.tensor([i for i, _ in accepted], device=device, dtype=torch.long)
         counted_terminated = terminated[counted_ids].detach().cpu().tolist()
         counted_truncated = truncated[counted_ids].detach().cpu().tolist()
         episode_success = [
@@ -252,7 +297,8 @@ def main(env_cfg, _target_experiment_cfg):
         ]
         episode_d0 = initial_distance[counted_ids].detach().cpu().tolist()
 
-        for success, timed_out, terminated_flag, d0, path_length, time_s in zip(
+        for (env_id, ep), success, timed_out, terminated_flag, d0, path_length, time_s in zip(
+            accepted,
             episode_success,
             counted_truncated,
             counted_terminated,
@@ -260,6 +306,16 @@ def main(env_cfg, _target_experiment_cfg):
             episode_paths,
             episode_times,
         ):
+            rec = {
+                "env": env_id, "ep": ep, "success": success,
+                "terminated": bool(terminated_flag), "truncated": bool(timed_out),
+                "tts_s": time_s if success else None,
+                "path_length_m": path_length, "d0_m": d0,
+            }
+            hashes = getattr(base, "episode_scenario_hashes", None)
+            if hashes is not None and hashes[env_id]:
+                rec["scenario_hashes"] = dict(hashes[env_id])
+            records.append(cert.finish_episode(env_id, rec))
             if success:
                 successes += 1
                 if math.isfinite(time_s):
@@ -288,16 +344,15 @@ def main(env_cfg, _target_experiment_cfg):
                 spl_values.append(math.nan)
 
         completed += int(counted_ids.numel())
-        if completed >= args_cli.episodes:
-            break
-
         next_distance = _initial_distances(base, args_cli.num_envs, device)
         initial_distance[done_ids] = next_distance[done_ids]
 
-    sr = successes / completed
+    if not cert.grid.complete:
+        print("[INCOMPLETE] step budget exhausted before every env delivered its quota", flush=True)
+    sr = successes / completed if completed else math.nan
     spl = (
         sum(spl_values) / completed
-        if all(math.isfinite(value) for value in spl_values)
+        if completed and all(math.isfinite(value) for value in spl_values)
         else math.nan
     )
     mean_time = (
@@ -321,6 +376,14 @@ def main(env_cfg, _target_experiment_cfg):
     print(f"  failures - other           : {failures_other:8d}")
     print("=" * 64 + "\n")
     sys.stdout.flush()
+
+    if args_cli.out:
+        with open(args_cli.out, "w", encoding="utf-8") as handle:
+            json.dump(cert.build({
+                "scenario_protocol": scenario_protocol_stamp(base),
+                "champion_task": args_cli.champion_task,
+                "records": records,
+            }), handle, indent=2, allow_nan=False)
 
     env.close()
 

@@ -1,0 +1,212 @@
+{
+ "family": "docking",
+ "pools": {
+  "docking_blueboat_v2_g2_s11002_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 1193788,
+   "eval_seed": 11002,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "3729da9ad424d7d3c101a686af3398a7a6fe50f0b8a2857d73006897c22df559",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "7f9ba53c55fb3e9dc512389864f0aeec0e515e63fe8ab3e36a5113b10185e521",
+   "vessel": "blueboat_v2"
+  },
+  "docking_blueboat_v2_g2_s41041_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 1196700,
+   "eval_seed": 41041,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "f5e6fe93af7f418cb75959702ced265d6634014550ca75fd87c21e780d0837a2",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "d17151091dfd339429f1875e14bf182adf8406177faa4ef9de2bdb114086dc2a",
+   "vessel": "blueboat_v2"
+  },
+  "docking_blueboat_v2_g2_s41047_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 1190932,
+   "eval_seed": 41047,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "a91e626bbc60c0659ef1e6c60a710b1345e73297238a9fdb2cc5439473178c3e",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "ea269f3c89fc2e9e0d74d1aab06faf3ed80cce315408b467636e58720acd867b",
+   "vessel": "blueboat_v2"
+  },
+  "docking_blueboat_v2_g2_s41051_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 1195368,
+   "eval_seed": 41051,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "bc7ab95049b70b5626d389e1578b80b6798b4c3c251a3ce4fd8a2d577efd7151",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "37b15365ee54d19013061d03744d1a61d4b04c17e0bff729e5d92b2d8f4bbc26",
+   "vessel": "blueboat_v2"
+  },
+  "docking_blueboat_v2_g2_s41057_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 1196424,
+   "eval_seed": 41057,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "f8053fca249f9876500d9f134d505c3cdb8a518f931f0fb78cf472a95850874f",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "7ea3a09256498685df540c097cd8bb9e095b522df05fac438b15d0abf597438c",
+   "vessel": "blueboat_v2"
+  },
+  "docking_blueboat_v2_g2_s42_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 1193664,
+   "eval_seed": 42,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "65ee10782095d88eb84894f97e8dc208fa6f5bfeb60ced0c6ec1bc7770a526ee",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "a28e85bd2426fa675015642b1ad057921cb37f3137ba7929f5a6959f894e4f4d",
+   "vessel": "blueboat_v2"
+  },
+  "docking_wamv_vrx_v2_opt1_g2_s11002_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 3375468,
+   "eval_seed": 11002,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "524121c45255dc8fb12b54f24a3cb4a5fc092ccfbeec027cd9b7d13994636e84",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "c8ee0204136ce80c666ea528c0f037de3b269f4f7905bf723cd3012ef80c1a28",
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  "docking_wamv_vrx_v2_opt1_g2_s41041_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 3374216,
+   "eval_seed": 41041,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "aee308e1f4ebb6a45c9222e0ead4446455ba3762dfeecddc6869d95d2ff29dbf",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "c34e43bdeba3b5bc8f9d7441fb8659f990c0a72f85c99013a4c44cd40b4c79f1",
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  "docking_wamv_vrx_v2_opt1_g2_s41047_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 3346292,
+   "eval_seed": 41047,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "d49f58c94e47df2e2ccf46c07aea043c717757da62a79f8984036481be6c2f17",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "b0b96db4563e576f5df24a1468a62763515de722fb4fa10d593c6a972f04678e",
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  "docking_wamv_vrx_v2_opt1_g2_s41051_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 3369004,
+   "eval_seed": 41051,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "5ae726f662b5474974ef1f0050a5ab682216ace667fc631d1d4b79e6b59f9d29",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "eb11ea36680f8d46ee6826cd50724a6b504f7a63fd92e9ce1fef902d23687075",
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  "docking_wamv_vrx_v2_opt1_g2_s41057_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 3363920,
+   "eval_seed": 41057,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "441156ae27f910c6093e97b4b85054cf1f848275392f04ce6cf025c3c77fa160",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "54a94171c934eb71400459dad407a6b11818fd74bfc6b4f4580cbb16684f8e4b",
+   "vessel": "wamv_vrx_v2_opt1"
+  },
+  "docking_wamv_vrx_v2_opt1_g2_s42_64x2.json.xz": {
+   "berth_walls": true,
+   "bytes": 3357016,
+   "eval_seed": 42,
+   "geometry_tier": 2,
+   "grid": {
+    "episodes": 2,
+    "num_envs": 64
+   },
+   "keys_admitted": 128,
+   "keys_not_admitted": 0,
+   "keys_offered": 128,
+   "pool_digest": "9bf123f8ba6e026dd42ada38030d5b9a11a250cbc995b9b454938f266935abcf",
+   "schema": "usvbench.docking.d7_pool/2",
+   "sha256": "334ececea3c23ca808a7bd96ff3cb64601fb2ae42cd2a64ba58d22cf2497bc49",
+   "vessel": "wamv_vrx_v2_opt1"
+  }
+ },
+ "rule": "CONTEXT_R4 D16/D19: admitted ladders + explicit not_admitted records; files ship here",
+ "schema": "usvbench.docking.d7_pool_manifest/1",
+ "task": "docking"
+}

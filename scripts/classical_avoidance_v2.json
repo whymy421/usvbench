@@ -1,0 +1,175 @@
+{
+ "base_controller_names": {
+  "docking": "docking_runup_pid",
+  "path_follow": "los_pid",
+  "station_keep": "los_pid_cont"
+ },
+ "controller_names": {
+  "docking": "docking_runup_pid_avoid_v2",
+  "path_follow": "los_pid_avoid_v2",
+  "station_keep": "los_pid_cont_avoid_v2"
+ },
+ "derivation": "scripts/journal_avoidance.py derive_document (G17); reasons in work/DESIGN_AVOIDANCE.md section 3",
+ "format": "usvbench-classical-avoidance-v1",
+ "layer_version": "g24b_avoidance_v2",
+ "rule_constants": {
+  "accept_radius_ref_m": 1.0,
+  "avoidance_speed_ratio": 1.0,
+  "bearing_uncertainty_ray_spacings": 0.5,
+  "berth_axis_points": 5,
+  "clear_ttc_ratio": 8.0,
+  "closing_speed_ratio": 0.25,
+  "closing_window_steps": 30,
+  "evade_bearings": 16,
+  "evade_margin_replan_periods": 1.0,
+  "evade_padding_fraction": 0.5,
+  "evade_ring_fractions": [
+   0.25,
+   0.5,
+   0.75,
+   1.0
+  ],
+  "fallback_distance_spacings": 2.0,
+  "memory_carve_lateral_cells": 0.5,
+  "memory_carve_margin_cells": 1.0,
+  "obstacle_memory_rule": "passed",
+  "obstacle_memory_steps": 61,
+  "obstacle_radius_length_factor": 0.8,
+  "plan_cell_ref_m": 0.25,
+  "ray_no_return_fraction": 1e-06,
+  "rejoin_lead_spacings": 2.0,
+  "replan_every_steps": 60,
+  "speed_gain_per_ref_speed": 1.0,
+  "static_mask_cells": 1.0,
+  "station_hold_mode": "continuous_v2",
+  "trigger_ttc_ratio": 6.0,
+  "wall_registration_iterations": 8,
+  "wall_registration_max_shift_m": 4.0,
+  "wall_registration_max_turn_rad": 0.5,
+  "wall_registration_min_new_returns": 4,
+  "wall_registration_turn_grid": 41,
+  "waypoint_spacing_ref_m": 2.0
+ },
+ "vessels": {
+  "blueboat_v2": {
+   "accept_radius_m": 1.0,
+   "avoidance_speed_mps": 1.0,
+   "bearing_pad_tan": 0.08748866352592401,
+   "clear_gap_m": 13.160157983693878,
+   "closing_speed_mps": 0.25,
+   "control_dt_s": 0.016666666666666666,
+   "evade_clearance_m": 2.573050313783286,
+   "fallback_distance_m": 4.0,
+   "footprint_m": [
+    -0.5939999999478459,
+    0.606825846247375,
+    -0.41800000160932543,
+    0.5119999983906747
+   ],
+   "footprint_reach_m": 0.7939657461288199,
+   "inflation_ladder_m": [
+    0.7790845676544658,
+    0.5790845676544658,
+    0.515
+   ],
+   "keep_inflation_m": 0.515,
+   "length_scale": 1.0,
+   "obstacle_radius_m": 0.8,
+   "plan_cell_m": 0.25,
+   "reference_speed_mps": 1.0,
+   "rejoin_lead_m": 4.0,
+   "replan_every_steps": 60,
+   "static_mask_tolerance_m": 0.25,
+   "t_avoid_s": 1.6450197479617348,
+   "tasks": {
+    "docking": {
+     "approach_line_tolerance_m": 3.0,
+     "approach_runup_m": 2.401651692390442,
+     "evade_radius_m": 5.0,
+     "position_tolerance_m": 2.5,
+     "runup_x_m": -9.401651692390441,
+     "slip_back_face_x_m": 0.856825846247375,
+     "slip_free_width_m": 2.93,
+     "slip_opening_x_m": -7.0,
+     "task": "docking",
+     "tier": 2,
+     "wall_radius_m": 0.35
+    },
+    "path_following": {
+     "rejoin_tolerance_m": 2.0,
+     "task": "path_following",
+     "tier": 2
+    },
+    "station_keeping": {
+     "evade_radius_m": 5.0,
+     "return_tolerance_m": 1.5,
+     "task": "station_keeping",
+     "tier": 2
+    }
+   },
+   "trigger_gap_m": 9.870118487770409,
+   "vessel": "blueboat_v2",
+   "waypoint_spacing_m": 2.0
+  },
+  "wamv_vrx_v2_opt1": {
+   "accept_radius_m": 4.47791504231185,
+   "avoidance_speed_mps": 1.0,
+   "bearing_pad_tan": 0.08748866352592401,
+   "clear_gap_m": 29.941854,
+   "closing_speed_mps": 0.25,
+   "control_dt_s": 0.016666666666666666,
+   "evade_clearance_m": 6.317444760191088,
+   "fallback_distance_m": 17.9116601692474,
+   "footprint_m": [
+    -2.557308290416314,
+    2.819887829458122,
+    -1.2672707165718544,
+    1.2669992834281454
+   ],
+   "footprint_reach_m": 3.091559871619274,
+   "inflation_ladder_m": [
+    2.225884888571814,
+    1.330301880109444,
+    1.467524752115593
+   ],
+   "keep_inflation_m": 1.330301880109444,
+   "length_scale": 4.47791504231185,
+   "obstacle_radius_m": 3.5823320338494806,
+   "plan_cell_m": 1.1194787605779626,
+   "reference_speed_mps": 1.0,
+   "rejoin_lead_m": 17.9116601692474,
+   "replan_every_steps": 60,
+   "static_mask_tolerance_m": 1.1194787605779626,
+   "t_avoid_s": 3.74273175,
+   "tasks": {
+    "docking": {
+     "approach_line_tolerance_m": 13.433745126935552,
+     "approach_runup_m": 10.754392239748872,
+     "evade_radius_m": 22.38957521155925,
+     "position_tolerance_m": 11.194787605779625,
+     "runup_x_m": -42.09979753593183,
+     "slip_back_face_x_m": 3.9393665900360846,
+     "slip_free_width_m": 11.4901000846237,
+     "slip_opening_x_m": -31.345405296182953,
+     "task": "docking",
+     "tier": 2,
+     "wall_radius_m": 1.5672702648091474
+    },
+    "path_following": {
+     "rejoin_tolerance_m": 8.9558300846237,
+     "task": "path_following",
+     "tier": 2
+    },
+    "station_keeping": {
+     "evade_radius_m": 22.38957521155925,
+     "return_tolerance_m": 6.716872563467776,
+     "task": "station_keeping",
+     "tier": 2
+    }
+   },
+   "trigger_gap_m": 22.456390499999998,
+   "vessel": "wamv_vrx_v2_opt1",
+   "waypoint_spacing_m": 8.9558300846237
+  }
+ }
+}

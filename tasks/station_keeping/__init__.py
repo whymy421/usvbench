@@ -18,6 +18,33 @@ gym.register(
     },
 )
 
+# Kinematic-observation variants (v11 block: body-frame surge/sway/yaw rate).
+# Append-only: the 3-D ids above and their certified champions are untouched.
+gym.register(
+    id="Isaac-USV-StationKeep-BlueBoat-Kin-Direct-v1",
+    entry_point=f"{__name__}.station_keeping_env:StationKeepingEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.station_keeping_env_cfg:StationKeepingBlueBoatKinEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+gym.register(
+    id="Isaac-USV-StationKeep-BlueBoat-Current-Kin-Direct-v1",
+    entry_point=f"{__name__}.station_keeping_env:StationKeepingEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.station_keeping_env_cfg:"
+            "StationKeepingBlueBoatCurrentKinEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
 gym.register(
     id="Isaac-USV-StationKeep-BlueBoat-Direct-v1",
     entry_point=f"{__name__}.station_keeping_env:StationKeepingEnv",
@@ -37,6 +64,36 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": (
             f"{__name__}.station_keeping_env_cfg:StationKeepingBlueBoatCurrentEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+
+# C2 x waves: station keeping in an irregular short-period sea.
+gym.register(
+    id="Isaac-USV-StationKeep-BlueBoat-Wave-Direct-v1",
+    entry_point=f"{__name__}.station_keeping_env:StationKeepingEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.station_keeping_env_cfg:StationKeepingBlueBoatWaveEnvCfg"
+        ),
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
+    },
+)
+
+# C2 x ramping current: speed climbs linearly within each episode
+# (current_ramp_start_mps -> current_ramp_end_mps, direction fixed per
+# episode). Append-only: certified Current ids untouched.
+gym.register(
+    id="Isaac-USV-StationKeep-BlueBoat-RampCurrent-Direct-v1",
+    entry_point=f"{__name__}.station_keeping_env:StationKeepingEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": (
+            f"{__name__}.station_keeping_env_cfg:"
+            "StationKeepingBlueBoatRampCurrentEnvCfg"
         ),
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_ppo_cfg.yaml",
     },

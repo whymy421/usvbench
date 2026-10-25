@@ -316,19 +316,25 @@ def chain_bfs_geodesic_lengths(
 
 
 def _sample_candidate(
-    obstacle_count: int, rng: np.random.Generator
+    obstacle_count: int,
+    rng: np.random.Generator,
+    blockers: int = REQUIRED_ON_LINE_BLOCKERS,
+    *,
+    physics_version: int = 1,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None:
     route_points = sample_route(rng)
     radii = rng.uniform(
         MIN_OBSTACLE_RADIUS_M, MAX_OBSTACLE_RADIUS_M, size=obstacle_count
     )
-    centers = np.empty((obstacle_count, 2), dtype=np.float64)
+    if physics_version == 2:
+        # Unwritten slots must be detected, never accepted as allocator data.
+        centers = np.full((obstacle_count, 2), np.nan, dtype=np.float64)
+    else:
+        centers = np.empty((obstacle_count, 2), dtype=np.float64)
     on_line_mask = np.zeros(obstacle_count, dtype=np.bool_)
     blocker_segments = np.full(obstacle_count, -1, dtype=np.int64)
 
-    chosen_segments = rng.choice(
-        NUM_SEGMENTS, size=REQUIRED_ON_LINE_BLOCKERS, replace=False
-    )
+    chosen_segments = rng.choice(NUM_SEGMENTS, size=blockers, replace=False)
     for obstacle_index, segment_index in enumerate(chosen_segments):
         start = route_points[segment_index]
         end = route_points[segment_index + 1]
@@ -349,7 +355,16 @@ def _sample_candidate(
         on_line_mask[obstacle_index] = True
         blocker_segments[obstacle_index] = segment_index
 
-    for obstacle_index in range(REQUIRED_ON_LINE_BLOCKERS, obstacle_count):
+    # blockers == 0 (line-avoid tier 0) must scatter-place EVERY obstacle.
+    # For blockers >= 1 the historical start index is kept bit-for-bit:
+    # frozen tier probes measured layouts produced by exactly this loop, so
+    # its RNG stream and index arithmetic must not move under them.
+    scatter_start = REQUIRED_ON_LINE_BLOCKERS if blockers > 0 else 0
+    if physics_version == 2:
+        # The first `blockers` slots were written above. This also preserves
+        # blocker four at tier 4, including the K == blockers fallback.
+        scatter_start = blockers
+    for obstacle_index in range(scatter_start, obstacle_count):
         admitted = False
         for _ in range(1000):
             segment_index = int(rng.integers(0, NUM_SEGMENTS))
@@ -389,6 +404,8 @@ def _sample_candidate(
         if not admitted:
             return None
 
+    if physics_version == 2:
+        assert np.all(np.isfinite(centers)), "every PathHazard center slot must be written"
     return route_points, centers, radii, on_line_mask, blocker_segments
 
 
@@ -397,24 +414,39 @@ def sample_layout(
     *,
     max_attempts: int = 20,
     obstacle_count: int = REQUESTED_OBSTACLE_COUNT,
+    blockers_override: int | None = None,
+    physics_version: int = 1,
 ) -> PathHazardLayout:
     """Rejection-sample a chain-feasible interaction layout.
 
     Each K receives at most ``max_attempts`` complete candidates. Failure emits
-    a warning before K is reduced, but K never falls below the three blockers
-    required to preserve the task's interaction effect.
+    a warning before K is reduced, but K never falls below the blocker count
+    required to preserve the task's interaction effect. ``blockers_override``
+    (tier-regrade probes) may pin 0..NUM_SEGMENTS on-line blockers; None keeps
+    the frozen v1 value of three. 0 is the line-avoid tier: a plain gate
+    route whose off-line scatter is unchanged and whose on-line corridor
+    (the ``count_on_line_blockers`` rule) is certified obstacle-free.
     """
+    if physics_version not in (1, 2):
+        raise ValueError("physics_version must be 1 (legacy) or 2")
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least one")
-    if obstacle_count < REQUIRED_ON_LINE_BLOCKERS:
+    blockers = REQUIRED_ON_LINE_BLOCKERS if blockers_override is None else int(blockers_override)
+    if not 0 <= blockers <= NUM_SEGMENTS:
+        raise ValueError(
+            f"blockers must be in 0..{NUM_SEGMENTS} (at most one route segment each); got {blockers}"
+        )
+    if obstacle_count < blockers:
         raise ValueError("obstacle_count cannot be smaller than the blocker count")
     rng = np.random.default_rng() if rng is None else rng
     total_attempts = 0
 
-    for accepted_count in range(obstacle_count, REQUIRED_ON_LINE_BLOCKERS - 1, -1):
+    for accepted_count in range(obstacle_count, blockers - 1, -1):
         for _ in range(max_attempts):
             total_attempts += 1
-            candidate = _sample_candidate(accepted_count, rng)
+            candidate = _sample_candidate(
+                accepted_count, rng, blockers, physics_version=physics_version
+            )
             if candidate is None:
                 continue
             route_points, centers, radii, on_line_mask, blocker_segments = candidate
@@ -424,7 +456,13 @@ def sample_layout(
                 continue
             if not _inflated_obstacles_separated(centers, radii):
                 continue
-            if count_on_line_blockers(route_points, centers) < REQUIRED_ON_LINE_BLOCKERS:
+            measured_blockers = count_on_line_blockers(route_points, centers)
+            if blockers == 0:
+                # Line-avoid tier 0 is a plain gate route: reject any scatter
+                # obstacle that strays into a segment's on-line corridor.
+                if measured_blockers != 0:
+                    continue
+            elif measured_blockers < blockers:
                 continue
             leg_lengths = chain_bfs_geodesic_lengths(route_points, centers, radii)
             if leg_lengths is None:
@@ -440,7 +478,7 @@ def sample_layout(
                 attempts=total_attempts,
             )
 
-        if accepted_count > REQUIRED_ON_LINE_BLOCKERS:
+        if accepted_count > blockers:
             warnings.warn(
                 f"PathHazard: no feasible K={accepted_count} layout in "
                 f"{max_attempts} attempts; reducing to K={accepted_count - 1}.",
@@ -449,7 +487,8 @@ def sample_layout(
             )
 
     raise RuntimeError(
-        "Could not generate a feasible PathHazard layout while retaining three blockers."
+        f"Could not generate a feasible PathHazard layout while retaining "
+        f"{blockers} blockers."
     )
 
 
