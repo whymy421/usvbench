@@ -62,8 +62,13 @@ class TrainingPathHazardD7Pool:
         self.keys_offered = self.keys_admitted = self.keys_not_admitted = 0
         self.joint = False
         self.manifest_sha256 = None
-        self.geometry_hashes = _GeometryView(self)
         self.grid = {"num_envs": self.num_envs, "episodes": 1}
+
+    @property
+    def geometry_hashes(self):
+        # G55: a property, not an instance attribute: _GeometryView(self) stored in __dict__ made a
+        # pool -> view -> pool cycle that isaaclab configclass._validate recursed into (RecursionError)
+        return _GeometryView(self)
 
     def _compute(self, key):
         def run():
