@@ -1,0 +1,75 @@
+{
+ "artifact_file": "usvbench-230c7a5419d1-f495de421958.tar.gz",
+ "artifact_sha256": "1aa9baf19d95ebd3cd089a4c30de43b18c5c737956141ed66f2b3926d900729f",
+ "artifact_size": 112944740,
+ "asset_roots": [
+  "assets",
+  "assets_v2"
+ ],
+ "assets_file_count": 9,
+ "assets_manifest_file": "usvbench-230c7a5419d1-f495de421958.assets.manifest",
+ "assets_tree_sha256": "256d508d6bfe8edee016042545d69e366cc359ac46ce0685764bc9c5a608747f",
+ "builder": {
+  "kit_version": "e1-kit-4",
+  "tool": "usvb_kit.py build-release",
+  "tool_sha256": "fc7bed49130146e9a45c0e831b7f651ce2d1a202a406e93b93b013759a36d191"
+ },
+ "code_tree_sha256": "f495de4219585fc64491d2892e75e82f530f4f2de69f897affd73242fa4a5a54",
+ "created_utc": "2026-10-20T08:45:29Z",
+ "excluded_by_suffix": {
+  "(none)": 4,
+  ".md": 23,
+  ".mp4": 1,
+  ".ps1": 5,
+  ".py": 5,
+  ".sh": 7,
+  ".sha256": 4,
+  ".txt": 3,
+  ".xz": 8
+ },
+ "file_count": 612,
+ "format": "usvbench-release-v1",
+ "git_commit": "230c7a5419d11bdf0a65b65d32718ae4a93812ed",
+ "git_tree": "ef9a61d1efdc9433bda41b6d3c20f5e468bacf4d",
+ "inclusion": {
+  "excluded_parts": [
+   "__pycache__"
+  ],
+  "excluded_prefix": ".",
+  "file_mode": "100644",
+  "line_endings": "CRLF->LF",
+  "roots": [
+   "scripts",
+   "tasks"
+  ],
+  "suffixes": [
+   ".cfg",
+   ".json",
+   ".py",
+   ".toml",
+   ".yaml",
+   ".yml"
+  ],
+  "version": "usvbench-release-inclusion-v1"
+ },
+ "manifest_file": "usvbench-230c7a5419d1-f495de421958.manifest",
+ "release_id": "230c7a5419d1-f495de421958",
+ "staging": {
+  "families": [
+   "_shared",
+   "blueboat_calm_nav",
+   "boat_calm_nav",
+   "docking",
+   "harbor_mission",
+   "hazard_nav",
+   "journal",
+   "path_following",
+   "path_hazard",
+   "rov_calm_nav",
+   "station_keeping",
+   "station_keeping_boat"
+  ],
+  "target": "source/isaaclab_tasks/isaaclab_tasks/direct"
+ },
+ "total_bytes": 177659724
+}

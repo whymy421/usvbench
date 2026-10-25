@@ -88,7 +88,8 @@ TRAINING_LEVEL = 1              # owner decision J10: each suite's current D1 ..
 TRAINING_LEVEL_EXCEPTIONS = {
     ("station_keeping", "blueboat_v2", "dynamic"): 2,     # G23e: BlueBoat SK D7 offers D2-D4 only
     ("station_keeping", "blueboat_v2", "appearing"): 2,   # G20d: BlueBoat SK appearing offers D2-D4 only
-}
+    ("docking", "blueboat_v2", "appearing"): 2,           # G58: BlueBoat docking appearing D1 not applicable by
+}                                                         # design (appearing/ladder.py NOT_APPLICABLE_DOSES, 2026-10-14)
 TRAINING_LEVEL_DECISION = ("owner decision J10 (2026-10-06): PPO training light dose = each suite's current D1 "
                            "(appearing D1 = 5.0 m both boats); BlueBoat station keeping dynamic and appearing "
                            "have no D1 by design and train at D2")

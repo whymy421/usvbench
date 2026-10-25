@@ -37,12 +37,14 @@ class Table(unittest.TestCase):
         self.assertEqual(tm.TRAINING_LEVEL, 1)
         self.assertEqual(dict(tm.TRAINING_LEVEL_EXCEPTIONS),
                          {("station_keeping", "blueboat_v2", "dynamic"): 2,
-                          ("station_keeping", "blueboat_v2", "appearing"): 2})
+                          ("station_keeping", "blueboat_v2", "appearing"): 2,
+                          ("docking", "blueboat_v2", "appearing"): 2})
         for task in cfgv2.TASKS:
             for vessel in VESSELS:
                 m = mixture(task, vessel)
                 for suite in tm.SUITE_ORDER:
-                    want = 2 if (task, vessel) == EXCEPTION and suite in tm.HAZARD_SUITES else 1
+                    want = 2 if (((task, vessel) == EXCEPTION and suite in tm.HAZARD_SUITES)
+                                 or (task, vessel, suite) == ("docking", "blueboat_v2", "appearing")) else 1
                     self.assertEqual(tm.training_level(task, vessel, suite), want, (task, vessel, suite))
                 self.assertEqual(m.training_levels(), {s: m.level(s) for s in m.suites})
         with self.assertRaises(tm.MixtureError):
@@ -77,7 +79,8 @@ class Stack(unittest.TestCase):
                 self.assertTrue(tm.check_stack(m, resolved))
                 self.assertEqual(resolved.dynamic_dose, 1, (task, vessel))
                 if m.appearing_wired:
-                    self.assertEqual(resolved.appearing_dose, 1, (task, vessel))
+                    want = 2 if (task, vessel) == ("docking", "blueboat_v2") else 1    # G58
+                    self.assertEqual(resolved.appearing_dose, want, (task, vessel))
 
     def test_a_d1_stack_is_refused_for_blueboat_station_keeping(self):
         m = mixture(*EXCEPTION)

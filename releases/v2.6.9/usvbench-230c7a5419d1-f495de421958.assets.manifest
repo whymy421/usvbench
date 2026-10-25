@@ -1,0 +1,10 @@
+usvbench-asset-tree-v1
+["assets_v2/LICENSE_VRX.txt","file","100644",10353,"d34d509a9ca66a90191e2fcb0cb01d3ddba664343d913a8ab1d1f7617d36d311"]
+["assets_v2/MANIFEST.json","file","100644",8136,"1d5f078347f295cc6f53a25c1c073db9e218b0996f5505c2bbb0105d79b2516e"]
+["assets_v2/blueboat_v2.usda","file","100644",2847568,"fbd0e78a2617c569bdf88006a914680124768ddea4c8f2da9214236ba86b2965"]
+["assets_v2/tools/README_TOOLS.txt","file","100644",1651,"97e0f711871e5dc681f7e498aaf236fae89dd02f8cd6966b24c7fbfa8a44492d"]
+["assets_v2/tools/build_vessels_v2.py","file","100644",37751,"e90065e75efb7f0de8e0c4ba6cbd0c5721738a41be253443c1cf53f4c1ce00ac"]
+["assets_v2/tools/probe_vessels_v2.py","file","100644",6653,"d48e4cd3d32ee54cc2ebf2e185d07cdfdb20213d101864249bb3f1b7b93bc35a"]
+["assets_v2/tools/write_manifest_v2.py","file","100644",4994,"27a864c885d382c78c71c05b17fd3fd876c81013f47171117b8efa5abf487277"]
+["assets_v2/wamv_vrx_v2_bare.usdc","file","100644",64191,"d0fc5abe954f6b15ea9e39283565f01637f0c9802a614040022466682f2e33cd"]
+["assets_v2/wamv_vrx_v2_competition.usdc","file","100644",131890,"b3f10bd9bd505e0ab8e8cd9c9710da42f53e99972da0ed9fb3629f2f96a859b2"]
