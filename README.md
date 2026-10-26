@@ -101,3 +101,5 @@ Deterministic policy (mean action); report mean ± std over training seeds 42 / 
   [BlueBoat asset fix (2026-10-13)](docs/BLUEBOAT_ASSET.md) ·
   [Collaboration guide](docs/GITHUB_COLLABORATION.md)
 - **License**: TBD (MIT or Apache-2.0 on public release). **Citation**: TBD (ICRA Datasets & Benchmarks 2026, in preparation).
+
+> **Journal campaign code:** the exact code used for the USVBench journal results is on branch `journal/v2.6.6` (tags `v2.6.6`–`v2.6.9`); see [docs/JOURNAL_BRANCH.md](docs/JOURNAL_BRANCH.md).
