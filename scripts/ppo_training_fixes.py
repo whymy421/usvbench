@@ -193,8 +193,9 @@ class FailurePenalty:
     """Per-env penalty captured at each episode start (the env auto-resets inside step, so the value of the episode
     that just ended must be read before the step)."""
 
-    def __init__(self, terms, base, carrier, num_envs):
+    def __init__(self, terms, base, carrier, num_envs, codes=FAILURE_CODES):
         self.terms, self.base, self.num_envs = terms, base, int(num_envs)
+        self.codes = tuple(int(c) for c in codes)      # diagnostic branch: the plan may add TIMEOUT_CODE (round 4)
         self.attribute = BOUNDS_ATTRIBUTE[carrier]
         self.values = None
         self.rows = 0
@@ -232,7 +233,7 @@ class FailurePenalty:
         out = {}
         self.last = out
         for i, done in enumerate(dones):
-            if done and int(codes[i]) in FAILURE_CODES:
+            if done and int(codes[i]) in self.codes:
                 value = self.values[i]
                 out[i] = value
                 self.rows += 1
@@ -243,7 +244,7 @@ class FailurePenalty:
         return out
 
     def summary(self):
-        return {"rule": FAILURE_PENALTY_RULE, "failure_codes": list(FAILURE_CODES), "terms": self.terms,
+        return {"rule": FAILURE_PENALTY_RULE, "failure_codes": list(self.codes), "terms": self.terms,
                 "bounds_attribute": self.attribute, "rows_penalised": self.rows,
                 "per_code": dict(sorted(self.per_code.items())), "penalty_min": self.min_applied,
                 "penalty_max": self.max_applied, "bounds_diagonal_min_m": self.diag_min,

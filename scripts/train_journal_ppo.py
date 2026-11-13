@@ -181,7 +181,84 @@ def build_parser():
     p.add_argument("--agent-set", action="append", default=[],
                    help="REFUSED: agent hyperparameters are the registration yaml; only the stamped runtime "
                         "overrides are applied")
+    p.add_argument("--fair-fix", choices=tuple(FAIR_FIXES), default="none",
+                   help="diagnostic branch yutong/ppo-fair-fix: env-cfg reward fixes applied to EVERY task of the "
+                        "carrier (none = the release behaviour); stamped in preflight.json and fair_fix.json")
+    p.add_argument("--policy", choices=("mlp", "gru"), default="mlp",
+                   help="diagnostic branch: mlp = the registration yaml's models; gru = PPO-GRU "
+                        "(scripts/ppo_memory_models.py, models only, every other setting unchanged)")
+    p.add_argument("--initial-log-std", type=float, default=None,
+                   help="diagnostic branch: models.policy.initial_log_std (default: the yaml's value); the "
+                        "per-vessel exploration grid of round 2")
+    p.add_argument("--resume", action="store_true",
+                   help="diagnostic branch: continue the incomplete run in --out (crashed, stalled or diverged) from "
+                        "a checkpoint, with the run's own preflight.json as the plan (see prepare_resume)")
+    p.add_argument("--resume-checkpoint", type=Path, default=None,
+                   help="with --resume: the skrl checkpoint to continue from (default: the latest finite one; for a "
+                        "diverged run the latest one at least two checkpoints before the divergence)")
+    p.add_argument("--resume-reason", default="unspecified", help="with --resume: stamped in resume_<k>.json")
+    p.add_argument("--timeout-penalty", action="store_true",
+                   help="diagnostic branch (round 4): a timeout (termination code 3) gets the same G44/G46 failure "
+                        "terminal penalty as a crash, so waiting out the time limit is no longer safer than trying")
+    p.add_argument("--action-dist", choices=("clip", "tanh"), default="clip",
+                   help="diagnostic branch: clip = the yaml's Gaussian with sample clipping (release); tanh = the "
+                        "bounded tanh-transformed Gaussian with the exact log-probability "
+                        "(scripts/ppo_squashed_models.py; same networks, every other setting unchanged)")
     return p
+
+
+def policy_variant_block(args):
+    """The preflight 'policy_variant' block of the diagnostic branch."""
+    value = getattr(args, "initial_log_std", None)
+    if value is not None and not (math.isfinite(value) and -20.0 <= value <= 2.0):
+        raise TrainingRefusal("--initial-log-std must be finite and within the yaml clip range [-20, 2]")
+    block = {"policy": getattr(args, "policy", "mlp"), "initial_log_std": value}
+    if getattr(args, "action_dist", "clip") != "clip":          # absent key = the release distribution (round 1-2)
+        block["action_dist"] = args.action_dist
+    return block
+
+
+def apply_policy_variant(agent_cfg, block):
+    """Write the variant into the agent cfg (the same call in preflight and run, so the planned digest matches)."""
+    if block and block.get("initial_log_std") is not None:
+        agent_cfg["models"]["policy"]["initial_log_std"] = float(block["initial_log_std"])
+    return agent_cfg
+
+
+# ------------------------------------------------------------------ diagnostic branch yutong/ppo-fair-fix
+# Task-agnostic reward fixes for the PPO baseline (2026-11-12). They change only the TRAINING reward; the
+# policy's observation is the journal 42-D contract unchanged (the observation keeps the straight-line
+# distance normaliser, hazard_nav_env._journal_obs_d0), so the deployed information diet is the release's.
+#   geo   progress potential on the geodesic field of the scenario's static layout (reward_progress_geodesic,
+#         the release's own journal code path _journal_write_geodesic), the PPO counterpart of the MPPI G39 F2
+#         geodesic potential; the reward already reads truth (contact, clearance, goal distance).
+#   time  flat per-step time cost before the goal (reward_time_cost_any_speed): loitering at speed is no longer
+#         free (the 08-21 fortress forensics, hazard_nav_env_cfg HazardBandFortWayTaxEnvCfg).
+FAIR_FIXES = {
+    "none": {},
+    "geo": {"reward_progress_geodesic": True},
+    "time": {"reward_time_cost_any_speed": True},
+    "geo_time": {"reward_progress_geodesic": True, "reward_time_cost_any_speed": True},
+}
+FAIR_FIX_CARRIERS = ("hazard_nav",)
+
+
+def fair_fix_block(name, carrier):
+    """The preflight 'fair_fix' block (refuses a fix on a carrier it is not implemented for)."""
+    fields = dict(FAIR_FIXES[name])
+    if fields and carrier not in FAIR_FIX_CARRIERS:
+        raise TrainingRefusal("--fair-fix %s is implemented for %s only (got carrier %s)"
+                              % (name, ", ".join(FAIR_FIX_CARRIERS), carrier))
+    return {"name": name, "env_cfg_fields": fields, "branch": "yutong/ppo-fair-fix"}
+
+
+def apply_fair_fix(env_cfg, block):
+    """Set the fix's env-cfg fields (before gym.make, so the env allocates the geodesic buffers)."""
+    for field, value in block["env_cfg_fields"].items():
+        if not hasattr(env_cfg, field):
+            raise RuntimeError("env cfg has no field %s (fair fix %s)" % (field, block["name"]))
+        setattr(env_cfg, field, value)
+    return {field: getattr(env_cfg, field) for field in block["env_cfg_fields"]}
 
 
 # ------------------------------------------------------------------ CPU loading (no family __init__)
@@ -359,6 +436,7 @@ def preflight(args, *, root=None, registry=None, reference_block=None, code_tree
     if carrier not in R.CODE9_PENALTY_FIELD:
         raise TrainingRefusal("no declared code-9 replacement rule for carrier %r (ppo_training_record."
                               "CODE9_PENALTY_FIELD)" % carrier)
+    fair_fix = fair_fix_block(getattr(args, "fair_fix", "none"), carrier)
     pool_module = family_pool_module(root, carrier)
     wired = task in mods.appearing.WIRED_TASKS                    # read at run time (G20b extends it)
     mixture = None
@@ -385,12 +463,16 @@ def preflight(args, *, root=None, registry=None, reference_block=None, code_tree
     if budget % rollouts:
         raise TrainingRefusal("the budget %d is not a whole number of %d-step iterations" % (budget, rollouts))
     planned = copy.deepcopy(agent_cfg)
+    policy_variant = policy_variant_block(args)
+    apply_policy_variant(planned, policy_variant)
     try:                                                             # v2.6.4 PPO final (KLAdaptiveLR only)
         g46 = G46.block(purpose, agent_cfg, vehicle, budget)
     except FX.FixError as exc:
         raise TrainingRefusal(str(exc)) from None
     plan_params = mods.plans.plan_class(task, vehicle)(2).params
-    g44 = {"version": FX.G44_VERSION, "failure_codes": list(FX.FAILURE_CODES),
+    failure_codes = list(FX.FAILURE_CODES) + ([FX.TIMEOUT_CODE] if getattr(args, "timeout_penalty", False) else [])
+    g44 = {"version": FX.G44_VERSION, "failure_codes": failure_codes,
+           "timeout_penalty": bool(getattr(args, "timeout_penalty", False)),
            "warmup_timesteps": int(math.ceil(FX.WARMUP_FRACTION * budget)),
            "lr_floor_fraction": FX.LR_FLOOR_FRACTION,
            "base_learning_rate": float(agent_cfg["agent"]["learning_rate"]),
@@ -419,7 +501,8 @@ def preflight(args, *, root=None, registry=None, reference_block=None, code_tree
             "out": str(out), "device": args.device,
             "code9": {"penalty_field": R.CODE9_PENALTY_FIELD[carrier], "rule": R.CODE9_REPLACEMENT_RULE,
                       "alarm": R.code9_alarm_block()},
-            "in_tree_registry_sha256": seed_registry.registry_digest(in_tree), "g44": g44, "g46": g46}
+            "in_tree_registry_sha256": seed_registry.registry_digest(in_tree), "g44": g44, "g46": g46,
+            "fair_fix": fair_fix, "policy_variant": policy_variant}
 
 
 # ------------------------------------------------------------------ run (backend-driven)
@@ -792,13 +875,118 @@ def _infrastructure_failure(out, plan, error, started, clock_start):
     return EXIT_INFRA
 
 
+RESUME_DIVERGENCE_MARGIN_CHECKPOINTS = 2
+RESUME_HEALTHY_POLICY_LOSS = 1.0       # |PPO policy loss| above this = the ratio is already exploding (normal ~0.01)
+
+
+def first_unhealthy_step(out, plan, bound=RESUME_HEALTHY_POLICY_LOSS):
+    """The first logged timestep whose |Loss / Policy loss| exceeds ``bound`` (or is non-finite), from the run's
+    TensorBoard files; None when there is none or TensorBoard cannot be read."""
+    try:
+        from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+    except ImportError:
+        return None
+    first = None
+    for path in (Path(out) / "skrl" / plan["agent"]["experiment_name"]).glob("events.out.tfevents.*"):
+        acc = EventAccumulator(str(path), size_guidance={"scalars": 0})
+        acc.Reload()
+        if "Loss / Policy loss" not in acc.Tags().get("scalars", []):
+            continue
+        for event in acc.Scalars("Loss / Policy loss"):
+            if not math.isfinite(event.value) or abs(event.value) > bound:
+                first = event.step if first is None else min(first, event.step)
+                break
+    return first
+
+
+def _checkpoint_timestep(path):
+    stem = Path(path).stem.split("_")
+    return int(stem[1]) if len(stem) == 2 and stem[1].isdigit() else None
+
+
+def _load_state(torch_module, path):
+    try:
+        return torch_module.load(str(path), map_location="cpu", weights_only=False)
+    except TypeError:
+        return torch_module.load(str(path), map_location="cpu")
+
+
+def prepare_resume(out, plan, torch_module, checkpoint=None, reason="unspecified"):
+    """Diagnostic branch: pick the checkpoint an incomplete run continues from and move the previous segment's record
+    aside (training_record.segment<k>.json; the release record format has no field for segments, so the segment
+    history lives in resume_<k>.json). Rule: an explicit checkpoint, else the latest checkpoint with finite
+    parameters below the budget; after a divergence, the latest one at least RESUME_DIVERGENCE_MARGIN_CHECKPOINTS
+    checkpoints before the divergence timestep. Raises RuntimeError when nothing can be resumed."""
+    out = Path(out)
+    ckpt_dir = out / "skrl" / plan["agent"]["experiment_name"] / "checkpoints"
+    k = 1 + len(list(out.glob("resume_*.json")))
+    previous = None
+    record = out / "training_record.json"
+    if record.is_file():
+        previous = json.loads(record.read_text(encoding="ascii"))
+        if previous.get("status") == "completed":
+            raise RuntimeError("resume: %s is a completed run" % out)
+        record.rename(out / ("training_record.segment%d.json" % k))
+    limit = plan["budget_timesteps"] - 1
+    unhealthy = None
+    if previous is not None and previous.get("status") == "diverged" and previous.get("divergence"):
+        limit = min(limit, int(previous["divergence"]["timestep"])
+                    - RESUME_DIVERGENCE_MARGIN_CHECKPOINTS * int(plan["checkpoint_every"]))
+        unhealthy = first_unhealthy_step(out, plan)
+        if unhealthy is not None:                    # before the loss left the healthy range, one checkpoint margin
+            limit = min(limit, int(unhealthy) - int(plan["checkpoint_every"]))
+    if checkpoint is not None:
+        candidates = [Path(checkpoint)]
+    else:
+        candidates = sorted((p for p in ckpt_dir.glob("agent_*.pt") if _checkpoint_timestep(p) is not None
+                             and 0 < _checkpoint_timestep(p) <= limit), key=_checkpoint_timestep, reverse=True)
+    chosen = None
+    for path in candidates:
+        if _checkpoint_timestep(path) is None or not path.is_file():
+            continue
+        if _finite_state(_load_state(torch_module, path)):
+            chosen = path
+            break
+    if chosen is None:
+        raise RuntimeError("resume: no finite checkpoint at or below timestep %d in %s" % (limit, ckpt_dir))
+    if not (out / G46.INIT_CHECKPOINT).is_file():
+        raise RuntimeError("resume: the run has no %s" % G46.INIT_CHECKPOINT)
+    info = {"segment": k, "utc": utc_now(), "reason": reason, "checkpoint": chosen.relative_to(out).as_posix(),
+            "checkpoint_sha256": R.file_sha256(chosen), "timestep": _checkpoint_timestep(chosen),
+            "previous_status": None if previous is None else previous.get("status"),
+            "previous_divergence": None if previous is None else previous.get("divergence"),
+            "previous_completed_timesteps": None if previous is None else previous.get("completed_timesteps"),
+            "resume_limit_timestep": limit, "first_unhealthy_policy_loss_step": unhealthy,
+            "healthy_policy_loss_bound": RESUME_HEALTHY_POLICY_LOSS,
+            "notes": ["the skrl agent state (models, optimizer incl. the learning rate, preprocessors) is the "
+                      "checkpoint's; the trainer, the monitor and the normaliser freeze continue at its timestep",
+                      "the env restarts its episode sequence at episode 0 of every env (layouts and the mixture "
+                      "schedule are a function of the episode index): the same distribution, not the same draws",
+                      "the training record counts this segment's wall time, returns and episodes only"]}
+    atomic_write_json(out / ("resume_%d.json" % k), info)
+    return info
+
+
+def existing_g46_init(out, torch_module):
+    path = Path(out) / G46.INIT_CHECKPOINT
+    return {"path": G46.INIT_CHECKPOINT, "sha256": G46.file_sha256(path),
+            "modules": sorted(_load_state(torch_module, path))}
+
+
 def run_training(plan, args, backend):
     """The run (see the module docstring). ``backend`` supplies package_root, parse_env_cfg, load_agent_cfg,
     make_env, wrap, make_runner, torch; returns the exit code."""
     out = Path(plan["out"])
     started, clock_start = utc_now(), time.monotonic()
-    out.mkdir(parents=True, exist_ok=False)                     # never overwrite a run
-    atomic_write_json(out / "preflight.json", plan)               # manifest first
+    resume = None
+    if getattr(args, "resume", False):                          # diagnostic branch: continue an incomplete run
+        resume = prepare_resume(out, plan, backend.torch, getattr(args, "resume_checkpoint", None),
+                                getattr(args, "resume_reason", "unspecified"))
+        print("train_journal_ppo: RESUME segment %d from %s (timestep %d)"
+              % (resume["segment"], resume["checkpoint"], resume["timestep"]), flush=True)
+    else:
+        out.mkdir(parents=True, exist_ok=False)                     # never overwrite a run
+        atomic_write_json(out / "preflight.json", plan)               # manifest first
     monitor = cache = None
     status, divergence = "completed", None
     try:
@@ -809,6 +997,9 @@ def run_training(plan, args, backend):
         pool_module = family_pool_module(backend.package_root, plan["carrier"])
         env_cfg = backend.parse_env_cfg(plan["journal_id"], plan["device"], plan["num_envs"])
         env_cfg.seed = int(plan["training_seed"])
+        fix_block = plan.get("fair_fix") or {"name": "none", "env_cfg_fields": {}}
+        applied = apply_fair_fix(env_cfg, fix_block)
+        atomic_write_json(out / "fair_fix.json", dict(fix_block, applied=applied))
         mixture = None
         tokens = []
         if plan["arm"] == "mixture":
@@ -833,6 +1024,8 @@ def run_training(plan, args, backend):
         agent_cfg = backend.load_agent_cfg(plan["journal_id"])
         if R.digest(agent_cfg) != plan["agent"]["base_config_sha256"]:
             raise RuntimeError("the registry agent config differs from the preflight yaml")
+        variant = plan.get("policy_variant") or {"policy": "mlp", "initial_log_std": None}
+        apply_policy_variant(agent_cfg, variant)
         overrides = agent_overrides(agent_cfg, seed=plan["training_seed"], budget=plan["budget_timesteps"],
                                     directory=out / "skrl", experiment_name=plan["agent"]["experiment_name"],
                                     checkpoint_interval=plan["checkpoint_every"],
@@ -852,12 +1045,31 @@ def run_training(plan, args, backend):
                               lambda: getattr(holder.get("runner"), "agent", None))
         monitor.heartbeat("starting")
         agent_snapshot = json.loads(R.canonical(agent_cfg))     # the stamped config (skrl may rewrite its copy)
-        runner = backend.make_runner(wrapped, copy.deepcopy(agent_cfg))
+        squash = variant.get("action_dist", "clip") == "tanh"
+        if variant.get("policy") == "gru":
+            import ppo_memory_models as PM                                  # skrl import after the app launch
+            runner = PM.RecurrentRunner(wrapped, copy.deepcopy(agent_cfg), squash=squash)
+            atomic_write_json(out / "policy_variant.json", dict(variant, architecture=PM.describe(runner)))
+        elif squash:
+            import ppo_squashed_models as PS
+            runner = PS.SquashedRunner(wrapped, copy.deepcopy(agent_cfg))
+            atomic_write_json(out / "policy_variant.json", dict(variant, architecture=PS.describe(runner)))
+        else:
+            runner = backend.make_runner(wrapped, copy.deepcopy(agent_cfg))
+            atomic_write_json(out / "policy_variant.json", dict(variant, architecture={"variant": "mlp (yaml)"}))
         holder["runner"] = runner
         monitor.attach_agent(runner.agent)                                   # follow-up M2
         g44 = install_g44(plan, env_cfg, base, runner.agent)                 # G44 R1a + G46 P1
         monitor.g44 = g44
-        g46_init = G46.save_init(runner.agent, out, backend.torch)           # G46: the untrained agent
+        if resume is None:
+            g46_init = G46.save_init(runner.agent, out, backend.torch)       # G46: the untrained agent
+        else:
+            g46_init = existing_g46_init(out, backend.torch)
+            runner.agent.load(str(out / resume["checkpoint"]))
+            runner._trainer.initial_timestep = int(resume["timestep"])
+            monitor.timestep = int(resume["timestep"])
+            monitor.next_percent = int(resume["timestep"]) * 100 // int(plan["budget_timesteps"]) + 1
+            monitor.heartbeat("resumed")
         try:
             runner.run("train")
         except Divergence as exc:
@@ -1040,7 +1252,10 @@ def main(argv=None, backend=None):
             print("train_journal_ppo: DRY RUN OK %s %s seed %d (%s, arm %s)" % (
                 plan["journal_id"], plan["vessel"], plan["training_seed"], plan["purpose"], plan["arm"]))
             return EXIT_OK
-        if Path(args.out).exists():                    # cheap refusal before the app starts
+        if getattr(args, "resume", False):
+            if not (Path(args.out) / "preflight.json").is_file():
+                raise TrainingRefusal("--resume needs an existing run directory with preflight.json: %s" % args.out)
+        elif Path(args.out).exists():                    # cheap refusal before the app starts
             raise TrainingRefusal("output directory %s exists (never overwrite a run)" % args.out)
         if args.agent_set:
             raise TrainingRefusal("--agent-set is refused (agent hyperparameters are the registration yaml)")
@@ -1050,7 +1265,17 @@ def main(argv=None, backend=None):
             backend = isaac_backend(rest, args.device)
         elif rest:
             raise TrainingRefusal("unknown arguments: %s" % " ".join(rest))
-        plan = preflight(args, root=backend.package_root)
+        if getattr(args, "resume", False):               # the run's own plan (its digests are re-checked in the run)
+            plan = json.loads((Path(args.out) / "preflight.json").read_text(encoding="ascii"))
+            for key, value in (("task", None), ("training_seed", args.training_seed),
+                               ("budget_timesteps", None), ("num_envs", args.num_envs)):
+                if value is not None and plan.get(key) != value:
+                    raise TrainingRefusal("--resume: %s differs from the run's plan (%r vs %r)"
+                                          % (key, value, plan.get(key)))
+            if Path(plan["out"]).resolve() != Path(args.out).resolve():
+                raise TrainingRefusal("--resume: the plan's out %s is not %s" % (plan["out"], args.out))
+        else:
+            plan = preflight(args, root=backend.package_root)
     except (TrainingRefusal, ValueError) as exc:
         print("train_journal_ppo: REFUSED: %s" % exc, file=sys.stderr)
         return finish(EXIT_REFUSED, backend if backend is not None else launched_backend())

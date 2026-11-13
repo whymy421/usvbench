@@ -283,6 +283,13 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # Full-idle episode cost = scale * 120 s = 30.0, making a timeout worse
     # than active progress while remaining comparable to one contact penalty.
     reward_swift_scale: float = 0.25
+    # Diagnostic branch yutong/ppo-fair-fix (2026-11-12), fix "time": charge the
+    # swiftness cost at its full rate on EVERY step before the goal, whatever the
+    # speed. The speed-scaled form is zero at >= SPEED_SCALE_MPS, so circling at
+    # speed in open water costs nothing (the 08-21 fortress forensics: a zero-cost
+    # absorbing region). The per-step maximum is unchanged (scale x dt), so the
+    # G46 failure-penalty bound stays valid. Default False = historical reward.
+    reward_time_cost_any_speed: bool = False
 
     # --- Potential-shaping correctness (OFF by default; new gym ids opt in) ---
     # Our progress term is a RAW difference Phi(s') - Phi(s). The policy-

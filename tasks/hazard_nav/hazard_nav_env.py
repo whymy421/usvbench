@@ -1611,10 +1611,14 @@ class HazardNavEnv(JournalEnvMixin, DirectRLEnv):
                 torch.norm(self.robot.data.root_com_vel_w[:, :2], dim=-1)
                 / SPEED_SCALE_MPS
             )
+            slowness = 1.0 - speed_norm.clamp(max=1.0)
+            if getattr(self.cfg, "reward_time_cost_any_speed", False):
+                # ppo-fair-fix "time": a flat per-step time cost (see the cfg field)
+                slowness = torch.ones_like(slowness)
             swift_cost = (
                 self.cfg.reward_swift_scale
                 * self.control_step_s
-                * (1.0 - speed_norm.clamp(max=1.0))
+                * slowness
                 * (~self._reached_goal).float()
             )
 
@@ -2981,6 +2985,10 @@ class HazardNavEnv(JournalEnvMixin, DirectRLEnv):
         self._jd7_point_slots = _d7pr.slot_mask(width, range(base, _journal.storage_width(task)), device)
         self._journal_prev_pose = torch.zeros((n, 3), dtype=torch.float64, device=device)
         self._journal_bounds = torch.zeros((n, 4), dtype=torch.float64, device=device)
+        # ppo-fair-fix: the observation's distance normaliser is ALWAYS the straight-line spawn distance,
+        # also when reward_progress_geodesic replaces d0_per_env by the geodesic spawn distance (reward only),
+        # so the route length of the true map never enters the observation. Equal to d0_per_env otherwise.
+        self._journal_obs_d0 = torch.ones(n, dtype=torch.float32, device=device)
         self._journal_scenarios = [None] * n
         self._journal_family_hash = [None] * n
         self.journal_completed_records = [None] * n
@@ -3370,6 +3378,7 @@ class HazardNavEnv(JournalEnvMixin, DirectRLEnv):
         self.obstacle_count[env_ids] = torch.as_tensor(counts, device=device)
         self._journal_bounds[env_ids] = torch.as_tensor(bounds, dtype=torch.float64, device=device)
         d0 = np.linalg.norm(goals - starts, axis=1)
+        self._journal_obs_d0[env_ids] = torch.as_tensor(d0, dtype=torch.float32, device=device)
         if self.cfg.reward_progress_geodesic:
             d0 = self._journal_write_geodesic(env_ids, scenarios)
         self.d0_per_env[env_ids] = torch.as_tensor(d0, dtype=torch.float32, device=device)
@@ -3521,7 +3530,7 @@ class HazardNavEnv(JournalEnvMixin, DirectRLEnv):
         dot = torch.sum(forward * direction, dim=-1, keepdim=True)
         cross = forward[:, 0:1] * direction[:, 1:2] - forward[:, 1:2] * direction[:, 0:1]
         distance_norm = torch.clamp(
-            distance / self.d0_per_env.unsqueeze(-1).clamp_min(1.0e-6), min=0.0, max=1.0
+            distance / self._journal_obs_d0.unsqueeze(-1).clamp_min(1.0e-6), min=0.0, max=1.0
         )
         surge_norm, sway_norm, yaw_rate_norm = self._body_motion_observation(
             est.velocity.to(torch.float32)

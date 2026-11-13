@@ -286,7 +286,8 @@ def install(plan, env_cfg, base, agent):
     """The P1 fixes on the skrl agent: discounted failure penalty, normaliser freeze, LR log (no floor)."""
     g44, g46 = plan["g44"], plan["g46"]
     terms = discounted_terms(plan["carrier"], env_cfg, g44["plan_params"], g46["gamma"], g46["top_speed_mps"])
-    failure = FX.FailurePenalty(terms, base, plan["carrier"], plan["num_envs"])
+    failure = FX.FailurePenalty(terms, base, plan["carrier"], plan["num_envs"],
+                                codes=tuple(g44.get("failure_codes", FX.FAILURE_CODES)))   # the plan's codes
     freeze = FX.NormaliserFreeze(g44["warmup_timesteps"])
     freeze.attach(agent)
     lrlog = LearningRateLog(g46["lr_mode"])
