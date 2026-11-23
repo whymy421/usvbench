@@ -1,0 +1,517 @@
+{
+ "family": "hazard_nav",
+ "manifest_entry": {
+  "admission": {
+   "monotone_stitching": false,
+   "not_applicable_doses": [],
+   "offered_doses": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "optional_doses": [],
+   "required_doses": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ]
+  },
+  "bytes": 6236532,
+  "file": "fortress__wamv_vrx_v2_opt1__s41047.json.xz",
+  "grid": {
+   "episodes": 2,
+   "num_envs": 64
+  },
+  "keys_admitted": 121,
+  "keys_not_admitted": 7,
+  "keys_offered": 128,
+  "optional_reason_counts": {},
+  "per_dose_counts": [
+   [
+    128,
+    121,
+    7
+   ],
+   [
+    128,
+    121,
+    7
+   ],
+   [
+    128,
+    121,
+    7
+   ],
+   [
+    128,
+    121,
+    7
+   ],
+   [
+    128,
+    121,
+    7
+   ],
+   [
+    128,
+    121,
+    7
+   ]
+  ],
+  "per_dose_counts_fields": [
+   "offered",
+   "admitted",
+   "not_admitted"
+  ],
+  "pool_digest": "963514194c6385cc77f6df7dfcb3800bf0954269cafb6532fb00982372434398",
+  "reason_counts": {
+   "fortress_radius_below_ray_floor": 4,
+   "no_clear_site_in_route_window": 4,
+   "no_witness_in_frozen_search": 2,
+   "no_witness_in_frozen_search_or_fallback_beam_192": 3,
+   "overlaps_gate_region": 4,
+   "overlaps_static_obstacle": 4
+  },
+  "seed": 41047,
+  "sha256": "4919a66938c86539c6dc5cf67b65c239c8d9b2124222a8cd7f19140577660030",
+  "task": "fortress",
+  "tier": 2,
+  "vessel_id": "wamv_vrx_v2_opt1"
+ },
+ "provenance": {
+  "code_lf_sha256": {
+   "scripts/admit_appearing_pools.py": "3dfec744a8bf64d07fd2df9e99a72d45facbfb5c38beece5faaf68983bd4341a",
+   "tasks/_shared/conditions/appearing/about.py": "d371e60c89bcb37bc46f6ba93347716fafdc075d3fd8eeb1f36de10bae32f3a5",
+   "tasks/_shared/conditions/appearing/admission.py": "06442d4bcbc56f0c4f0390413499d9686ec463d0beec428c0c3e729b42aa5cf2",
+   "tasks/_shared/conditions/appearing/config.py": "ff820a814c67312bf461b88a4638aca7f967f86e74b563d2de7d9ea46f8d47bd",
+   "tasks/_shared/conditions/appearing/families.py": "abbc2650b53f114ff01daa9452884ed3246015862e22f041eb67038c4ace68f6",
+   "tasks/_shared/conditions/appearing/ladder.py": "43397c0c40f4c90331d670fa13331138c6ceceab19f642b114bfc06f17981eb5",
+   "tasks/_shared/conditions/appearing/occlusion.py": "564e8676df74b46ffd8649bb5f2e6bb52a35fbdba18d2bb42ab0afd235820a6e",
+   "tasks/_shared/conditions/appearing/placement.py": "947b6be3aa34e61a1a2010d5dc34938f05d76d932444dd86be282a4092a913eb",
+   "tasks/_shared/conditions/appearing/pool.py": "4dd8e59aa7e33b311bbbb28eb53cffd58a67491e85aed005bb819dd57514bacd",
+   "tasks/_shared/conditions/appearing/runtime.py": "71cab77584ed3d81b69e98cdc66e1ac83bedddd7c3f669b0ea409e4964b9feff",
+   "tasks/_shared/conditions/appearing/stamp.py": "44a37ed16c54ecb8164e3a4a56145a55de9fa2681fbb1ca4fd901136e15681f7",
+   "tasks/_shared/conditions/dynamic/adapters.py": "ca01123540de396e7e846dfd6f6eab3381711cb1023b11d6cafb7116c571780a",
+   "tasks/_shared/conditions/dynamic/feasibility.py": "79fa8a2f8d59f2d2dc58ac0faa8f85e260b7f46e7578fe606291a8767c33ed66",
+   "tasks/_shared/journal_cfg_v2.py": "d0b1c67afbd4ce637c46c1f7efad77e60f0e3c8fc556926953bc321211d45a8a",
+   "tasks/_shared/journal_layouts_v2.py": "21387d2f80601c437936a016f4fdf1e39281e648b3006889ef657201c0f1a2d8",
+   "tasks/hazard_nav/journal_hazard_nav.py": "377525445b368e71b1757d5f818e31f0d91afeef5909723743a1b0a94a11d6ac"
+  },
+  "episodes": 2,
+  "ladder": {
+   "calibration_rung_m": {
+    "blueboat_v2": 0.76,
+    "wamv_vrx_v2_opt1": 1.25
+   },
+   "calibration_sweep_m": {
+    "blueboat_v2": [
+     0.76,
+     1.0,
+     1.4,
+     2.0,
+     2.9,
+     4.0,
+     5.0,
+     6.6,
+     7.5
+    ],
+    "wamv_vrx_v2_opt1": [
+     1.25,
+     1.4,
+     1.8,
+     2.5,
+     3.6,
+     5.0,
+     7.5,
+     11.0,
+     15.0
+    ]
+   },
+   "gap_override_min_m": {
+    "blueboat_v2": 0.76,
+    "wamv_vrx_v2_opt1": 1.25
+   },
+   "gap_ratios": null,
+   "gaps_m": {
+    "blueboat_v2": [
+     null,
+     7.5,
+     3.5,
+     1.6,
+     0.76,
+     0.76
+    ],
+    "wamv_vrx_v2_opt1": [
+     null,
+     15.0,
+     6.6,
+     2.9,
+     1.25,
+     1.25
+    ]
+   },
+   "kind": "metres",
+   "kinematic_floor_m": {
+    "blueboat_v2": 0.67,
+    "wamv_vrx_v2_opt1": 1.03
+   },
+   "option": "M",
+   "suite_version": "g3_appearing_gap_v7m"
+  },
+  "num_envs": 64,
+  "python": "3.11.15",
+  "seed": 41047,
+  "tier": 2,
+  "tool": "g20d-admit-appearing-pools-v5"
+ },
+ "report": {
+  "admission_policy": {
+   "monotone_stitching": false,
+   "not_applicable_doses": [],
+   "offered_doses": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "optional_doses": [],
+   "required_doses": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ]
+  },
+  "admission_seconds": 1826.9219999997877,
+  "admitted_candidate_index": {
+   "0": 33,
+   "1": 21,
+   "11": 2,
+   "14": 1,
+   "15": 2,
+   "2": 21,
+   "3": 13,
+   "4": 6,
+   "5": 7,
+   "6": 6,
+   "7": 3,
+   "8": 1,
+   "9": 5
+  },
+  "admitted_fraction": 0.9453125,
+  "admitted_radius_m": {
+   "max": 3.5823320338494806,
+   "min": 1.7817628548652333,
+   "n": 121,
+   "p10": 2.753632412638675,
+   "p50": 3.5823320338494806,
+   "p90": 3.5823320338494806
+  },
+  "bytes": 6236532,
+  "dose_applicability": {
+   "D1": "offered",
+   "D2": "offered",
+   "D3": "offered",
+   "D4": "offered",
+   "D5": "offered"
+  },
+  "file_sha256": "4919a66938c86539c6dc5cf67b65c239c8d9b2124222a8cd7f19140577660030",
+  "grid": {
+   "episodes": 2,
+   "num_envs": 64
+  },
+  "keys_admitted": 121,
+  "keys_not_admitted": 7,
+  "keys_offered": 128,
+  "ladder": "M",
+  "nominal_trigger": {
+   "D1": {
+    "admitted_keys": 121,
+    "nominal_occluded_at_trigger": 0,
+    "nominal_trigger_reached_keys": 121,
+    "nominal_trigger_s_max": 123.39325591333133,
+    "nominal_trigger_s_min": 45.62549350895811,
+    "nominal_visible_at_trigger": 121,
+    "witness_kinds": {
+     "frozen_search": 121
+    }
+   },
+   "D2": {
+    "admitted_keys": 121,
+    "nominal_occluded_at_trigger": 0,
+    "nominal_trigger_reached_keys": 121,
+    "nominal_trigger_s_max": 131.79325591333134,
+    "nominal_trigger_s_min": 57.24445040248631,
+    "nominal_visible_at_trigger": 121,
+    "witness_kinds": {
+     "frozen_search": 121
+    }
+   },
+   "D3": {
+    "admitted_keys": 121,
+    "nominal_occluded_at_trigger": 0,
+    "nominal_trigger_reached_keys": 121,
+    "nominal_trigger_s_max": 135.49325591333135,
+    "nominal_trigger_s_min": 61.18129374171832,
+    "nominal_visible_at_trigger": 121,
+    "witness_kinds": {
+     "frozen_search": 121
+    }
+   },
+   "D4": {
+    "admitted_keys": 121,
+    "nominal_occluded_at_trigger": 0,
+    "nominal_trigger_reached_keys": 121,
+    "nominal_trigger_s_max": 137.14325591333136,
+    "nominal_trigger_s_min": 63.08728210135719,
+    "nominal_visible_at_trigger": 121,
+    "witness_kinds": {
+     "frozen_search": 121
+    }
+   },
+   "D5": {
+    "admitted_keys": 121,
+    "nominal_occluded_at_trigger": 0,
+    "nominal_trigger_reached_keys": 121,
+    "nominal_trigger_s_max": 137.14325591333136,
+    "nominal_trigger_s_min": 63.08728210135719,
+    "nominal_visible_at_trigger": 121,
+    "witness_kinds": {
+     "frozen_search": 121
+    }
+   }
+  },
+  "not_admitted_keys": [
+   [
+    1,
+    1,
+    [
+     [
+      3,
+      "no_witness_in_frozen_search_or_fallback_beam_192"
+     ],
+     [
+      4,
+      "no_witness_in_frozen_search"
+     ],
+     [
+      5,
+      "no_witness_in_frozen_search"
+     ],
+     [
+      1,
+      "joint_ladder_member_rejected"
+     ],
+     [
+      2,
+      "joint_ladder_member_rejected"
+     ]
+    ]
+   ],
+   [
+    12,
+    0,
+    [
+     [
+      0,
+      "no_clear_site_in_route_window"
+     ],
+     [
+      0,
+      "overlaps_static_obstacle"
+     ],
+     [
+      0,
+      "overlaps_gate_region"
+     ],
+     [
+      0,
+      "fortress_radius_below_ray_floor"
+     ]
+    ]
+   ],
+   [
+    12,
+    1,
+    [
+     [
+      0,
+      "no_clear_site_in_route_window"
+     ],
+     [
+      0,
+      "overlaps_static_obstacle"
+     ],
+     [
+      0,
+      "fortress_radius_below_ray_floor"
+     ],
+     [
+      0,
+      "overlaps_gate_region"
+     ]
+    ]
+   ],
+   [
+    16,
+    1,
+    [
+     [
+      0,
+      "no_clear_site_in_route_window"
+     ],
+     [
+      0,
+      "overlaps_static_obstacle"
+     ],
+     [
+      0,
+      "fortress_radius_below_ray_floor"
+     ],
+     [
+      0,
+      "overlaps_gate_region"
+     ]
+    ]
+   ],
+   [
+    21,
+    1,
+    [
+     [
+      3,
+      "no_witness_in_frozen_search_or_fallback_beam_192"
+     ],
+     [
+      4,
+      "no_witness_in_frozen_search"
+     ],
+     [
+      5,
+      "no_witness_in_frozen_search"
+     ],
+     [
+      1,
+      "joint_ladder_member_rejected"
+     ],
+     [
+      2,
+      "joint_ladder_member_rejected"
+     ]
+    ]
+   ],
+   [
+    44,
+    1,
+    [
+     [
+      1,
+      "no_witness_in_frozen_search_or_fallback_beam_192"
+     ],
+     [
+      2,
+      "joint_ladder_member_rejected"
+     ],
+     [
+      3,
+      "joint_ladder_member_rejected"
+     ],
+     [
+      4,
+      "joint_ladder_member_rejected"
+     ],
+     [
+      5,
+      "joint_ladder_member_rejected"
+     ]
+    ]
+   ],
+   [
+    56,
+    1,
+    [
+     [
+      0,
+      "no_clear_site_in_route_window"
+     ],
+     [
+      0,
+      "overlaps_static_obstacle"
+     ],
+     [
+      0,
+      "fortress_radius_below_ray_floor"
+     ],
+     [
+      0,
+      "overlaps_gate_region"
+     ]
+    ]
+   ]
+  ],
+  "optional_not_admitted_keys": [],
+  "optional_reason_counts": {},
+  "per_dose_counts": [
+   [
+    128,
+    121,
+    7
+   ],
+   [
+    128,
+    121,
+    7
+   ],
+   [
+    128,
+    121,
+    7
+   ],
+   [
+    128,
+    121,
+    7
+   ],
+   [
+    128,
+    121,
+    7
+   ],
+   [
+    128,
+    121,
+    7
+   ]
+  ],
+  "per_dose_counts_fields": [
+   "offered",
+   "admitted",
+   "not_admitted"
+  ],
+  "placed_radius_m": {
+   "max": 3.5823320338494806,
+   "min": 1.7817628548652333
+  },
+  "pool_digest": "963514194c6385cc77f6df7dfcb3800bf0954269cafb6532fb00982372434398",
+  "reason_counts_keys": {
+   "fortress_radius_below_ray_floor": 4,
+   "no_clear_site_in_route_window": 4,
+   "no_witness_in_frozen_search": 2,
+   "no_witness_in_frozen_search_or_fallback_beam_192": 3,
+   "overlaps_gate_region": 4,
+   "overlaps_static_obstacle": 4
+  },
+  "seed": 41047,
+  "suite_version": "g3_appearing_gap_v7m",
+  "task": "fortress",
+  "tier": 2,
+  "trigger_gaps_m": null,
+  "vessel_id": "wamv_vrx_v2_opt1"
+ }
+}
