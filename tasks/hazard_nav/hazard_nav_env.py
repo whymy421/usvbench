@@ -2989,6 +2989,13 @@ class HazardNavEnv(JournalEnvMixin, DirectRLEnv):
         # also when reward_progress_geodesic replaces d0_per_env by the geodesic spawn distance (reward only),
         # so the route length of the true map never enters the observation. Equal to d0_per_env otherwise.
         self._journal_obs_d0 = torch.ones(n, dtype=torch.float32, device=device)
+        # round 5 curriculum state (inactive when journal_curriculum_tiers is empty)
+        import collections as _collections
+        self._jcur_tiers = tuple(int(t) for t in (getattr(self.cfg, "journal_curriculum_tiers", ()) or ()))
+        self._jcur_index = 0
+        self._jcur_window = _collections.deque(maxlen=max(1, int(getattr(self.cfg, "journal_curriculum_window", 256))))
+        self._jcur_has_episode = [False] * n
+        self.journal_curriculum_log = []
         self._journal_scenarios = [None] * n
         self._journal_family_hash = [None] * n
         self.journal_completed_records = [None] * n
@@ -3306,6 +3313,42 @@ class HazardNavEnv(JournalEnvMixin, DirectRLEnv):
         self._journal_ordinal[env_index] = ordinal + 1
         return ordinal, ordinal
 
+    def _journal_curriculum_tier(self, ids) -> int:
+        """Round 5: the geometry tier of the episodes starting now (one global tier for every env)."""
+        tiers = self._jcur_tiers
+        if not tiers:
+            return int(self.cfg.journal_geometry_tier)
+        for i in ids:                                   # the episodes ending now count at the tier they ran
+            if self._jcur_has_episode[i]:
+                self._jcur_window.append(bool(self.episode_success[i]))
+            self._jcur_has_episode[i] = True
+        steps = int(getattr(self, "common_step_counter", 0))
+        index, reason = self._jcur_index, None
+        window = self._jcur_window
+        if (index < len(tiers) - 1 and len(window) >= window.maxlen
+                and sum(window) / len(window) >= float(self.cfg.journal_curriculum_threshold)):
+            index, reason = index + 1, "success %.3f over %d episodes" % (sum(window) / len(window), len(window))
+        for k, at in enumerate(tuple(getattr(self.cfg, "journal_curriculum_force_steps", ()) or ())):
+            if steps >= int(at) and index < min(k + 1, len(tiers) - 1):
+                index, reason = min(k + 1, len(tiers) - 1), "forced at env step %d" % steps
+        if index != self._jcur_index:
+            entry = {"env_step": steps, "from_tier": tiers[self._jcur_index], "to_tier": tiers[index],
+                     "reason": reason}
+            self.journal_curriculum_log.append(entry)
+            print("[curriculum] %s" % entry, flush=True)
+            self._jcur_index = index
+            window.clear()
+        tier = int(tiers[self._jcur_index])
+        ref = getattr(self.cfg, "journal_curriculum_ref", None)
+        if ref is not None:
+            ref.value = tier
+        pool = getattr(self, "_d7_pool", None)
+        if pool is not None and hasattr(pool, "tier"):
+            pool.tier = tier
+        self.extras.setdefault("log", {})
+        self.extras["log"]["Episode/curriculum_tier"] = torch.tensor(float(tier))
+        return tier
+
     def _journal_reset_idx(self, env_ids: Sequence[int] | None) -> None:
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
@@ -3317,6 +3360,7 @@ class HazardNavEnv(JournalEnvMixin, DirectRLEnv):
         ids = env_ids.detach().cpu().tolist()
         # 1. task scenario counter: consecutive ordinals = scenario episodes (condition
         #    layer, D7 key, E5 layout key; D16)
+        tier_now = self._journal_curriculum_tier(ids)        # round 5 (= journal_geometry_tier when off)
         pairs = [self._journal_next_episode(i) for i in ids]
         ordinals = [p[0] for p in pairs]
         episodes = [p[1] for p in pairs]
@@ -3325,7 +3369,7 @@ class HazardNavEnv(JournalEnvMixin, DirectRLEnv):
         # 2. layout from E5 build_layout (quarter-turn rotation, env-local)
         scenarios = [
             _journal.build_scenario(
-                cfg.journal_task, cfg.vehicle, int(cfg.journal_geometry_tier),
+                cfg.journal_task, cfg.vehicle, int(tier_now),
                 int(cfg.seed), i, episode,
             )
             for i, episode in zip(ids, episodes)

@@ -290,6 +290,16 @@ class HazardNavEnvCfg(DirectRLEnvCfg):
     # absorbing region). The per-step maximum is unchanged (scale x dt), so the
     # G46 failure-penalty bound stays valid. Default False = historical reward.
     reward_time_cost_any_speed: bool = False
+    # Diagnostic branch (round 5): training curriculum over the journal geometry tiers (gap widths
+    # beam + c*s, c = 4/3/2/1.2 m for tiers 0..3). Empty = off (the fixed journal_geometry_tier).
+    # Promote when the success rate of the last `window` finished episodes at the current tier is
+    # >= `threshold`; also forced: tier index >= k+1 once the env step counter reaches force_steps[k].
+    # Never demotes. The evaluation always runs the fixed tier (journal_geometry_tier).
+    journal_curriculum_tiers: tuple = ()
+    journal_curriculum_window: int = 256
+    journal_curriculum_threshold: float = 0.5
+    journal_curriculum_force_steps: tuple = ()
+    journal_curriculum_ref: object = None   # shared tier holder (training_pool.TierRef), set by training_pools
 
     # --- Potential-shaping correctness (OFF by default; new gym ids opt in) ---
     # Our progress term is a RAW difference Phi(s') - Phi(s). The policy-

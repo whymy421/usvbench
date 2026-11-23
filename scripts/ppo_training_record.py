@@ -16,7 +16,8 @@ ledger v2 (seed_registry.py, ``training_record_sha256``) and the later policy re
   mixture (TrainingMixture.stamp(realised counts) or null for the calm arm),
   hazard_admission (TrainingHazardCache.admission_log() or null),
   checkpoints [{timestep, path, sha256}], final_checkpoint ({path, sha256, source_path, source_sha256} or null),
-  status ("completed" | "diverged"), divergence (null or {reason, timestep}),
+  status ("completed" | "diverged" | "early_stopped"), divergence (null or {reason, timestep}),
+  (early_stopped: ppo_early_stop.py rule; final.pt = the latest checkpoint; evidence in early_stop.json),
   nonfinite_terminal ({rule, termination_code 9, replacement_reward, replacement_source {carrier, field,
                       cfg_value, value_rule}, rows_replaced, episodes_finished, alarm, per_component}: code-9 rows;
                       replacement = the family's terminal failure penalty (CODE9_PENALTY_FIELD); a completed run
@@ -47,7 +48,7 @@ import types
 
 SCHEMA = "usvbench.ppo_training_record/1"
 SCHEMA_FILE = Path(__file__).resolve().with_name("ppo_training_record.schema.json")
-STATUSES = ("completed", "diverged")
+STATUSES = ("completed", "diverged", "early_stopped")
 ARMS = ("mixture", "calm")
 PURPOSES = ("training", "training_smoke")
 VESSELS = ("blueboat", "wamv")
@@ -261,7 +262,7 @@ def validate(record, run_dir=None, registry=None):
     _require(record["arm"] in ARMS, "arm must be mixture or calm")
     _require(record["purpose"] in PURPOSES, "purpose must be training or training_smoke")
     _require(record["vessel"] in VESSELS, "vessel must be blueboat or wamv")
-    _require(record["status"] in STATUSES, "status must be completed or diverged")
+    _require(record["status"] in STATUSES, "status must be completed, diverged or early_stopped")
     for name in ("training_seed", "budget_timesteps", "completed_timesteps", "num_envs", "rollouts",
                  "iterations", "concurrency"):
         _require(type(record[name]) is int and record[name] >= 0, name + " must be a nonnegative integer")
@@ -308,7 +309,7 @@ def validate(record, run_dir=None, registry=None):
     _require(nft.get("alarm") == code9_alarm_block(), "nonfinite_terminal.alarm must be the declared alarm")
     _require(type(nft.get("episodes_finished")) is int and nft["episodes_finished"] >= 0,
              "nonfinite_terminal.episodes_finished required")
-    if record["status"] == "completed":
+    if record["status"] in ("completed", "early_stopped"):
         _require(nft["rows_replaced"] <= code9_alarm_limit(nft["episodes_finished"]),
                  "a completed run stays within the code-9 alarm limit %s" % CODE9_ALARM_RULE)
     checks = record["divergence_checks"]
@@ -364,6 +365,17 @@ def validate(record, run_dir=None, registry=None):
                  and checkpoints[-1]["sha256"] == final["sha256"],
                  "the final checkpoint is the checkpoint at the budget (last-checkpoint rule)")
         _require(record["divergence"] is None, "a completed run has no divergence")
+    elif record["status"] == "early_stopped":
+        _require(record["completed_timesteps"] < record["budget_timesteps"],
+                 "an early-stopped run ends before its budget")
+        _require(isinstance(final, dict) and _is_sha(final.get("sha256")),
+                 "an early-stopped run has a final checkpoint")
+        _require(final["sha256"] == final.get("source_sha256"), "final.pt must be a copy of the last checkpoint")
+        _require(bool(checkpoints) and checkpoints[-1]["sha256"] == final["sha256"]
+                 and checkpoints[-1]["timestep"] <= record["completed_timesteps"],
+                 "an early-stopped run's final checkpoint is its latest saved checkpoint")
+        _require(record["divergence"] is None, "an early-stopped run has no divergence")
+        _require("early_stop.json" in record["log_digests"], "an early-stopped run carries early_stop.json")
     else:
         _require(isinstance(record["divergence"], dict) and isinstance(record["divergence"].get("reason"), str),
                  "a diverged run states its divergence")

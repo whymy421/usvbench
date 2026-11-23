@@ -49,6 +49,11 @@ parser.add_argument("--policy", choices=("mlp", "gru"), default="mlp",
 parser.add_argument("--action-dist", choices=("clip", "tanh"), default="clip",
                     help="tanh = a checkpoint trained with the bounded tanh-Gaussian head (scripts/ppo_squashed_models"
                          ".py); the deterministic action is then tanh(mean)")
+parser.add_argument("--geometry-tier", type=int, default=None, choices=(0, 1, 2, 3),
+                    help="diagnostic (round 8): evaluate at this gap-width tier instead of the journal tier 2")
+parser.add_argument("--route-hint", action="store_true",
+                    help="round 10: the checkpoint was trained with --route-hint; install the same hook "
+                         "(scripts/ppo_route_hint.py) so the policy sees the planner's waypoint bearing")
 parser.add_argument("--max-steps", type=int, default=None,
                     help="stop after this many env steps (a quick mean-action probe; the success table is partial)")
 AppLauncher.add_app_launcher_args(parser)
@@ -105,6 +110,8 @@ def main():
     journal_id = info["task_id"]
     env_cfg = parse_env_cfg(journal_id, device=args.device or "cuda:0", num_envs=args.num_envs)
     env_cfg.seed = int(args.eval_seed)
+    if args.geometry_tier is not None:                    # round 8: set before the pools read it
+        env_cfg.journal_geometry_tier = int(args.geometry_tier)
     resolved = mods.journal_config.resolve_journal_conditions(presets=[], seed=int(args.eval_seed))
     mods.journal_config.admit_journal_conditions(env_cfg, resolved)
     mods.journal_config.apply_journal_conditions(env_cfg, resolved)
@@ -118,6 +125,10 @@ def main():
     agent_cfg["agent"]["experiment"]["checkpoint_interval"] = 0
     agent_cfg["agent"]["experiment"]["wandb"] = False
     env = gym.make(journal_id, cfg=env_cfg, render_mode=None)
+    hint = None
+    if args.route_hint:                                   # round 10: before the first reset
+        import ppo_route_hint as RH
+        hint = RH.install(env.unwrapped, env_cfg, root, torch)
     wrapped = SkrlVecEnvWrapper(env, ml_framework="torch")
     recurrent = args.policy == "gru"
     squash = args.action_dist == "tanh"
@@ -196,7 +207,9 @@ def main():
         "utc": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "action_selection": "mean_actions", "conditions": "calm (no suite), D7 = calm-arm D0 adapter",
         "policy": args.policy, "action_dist": args.action_dist,
+        "geometry_tier": int(getattr(base.cfg, "journal_geometry_tier", 2)),
         "mean_action_probe": mean_probe(outside, abs_samples, step, base.num_envs, latent_key),
+        "route_hint": hint.summary() if hint is not None else None,
         "records": records,
     }
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)

@@ -121,6 +121,26 @@ def appearing_inputs(task, vessel, tier, seed):
     return inputs
 
 
+class TierRef:
+    """Diagnostic branch (round 5 curriculum): the current training tier, read with int() at every admission call,
+    so the appearing admission builds the same tier the env builds for that key."""
+
+    def __init__(self, value):
+        self.value = int(value)
+
+    def __int__(self):
+        return int(self.value)
+
+    def __index__(self):
+        return int(self.value)
+
+    def __repr__(self):
+        return "TierRef(%d)" % self.value
+
+    def __deepcopy__(self, memo):
+        return self
+
+
 def training_pools(cfg, mixture, *, cache, purpose="training", registry=None, registry_stamp=None, num_envs=None):
     """{"d7": TrainingHazardD7Pool, "appearing": TrainingAppearingPool or None} for a journal cfg carrying the
     resolved D1 stack (cfg.journal_conditions) and the run's seed."""
@@ -128,12 +148,19 @@ def training_pools(cfg, mixture, *, cache, purpose="training", registry=None, re
     n = int(cfg.scene.num_envs if num_envs is None else num_envs)
     suite = resolved.dynamic_config(cfg.vehicle)
     tier = int(getattr(cfg, "journal_geometry_tier", 2))
+    tiers = tuple(getattr(cfg, "journal_curriculum_tiers", ()) or ())
+    ref = None
+    if tiers:                                    # round 5: start at the first curriculum tier, the env moves it on
+        ref = TierRef(tiers[0])
+        cfg.journal_curriculum_ref = ref
+        tier = int(tiers[0])
     common = dict(mixture=mixture, task=cfg.journal_task, vessel=cfg.vehicle, seed=int(cfg.seed), tier=tier,
                   num_envs=n, cache=cache, purpose=purpose, registry=registry, registry_stamp=registry_stamp)
     d7 = TrainingHazardD7Pool(suite=suite, **common)
     appearing = None
     if mixture is not None and mixture.appearing_wired:
-        appearing = TH.TrainingAppearingPool(inputs=appearing_inputs(cfg.journal_task, cfg.vehicle, tier, cfg.seed),
+        appearing = TH.TrainingAppearingPool(inputs=appearing_inputs(cfg.journal_task, cfg.vehicle,
+                                                                     ref if ref is not None else tier, cfg.seed),
                                              **common)
     return {"d7": d7, "appearing": appearing}
 

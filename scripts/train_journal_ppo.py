@@ -108,6 +108,7 @@ if str(SCRIPTS) not in sys.path:
 
 import code_tree  # noqa: E402
 import ppo_training_record as R  # noqa: E402
+import ppo_early_stop as ES  # noqa: E402
 import reference_environment  # noqa: E402
 import seed_registry  # noqa: E402
 import ppo_training_fixes as FX  # noqa: E402
@@ -197,6 +198,37 @@ def build_parser():
                    help="with --resume: the skrl checkpoint to continue from (default: the latest finite one; for a "
                         "diverged run the latest one at least two checkpoints before the divergence)")
     p.add_argument("--resume-reason", default="unspecified", help="with --resume: stamped in resume_<k>.json")
+    p.add_argument("--demo-warmstart", action="store_true",
+                   help="diagnostic branch (round 6, hazard_nav only): before PPO, the classical memory planner "
+                        "drives the training env for 6400 steps and the network imitates it "
+                        "(scripts/ppo_demo_warmstart.py); the imitation policy is saved as bc_init/agent_0.pt")
+    p.add_argument("--demo-anchor", action="store_true",
+                   help="diagnostic branch (round 7, with --demo-warmstart): freeze the observation normaliser at the "
+                        "demonstration statistics from step 0 and add decaying imitation steps after every PPO update "
+                        "(ppo_demo_warmstart.BCAnchor)")
+    p.add_argument("--demo-steps", type=int, default=None,
+                   help="with --demo-warmstart: demonstration steps (default 6400; smaller only for smoke runs)")
+    p.add_argument("--curriculum", action="store_true",
+                   help="diagnostic branch (round 5, hazard_nav only): train on gap-width tiers 0 -> 1 -> 2 "
+                        "(promote at success >= 0.5 over the last 256 episodes; forced to tier 1 at 40 %% and tier 2 "
+                        "at 70 %% of the budget); the evaluation stays at the journal tier 2")
+    p.add_argument("--curriculum-adaptive", action="store_true",
+                   help="diagnostic branch (round 8, hazard_nav only): gap-width tiers 0 -> 1 -> 2 promoted ONLY on "
+                        "success >= 0.3 over the last 256 episodes (no forced promotion, never demotes); the "
+                        "evaluation stays at the journal tier 2 unless the evaluator is told otherwise")
+    p.add_argument("--early-stop-no-success", action="store_true",
+                   help="stop when no training episode succeeded in the last 1/3 of the budget, from 1/3 on "
+                        "(scripts/ppo_early_stop.py); the latest checkpoint becomes final.pt, status early_stopped")
+    p.add_argument("--failure-penalty-no-events", action="store_true",
+                   help="diagnostic branch (round 9, hazard_nav only): the G46 failure penalty without its event "
+                        "term E (goal bonuses + progress range), i.e. -H x L only; training reward only")
+    p.add_argument("--novelty-bonus", action="store_true",
+                   help="diagnostic branch (round 9, hazard_nav only): episodic novelty bonus for the first visit "
+                        "of a grid cell (scripts/ppo_novelty_bonus.py); training reward only, never observed")
+    p.add_argument("--route-hint", action="store_true",
+                   help="diagnostic branch (round 10, hazard_nav only): the policy observation's goal bearing "
+                        "(columns 0-1) points at the classical memory planner's current waypoint instead of the goal "
+                        "(scripts/ppo_route_hint.py); the evaluator must be given --route-hint too")
     p.add_argument("--timeout-penalty", action="store_true",
                    help="diagnostic branch (round 4): a timeout (termination code 3) gets the same G44/G46 failure "
                         "terminal penalty as a crash, so waiting out the time limit is no longer safer than trying")
@@ -470,6 +502,31 @@ def preflight(args, *, root=None, registry=None, reference_block=None, code_tree
     except FX.FixError as exc:
         raise TrainingRefusal(str(exc)) from None
     plan_params = mods.plans.plan_class(task, vehicle)(2).params
+    curriculum = None
+    if getattr(args, "curriculum", False):
+        if carrier != "hazard_nav":
+            raise TrainingRefusal("--curriculum is implemented for the hazard_nav carrier only")
+        curriculum = {"tiers": [0, 1, 2], "window": 256, "threshold": 0.5,
+                      "force_steps": [int(0.4 * budget), int(0.7 * budget)], "evaluation_tier": 2}
+    if getattr(args, "curriculum_adaptive", False):
+        if curriculum is not None:
+            raise TrainingRefusal("--curriculum-adaptive replaces --curriculum; pass only one")
+        if carrier != "hazard_nav":
+            raise TrainingRefusal("--curriculum-adaptive is implemented for the hazard_nav carrier only")
+        curriculum = {"mode": "adaptive (round 8)", "tiers": [0, 1, 2], "window": 256, "threshold": 0.3,
+                      "force_steps": [], "evaluation_tier": 2}
+    demo = None
+    if getattr(args, "demo_warmstart", False):
+        if carrier != "hazard_nav":
+            raise TrainingRefusal("--demo-warmstart is implemented for the hazard_nav carrier only")
+        import ppo_demo_warmstart as DW
+        demo = dict(DW.DEFAULTS)
+        if getattr(args, "demo_steps", None):
+            demo["steps"] = int(args.demo_steps)
+        if getattr(args, "demo_anchor", False):
+            demo["anchor"] = dict(DW.ANCHOR_DEFAULTS)
+    elif getattr(args, "demo_anchor", False):
+        raise TrainingRefusal("--demo-anchor needs --demo-warmstart")
     failure_codes = list(FX.FAILURE_CODES) + ([FX.TIMEOUT_CODE] if getattr(args, "timeout_penalty", False) else [])
     g44 = {"version": FX.G44_VERSION, "failure_codes": failure_codes,
            "timeout_penalty": bool(getattr(args, "timeout_penalty", False)),
@@ -477,6 +534,22 @@ def preflight(args, *, root=None, registry=None, reference_block=None, code_tree
            "lr_floor_fraction": FX.LR_FLOOR_FRACTION,
            "base_learning_rate": float(agent_cfg["agent"]["learning_rate"]),
            "plan_params": {k: plan_params.get(k) for k in ("length_scale", "gate_radius_m", "segment_count")}}
+    early_stop = dict(ES.DEFAULTS) if getattr(args, "early_stop_no_success", False) else None
+    guidance = None
+    no_events = bool(getattr(args, "failure_penalty_no_events", False))
+    novelty = bool(getattr(args, "novelty_bonus", False))
+    if no_events or novelty:                                   # round 9 (PROTOCOL_R9.md): training-time guidance
+        if carrier != "hazard_nav":
+            raise TrainingRefusal("--failure-penalty-no-events / --novelty-bonus are implemented for hazard_nav only")
+        import ppo_novelty_bonus as NB
+        guidance = {"round": 9, "failure_penalty_no_events": no_events,
+                    "novelty": dict(NB.DEFAULTS) if novelty else None}
+    route_hint = None
+    if getattr(args, "route_hint", False):                     # round 10 (PROTOCOL_R10.md): information-matched
+        if carrier != "hazard_nav":
+            raise TrainingRefusal("--route-hint is implemented for hazard_nav only")
+        import ppo_route_hint as RH
+        route_hint = dict(RH.DEFAULTS)
     out = Path(args.out).resolve()
     experiment = "ppo_%s_%s_s%d_%s" % (task, vessel, int(args.training_seed), args.arm)
     overrides = agent_overrides(planned, seed=args.training_seed, budget=budget, directory=out / "skrl",
@@ -502,7 +575,8 @@ def preflight(args, *, root=None, registry=None, reference_block=None, code_tree
             "code9": {"penalty_field": R.CODE9_PENALTY_FIELD[carrier], "rule": R.CODE9_REPLACEMENT_RULE,
                       "alarm": R.code9_alarm_block()},
             "in_tree_registry_sha256": seed_registry.registry_digest(in_tree), "g44": g44, "g46": g46,
-            "fair_fix": fair_fix, "policy_variant": policy_variant}
+            "fair_fix": fair_fix, "policy_variant": policy_variant, "curriculum": curriculum, "demo": demo,
+            "guidance": guidance, "early_stop": early_stop, "route_hint": route_hint}
 
 
 # ------------------------------------------------------------------ run (backend-driven)
@@ -527,7 +601,16 @@ def code9_replacement(env_cfg, carrier):
 def install_g44(plan, env_cfg, base, agent):
     """G44: the failure penalty (from the run's env cfg and the plan params), the normaliser freeze and the
     learning-rate floor, attached to the skrl agent; raises FixError when a fix cannot be derived."""
-    return G46.install(plan, env_cfg, base, agent)        # G46 P1: discounted penalty, freeze, LR log (no floor)
+    g44 = G46.install(plan, env_cfg, base, agent)         # G46 P1: discounted penalty, freeze, LR log (no floor)
+    if (plan.get("guidance") or {}).get("failure_penalty_no_events"):   # round 9: drop the event term E
+        failure = g44["failure"]
+        if failure.values is not None:
+            raise RuntimeError("round 9: the failure penalties were computed before the E term could be dropped")
+        terms = dict(failure.terms)
+        terms.update({"A_release": terms["A"], "E_dropped": terms["E"], "A": terms["A"] - terms["E"], "E": 0.0,
+                      "round9_rule": "round 9 (PROTOCOL_R9.md): P = -(H x L) = -(A_release - E_dropped)"})
+        failure.terms = terms
+    return g44
 
 
 def atomic_write_json(path, value):
@@ -648,6 +731,8 @@ class StepMonitor:
         self.appearing_speed_outside = 0
         self.appearing_speed_examples = []
         self.g44 = None                                          # G44: install_g44() result (None = off)
+        self.novelty = None                                      # round 9: ppo_novelty_bonus.NoveltyBonus
+        self.early_stop = None                                   # ppo_early_stop.NoSuccessStop (None = off)
         self.original = wrapped.step
         self.progress = open(self.out / "progress.log", "a", encoding="ascii")
         wrapped.step = self.step
@@ -778,6 +863,13 @@ class StepMonitor:
                 out = (out[0], rew) + tuple(out[2:])
             if any(dones):                                        # the new episodes' bounds (auto-reset)
                 self.g44["failure"].refresh([i for i, d in enumerate(dones) if d])
+        if self.novelty is not None:                              # round 9: novelty bonus (training reward only)
+            bonus = self.novelty.step(dones)
+            rew = rew + bonus.to(device=rew.device, dtype=rew.dtype).reshape(rew.shape)
+            out = (out[0], rew) + tuple(out[2:])
+            for i, value in enumerate(bonus.tolist()):
+                if value:
+                    rewards[i] += value
         self.episodes_finished += sum(1 for d in dones if d)
         if any(dones):
             self._count_appearing(dones)                          # G35 (J19)
@@ -803,8 +895,14 @@ class StepMonitor:
         if any(dones):
             now = self._current_components()
             self.components = [now[i] if d else c for i, (c, d) in enumerate(zip(self.components, dones))]
+        if self.early_stop is not None:
+            self.early_stop.observe(self.timestep, dones, codes)
         if self.timestep % self.rollouts == 0:
             self.heartbeat()
+            if self.early_stop is not None:
+                block = self.early_stop.check(self.timestep)
+                if block is not None:
+                    raise ES.EarlyStop(block)
         while self.next_percent <= 100 and self.timestep * 100 >= self.next_percent * self.budget:
             wall = self.clock() - self.start
             line = "PROGRESS %3d%% timestep %d/%d iteration %d wall %.1f s eta %.1f s" % (
@@ -814,7 +912,25 @@ class StepMonitor:
             self.progress.write(line + "\n")
             self.progress.flush()
             self.next_percent += 1
+            self.write_guidance()
         return out
+
+    def write_guidance(self):
+        """round 9: out/guidance_r9.json (the guidance block, novelty evidence, the failure terms in force).
+        round 10: also out/route_hint.json (the route-hint counters) when the hint is installed."""
+        if getattr(self, "route_hint", None) is not None:
+            self.route_hint.write(self.out / "route_hint.json")
+        guidance = self.plan.get("guidance")
+        if not guidance:
+            return
+        value = {"guidance": guidance, "novelty": self.novelty.summary() if self.novelty is not None else None,
+                 "failure_terms": self.g44["failure"].terms if self.g44 is not None else None,
+                 "failure_rows_penalised": self.g44["failure"].rows if self.g44 is not None else None,
+                 "timestep": self.timestep}
+        try:
+            atomic_write_json(self.out / "guidance_r9.json", value)
+        except OSError as exc:
+            print("train_journal_ppo: WARNING guidance_r9.json not written: %s" % exc, file=sys.stderr, flush=True)
 
     def last_inputs_problem(self):
         """verify2 M2 residual: 'observation' / 'action' when the last observations / actions hold a non-finite
@@ -924,8 +1040,8 @@ def prepare_resume(out, plan, torch_module, checkpoint=None, reason="unspecified
     record = out / "training_record.json"
     if record.is_file():
         previous = json.loads(record.read_text(encoding="ascii"))
-        if previous.get("status") == "completed":
-            raise RuntimeError("resume: %s is a completed run" % out)
+        if previous.get("status") in ("completed", "early_stopped"):
+            raise RuntimeError("resume: %s is a %s run" % (out, previous.get("status")))
         record.rename(out / ("training_record.segment%d.json" % k))
     limit = plan["budget_timesteps"] - 1
     unhealthy = None
@@ -999,6 +1115,12 @@ def run_training(plan, args, backend):
         env_cfg.seed = int(plan["training_seed"])
         fix_block = plan.get("fair_fix") or {"name": "none", "env_cfg_fields": {}}
         applied = apply_fair_fix(env_cfg, fix_block)
+        cur = plan.get("curriculum")
+        if cur:                                          # round 5: before training_pools (they read the tiers)
+            env_cfg.journal_curriculum_tiers = tuple(int(t) for t in cur["tiers"])
+            env_cfg.journal_curriculum_window = int(cur["window"])
+            env_cfg.journal_curriculum_threshold = float(cur["threshold"])
+            env_cfg.journal_curriculum_force_steps = tuple(int(s) for s in cur["force_steps"])
         atomic_write_json(out / "fair_fix.json", dict(fix_block, applied=applied))
         mixture = None
         tokens = []
@@ -1038,11 +1160,16 @@ def run_training(plan, args, backend):
         env = backend.make_env(plan["journal_id"], env_cfg)
         base = getattr(env, "unwrapped", env)
         check_attached(base, mixture, pools)                                 # follow-up m5
+        route_hint = None
+        if plan.get("route_hint"):                                           # round 10: before the first reset
+            import ppo_route_hint as RH
+            route_hint = RH.install(base, env_cfg, backend.package_root, backend.torch)
         code9_value, code9_source = code9_replacement(env_cfg, plan["carrier"])       # verify2 C1
         wrapped = backend.wrap(env)
         holder = {}
         monitor = StepMonitor(wrapped, base, dict(plan, code9_reward=code9_value, code9_source=code9_source), out,
                               lambda: getattr(holder.get("runner"), "agent", None))
+        monitor.route_hint = route_hint
         monitor.heartbeat("starting")
         agent_snapshot = json.loads(R.canonical(agent_cfg))     # the stamped config (skrl may rewrite its copy)
         squash = variant.get("action_dist", "clip") == "tanh"
@@ -1061,17 +1188,45 @@ def run_training(plan, args, backend):
         monitor.attach_agent(runner.agent)                                   # follow-up M2
         g44 = install_g44(plan, env_cfg, base, runner.agent)                 # G44 R1a + G46 P1
         monitor.g44 = g44
+        if plan.get("early_stop"):                                           # STOP_RULE_BACKTEST.md
+            monitor.early_stop = ES.NoSuccessStop(plan["early_stop"], plan["budget_timesteps"])
+        if (plan.get("guidance") or {}).get("novelty"):                      # round 9
+            import ppo_novelty_bonus as NB
+            monitor.novelty = NB.NoveltyBonus(plan["guidance"]["novelty"], base, plan["num_envs"], backend.torch)
         if resume is None:
             g46_init = G46.save_init(runner.agent, out, backend.torch)       # G46: the untrained agent
+            if plan.get("demo"):                                             # round 6: imitation before PPO
+                import ppo_demo_warmstart as DW
+                warm, demo_data = DW.warm_start(
+                    agent=runner.agent, wrapped=wrapped, step_fn=monitor.original, base=base, env_cfg=env_cfg,
+                    package_root=backend.package_root, failure=g44["failure"], carrier=plan["carrier"],
+                    num_envs=plan["num_envs"], codes_fn=monitor._codes, code9_reward=code9_value,
+                    gamma=float(agent_cfg["agent"]["discount_factor"]), recurrent=variant.get("policy") == "gru",
+                    out=out, cfg=plan["demo"], heartbeat=lambda: monitor.heartbeat("demo"),
+                    log=lambda m: print(m, flush=True))
+                atomic_write_json(out / "demo_warmstart.json", warm)
+                if plan["demo"].get("anchor"):                               # round 7
+                    DW.install_anchor(runner.agent, demo_data, plan["demo"]["anchor"], plan["budget_timesteps"],
+                                      lambda: monitor.timestep, variant.get("policy") == "gru", g44["freeze"], out)
         else:
             g46_init = existing_g46_init(out, backend.torch)
             runner.agent.load(str(out / resume["checkpoint"]))
             runner._trainer.initial_timestep = int(resume["timestep"])
             monitor.timestep = int(resume["timestep"])
             monitor.next_percent = int(resume["timestep"]) * 100 // int(plan["budget_timesteps"]) + 1
+            if monitor.early_stop is not None:                               # the window restarts (conservative)
+                monitor.early_stop.restart(int(resume["timestep"]))
             monitor.heartbeat("resumed")
+            if (plan.get("demo") or {}).get("anchor"):                       # round 7: the anchor continues
+                import ppo_demo_warmstart as DW
+                DW.install_anchor(runner.agent, DW.load_data(out / DW.DEMO_DATA), plan["demo"]["anchor"],
+                                  plan["budget_timesteps"], lambda: monitor.timestep, variant.get("policy") == "gru",
+                                  g44["freeze"], out)
         try:
             runner.run("train")
+        except ES.EarlyStop as exc:                                          # STOP_RULE_BACKTEST.md
+            status = "early_stopped"
+            print("train_journal_ppo: EARLY STOP at timestep %d: %s" % (monitor.timestep, exc), flush=True)
         except Divergence as exc:
             status, divergence = "diverged", {"reason": str(exc), "timestep": monitor.timestep}
         except Exception as exc:  # noqa: BLE001 - a NaN policy surfaces as e.g. a torch ValueError in act()
@@ -1087,9 +1242,12 @@ def run_training(plan, args, backend):
         completed = monitor.timestep
         monitor.heartbeat("finishing")
         monitor.close()
+        monitor.write_guidance()                                             # round 9 evidence
         fix = G46.sidecar(plan["g46"], g44, g46_init)                        # v2.6.4 evidence (log_digests)
         atomic_write_json(out / "ppo_fix.json", fix)
-        if status == "completed" and not G46.effective(fix):
+        if monitor.early_stop is not None:                                   # evidence, also when not stopped
+            atomic_write_json(out / ES.SIDECAR, monitor.early_stop.summary())
+        if status in ("completed", "early_stopped") and not G46.effective(fix):
             raise RuntimeError("v2.6.4 PPO fix not effective: %s" % FX.canonical(
                 {"normaliser_freeze": fix["normaliser_freeze"], "learning_rate_log": fix["learning_rate_log"]}))
         run_dir = out / "skrl" / plan["agent"]["experiment_name"]
@@ -1116,12 +1274,28 @@ def run_training(plan, args, backend):
                 shutil.copyfile(source, out / "final.pt")
                 final = {"path": "final.pt", "sha256": R.file_sha256(out / "final.pt"),
                          "source_path": source.relative_to(out).as_posix(), "source_sha256": R.file_sha256(source)}
+        if status == "early_stopped":                       # the latest saved checkpoint becomes final.pt
+            if not entries:
+                raise RuntimeError("early stop at timestep %d before any checkpoint was saved" % completed)
+            source = out / entries[-1]["path"]
+            try:
+                state = backend.torch.load(str(source), map_location="cpu", weights_only=False)
+            except TypeError:
+                state = backend.torch.load(str(source), map_location="cpu")
+            if not _finite_state(state):
+                status, divergence = "diverged", {"reason": "non-finite parameters in the early-stop checkpoint",
+                                                  "timestep": completed}
+            else:
+                shutil.copyfile(source, out / "final.pt")
+                final = {"path": "final.pt", "sha256": R.file_sha256(out / "final.pt"),
+                         "source_path": source.relative_to(out).as_posix(), "source_sha256": R.file_sha256(source)}
         layer = getattr(base, "_conditions", None)
         counts = layer.training_mixture_counts() if (layer is not None and mixture is not None) else None
         logs = {}
         for path in sorted(list(run_dir.glob("**/events.out.tfevents.*")) + [out / "progress.log",
                                                                            out / "heartbeat.json",
-                                                                           out / "ppo_fix.json"]):
+                                                                           out / "ppo_fix.json",
+                                                                           out / ES.SIDECAR]):
             if path.is_file():
                 logs[path.relative_to(out).as_posix()] = R.file_sha256(path)
         record = {
@@ -1152,7 +1326,7 @@ def run_training(plan, args, backend):
         sha = R.write_record(record, out / "training_record.json")       # LAST
         print("train_journal_ppo: %s, record %s (sha256 %s)" % (status.upper(), out / "training_record.json", sha),
               flush=True)
-        return EXIT_OK if status == "completed" else EXIT_DIVERGED
+        return EXIT_OK if status in ("completed", "early_stopped") else EXIT_DIVERGED
     except BaseException as exc:  # noqa: BLE001 - everything else is an infrastructure failure (exit 3)
         if monitor is not None:
             try:
