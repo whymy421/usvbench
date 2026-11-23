@@ -1,0 +1,324 @@
+{
+ "family": "hazard_nav",
+ "manifest_entry": {
+  "admission": {
+   "monotone_stitching": false,
+   "not_applicable_doses": [],
+   "offered_doses": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "optional_doses": [],
+   "required_doses": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ]
+  },
+  "bytes": 639152,
+  "file": "reach__blueboat_v2__s41051.json.xz",
+  "grid": {
+   "episodes": 2,
+   "num_envs": 64
+  },
+  "keys_admitted": 128,
+  "keys_not_admitted": 0,
+  "keys_offered": 128,
+  "optional_reason_counts": {},
+  "per_dose_counts": [
+   [
+    128,
+    128,
+    0
+   ],
+   [
+    128,
+    128,
+    0
+   ],
+   [
+    128,
+    128,
+    0
+   ],
+   [
+    128,
+    128,
+    0
+   ],
+   [
+    128,
+    128,
+    0
+   ],
+   [
+    128,
+    128,
+    0
+   ]
+  ],
+  "per_dose_counts_fields": [
+   "offered",
+   "admitted",
+   "not_admitted"
+  ],
+  "pool_digest": "2fc7c8e307b456a02123244df0db42426d84423d62f40df984a6dfa5cb5c07b7",
+  "reason_counts": {},
+  "seed": 41051,
+  "sha256": "ae233966c5e63de041daf11c0436a4f7556dc992a088592cd6af1f87bb50bf02",
+  "task": "reach",
+  "tier": 2,
+  "vessel_id": "blueboat_v2"
+ },
+ "provenance": {
+  "code_lf_sha256": {
+   "scripts/admit_appearing_pools.py": "3dfec744a8bf64d07fd2df9e99a72d45facbfb5c38beece5faaf68983bd4341a",
+   "tasks/_shared/conditions/appearing/about.py": "d371e60c89bcb37bc46f6ba93347716fafdc075d3fd8eeb1f36de10bae32f3a5",
+   "tasks/_shared/conditions/appearing/admission.py": "06442d4bcbc56f0c4f0390413499d9686ec463d0beec428c0c3e729b42aa5cf2",
+   "tasks/_shared/conditions/appearing/config.py": "ff820a814c67312bf461b88a4638aca7f967f86e74b563d2de7d9ea46f8d47bd",
+   "tasks/_shared/conditions/appearing/families.py": "abbc2650b53f114ff01daa9452884ed3246015862e22f041eb67038c4ace68f6",
+   "tasks/_shared/conditions/appearing/ladder.py": "43397c0c40f4c90331d670fa13331138c6ceceab19f642b114bfc06f17981eb5",
+   "tasks/_shared/conditions/appearing/occlusion.py": "564e8676df74b46ffd8649bb5f2e6bb52a35fbdba18d2bb42ab0afd235820a6e",
+   "tasks/_shared/conditions/appearing/placement.py": "947b6be3aa34e61a1a2010d5dc34938f05d76d932444dd86be282a4092a913eb",
+   "tasks/_shared/conditions/appearing/pool.py": "4dd8e59aa7e33b311bbbb28eb53cffd58a67491e85aed005bb819dd57514bacd",
+   "tasks/_shared/conditions/appearing/runtime.py": "71cab77584ed3d81b69e98cdc66e1ac83bedddd7c3f669b0ea409e4964b9feff",
+   "tasks/_shared/conditions/appearing/stamp.py": "44a37ed16c54ecb8164e3a4a56145a55de9fa2681fbb1ca4fd901136e15681f7",
+   "tasks/_shared/conditions/dynamic/adapters.py": "ca01123540de396e7e846dfd6f6eab3381711cb1023b11d6cafb7116c571780a",
+   "tasks/_shared/conditions/dynamic/feasibility.py": "79fa8a2f8d59f2d2dc58ac0faa8f85e260b7f46e7578fe606291a8767c33ed66",
+   "tasks/_shared/journal_cfg_v2.py": "d0b1c67afbd4ce637c46c1f7efad77e60f0e3c8fc556926953bc321211d45a8a",
+   "tasks/_shared/journal_layouts_v2.py": "21387d2f80601c437936a016f4fdf1e39281e648b3006889ef657201c0f1a2d8",
+   "tasks/hazard_nav/journal_hazard_nav.py": "377525445b368e71b1757d5f818e31f0d91afeef5909723743a1b0a94a11d6ac"
+  },
+  "episodes": 2,
+  "ladder": {
+   "calibration_rung_m": {
+    "blueboat_v2": 0.76,
+    "wamv_vrx_v2_opt1": 1.25
+   },
+   "calibration_sweep_m": {
+    "blueboat_v2": [
+     0.76,
+     1.0,
+     1.4,
+     2.0,
+     2.9,
+     4.0,
+     5.0,
+     6.6,
+     7.5
+    ],
+    "wamv_vrx_v2_opt1": [
+     1.25,
+     1.4,
+     1.8,
+     2.5,
+     3.6,
+     5.0,
+     7.5,
+     11.0,
+     15.0
+    ]
+   },
+   "gap_override_min_m": {
+    "blueboat_v2": 0.76,
+    "wamv_vrx_v2_opt1": 1.25
+   },
+   "gap_ratios": null,
+   "gaps_m": {
+    "blueboat_v2": [
+     null,
+     7.5,
+     3.5,
+     1.6,
+     0.76,
+     0.76
+    ],
+    "wamv_vrx_v2_opt1": [
+     null,
+     15.0,
+     6.6,
+     2.9,
+     1.25,
+     1.25
+    ]
+   },
+   "kind": "metres",
+   "kinematic_floor_m": {
+    "blueboat_v2": 0.67,
+    "wamv_vrx_v2_opt1": 1.03
+   },
+   "option": "M",
+   "suite_version": "g3_appearing_gap_v7m"
+  },
+  "num_envs": 64,
+  "python": "3.11.15",
+  "seed": 41051,
+  "tier": 2,
+  "tool": "g20d-admit-appearing-pools-v5"
+ },
+ "report": {
+  "admission_policy": {
+   "monotone_stitching": false,
+   "not_applicable_doses": [],
+   "offered_doses": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "optional_doses": [],
+   "required_doses": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ]
+  },
+  "admission_seconds": 16.17200000002049,
+  "admitted_candidate_index": {
+   "0": 128
+  },
+  "admitted_fraction": 1.0,
+  "admitted_radius_m": {
+   "max": 0.8,
+   "min": 0.8,
+   "n": 128,
+   "p10": 0.8,
+   "p50": 0.8,
+   "p90": 0.8
+  },
+  "bytes": 639152,
+  "dose_applicability": {
+   "D1": "offered",
+   "D2": "offered",
+   "D3": "offered",
+   "D4": "offered",
+   "D5": "offered"
+  },
+  "file_sha256": "ae233966c5e63de041daf11c0436a4f7556dc992a088592cd6af1f87bb50bf02",
+  "grid": {
+   "episodes": 2,
+   "num_envs": 64
+  },
+  "keys_admitted": 128,
+  "keys_not_admitted": 0,
+  "keys_offered": 128,
+  "ladder": "M",
+  "nominal_trigger": {
+   "D1": {
+    "admitted_keys": 128,
+    "nominal_occluded_at_trigger": 0,
+    "nominal_trigger_reached_keys": 128,
+    "nominal_trigger_s_max": 4.65109307893081,
+    "nominal_trigger_s_min": 1.5803404596785073,
+    "nominal_visible_at_trigger": 128,
+    "witness_kinds": {
+     "frozen_search": 128
+    }
+   },
+   "D2": {
+    "admitted_keys": 128,
+    "nominal_occluded_at_trigger": 0,
+    "nominal_trigger_reached_keys": 128,
+    "nominal_trigger_s_max": 8.65109307893081,
+    "nominal_trigger_s_min": 5.580340459679387,
+    "nominal_visible_at_trigger": 128,
+    "witness_kinds": {
+     "frozen_search": 128
+    }
+   },
+   "D3": {
+    "admitted_keys": 128,
+    "nominal_occluded_at_trigger": 0,
+    "nominal_trigger_reached_keys": 128,
+    "nominal_trigger_s_max": 10.551093078930808,
+    "nominal_trigger_s_min": 7.480340459679807,
+    "nominal_visible_at_trigger": 128,
+    "witness_kinds": {
+     "frozen_search": 128
+    }
+   },
+   "D4": {
+    "admitted_keys": 128,
+    "nominal_occluded_at_trigger": 0,
+    "nominal_trigger_reached_keys": 128,
+    "nominal_trigger_s_max": 11.391093078930808,
+    "nominal_trigger_s_min": 8.320340459679993,
+    "nominal_visible_at_trigger": 128,
+    "witness_kinds": {
+     "frozen_search": 128
+    }
+   },
+   "D5": {
+    "admitted_keys": 128,
+    "nominal_occluded_at_trigger": 0,
+    "nominal_trigger_reached_keys": 128,
+    "nominal_trigger_s_max": 11.391093078930808,
+    "nominal_trigger_s_min": 8.320340459679993,
+    "nominal_visible_at_trigger": 128,
+    "witness_kinds": {
+     "frozen_search": 128
+    }
+   }
+  },
+  "not_admitted_keys": [],
+  "optional_not_admitted_keys": [],
+  "optional_reason_counts": {},
+  "per_dose_counts": [
+   [
+    128,
+    128,
+    0
+   ],
+   [
+    128,
+    128,
+    0
+   ],
+   [
+    128,
+    128,
+    0
+   ],
+   [
+    128,
+    128,
+    0
+   ],
+   [
+    128,
+    128,
+    0
+   ],
+   [
+    128,
+    128,
+    0
+   ]
+  ],
+  "per_dose_counts_fields": [
+   "offered",
+   "admitted",
+   "not_admitted"
+  ],
+  "placed_radius_m": {
+   "max": 0.8,
+   "min": 0.8
+  },
+  "pool_digest": "2fc7c8e307b456a02123244df0db42426d84423d62f40df984a6dfa5cb5c07b7",
+  "reason_counts_keys": {},
+  "seed": 41051,
+  "suite_version": "g3_appearing_gap_v7m",
+  "task": "reach",
+  "tier": 2,
+  "trigger_gaps_m": null,
+  "vessel_id": "blueboat_v2"
+ }
+}
